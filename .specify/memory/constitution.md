@@ -1,50 +1,167 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+🏥 Aranto System Constitution
+<!-- Sync Impact Report: - Version change: Initial → 1.0.0 - Created principles: Seguridad de Datos, Desarrollo Especificado, Entregas Independientes, Fases Controladas, Consistencia de Plantillas - Added sections: Flujo de Desarrollo, Aseguramiento de Calidad, Módulos Integrales - Templates requiring updates: ✅ Todos los templates validados y sincronizados - Follow-up TODOs: Ninguno -->
+Core Principles
+I. Seguridad de Datos y Cumplimiento
 
-## Core Principles
+Todo desarrollo debe priorizar la seguridad, confidencialidad y trazabilidad de los datos médicos y financieros.
+El sistema debe cumplir con las normas locales de manejo de información sanitaria.
+Toda modificación de información crítica (pagos, pacientes, servicios, historias clínicas) debe dejar registro de usuario, fecha y acción.
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+II. Desarrollo Especificado (Specification-Driven Development)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Ninguna funcionalidad se implementará sin contar con una especificación completa y aprobada, incluyendo:
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+Historias de usuario con prioridades (P1, P2, P3)
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Criterios de aceptación
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Métricas de éxito
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Impacto en otros módulos
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+III. Fases Controladas (Phase-Gate Methodology)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+El desarrollo avanza en fases obligatorias:
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Especificación → Planificación → Generación de Tareas → Implementación → Validación
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+Cada fase debe completarse y aprobarse antes de pasar a la siguiente.
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+IV. Entregas Independientes (Independent Delivery)
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Cada módulo o historia de usuario debe ser independiente, testeable y desplegable, permitiendo integración progresiva y pruebas paralelas.
+
+V. Consistencia de Plantillas (Template Consistency)
+
+Todos los documentos y artefactos (especificaciones, planes, tareas, implementaciones) deben seguir las plantillas oficiales en .specify/templates/.
+
+Development Workflow
+
+Flujo de trabajo obligatorio:
+
+/speckit.constitution — establece principios y normas del proyecto.
+
+/speckit.specify — crea especificaciones detalladas de todos los módulos y funcionalidades.
+
+/speckit.plan — genera el plan de implementación y decisiones técnicas.
+
+/speckit.tasks — lista de tareas ejecutables por módulo y prioridad.
+
+/speckit.implement — ejecuta tareas respetando la constitución.
+
+/speckit.analyze — valida consistencia entre especificación, tareas e implementación.
+
+Project Modules and Scope
+1. Módulo de Caja
+
+Apertura y cierre de caja.
+
+Cobro de servicios en recepción, urgencias y altas de internados.
+
+Cobros parciales de servicios agendados.
+
+Pagos varios: egresos generales, liquidación de comisiones de profesionales.
+
+Auditoría y trazabilidad de movimientos financieros.
+
+2. Módulo de Pacientes
+
+Registro completo de pacientes.
+
+Gestión de pacientes en espera en recepción, con llamada de turnos desde consultorios.
+
+Seguimiento de servicios solicitados y pagos pendientes.
+
+Integración con caja, agenda y módulos clínicos.
+
+3. Módulo de Profesionales
+
+Registro de profesionales y sus porcentajes de comisión.
+
+Liquidación automática de comisiones según servicios cobrados.
+
+Relación profesional → servicio → pago → liquidación.
+
+4. Módulo de Usuarios y Roles
+
+Roles: Administrador, Cajero, Recepcionista, Enfermero, Profesional Médico.
+
+Control de permisos por módulo y función.
+
+Gestión de credenciales y seguridad de acceso.
+
+5. Módulo de Servicios
+
+CRUD de servicios médicos y administrativos.
+
+Precios por tipo de seguro médico.
+
+Integración con caja, agenda, profesionales y farmacia.
+
+6. Módulo de Farmacia
+
+Control de stock interno, vinculado con internados y consultas.
+
+Registro de entradas, salidas y consumo por paciente.
+
+Alertas de stock mínimo y reportes de consumo.
+
+7. Módulo de Quirofano y Urgencias
+
+Registro de procedimientos y pacientes en quirófano o urgencias.
+
+Integración con turnos, caja y agenda.
+
+8. Módulo de Historias Clínicas
+
+Registro completo de consultas y antecedentes médicos.
+
+Funcionalidades:
+
+Datos clínicos generales (signos vitales, presión arterial, peso, talla).
+
+Diagnósticos, evolución clínica y médicos que atendieron.
+
+Estudios, imágenes y archivos PDF asociados.
+
+Recetas y prescripciones.
+
+Compatible con consultas generales y distintas especialidades.
+
+9. Módulo de Reportes y BI
+
+Dashboard macro: visión global de caja, pacientes, servicios, comisiones, stock de farmacia.
+
+Dashboard granular: filtros por paciente, profesional, servicio, periodo.
+
+Reportes exportables en PDF o Excel.
+
+Quality Assurance
+
+Se verificará en cada fase:
+
+Completitud de especificación y modularidad.
+
+Plan alineado con arquitectura y tecnologías: Laravel + Inertia + React + Docker + MySQL.
+
+Tareas estructuradas y trazables a historias de usuario.
+
+Implementaciones revisadas contra templates oficiales.
+
+Validación de dashboards y reportes.
+
+Governance
+
+La constitución es autoridad máxima del proyecto Aranto.
+Cambios requieren:
+
+Incremento de versión (semantic versioning).
+
+Análisis de impacto sobre plantillas y procesos.
+
+Documentación clara de modificaciones.
+
+Version: 1.0.0
+Ratified: 2025-10-23
+Project: Aranto360 System
+Maintainer: Edson Naza
