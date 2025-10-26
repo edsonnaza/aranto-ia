@@ -19,7 +19,50 @@ Métricas de éxito
 
 Impacto en otros módulos
 
-III. Fases Controladas (Phase-Gate Methodology)
+III. Arquitectura Frontend Estandarizada
+
+**Mejores Prácticas de Commits:**
+- Commit al finalizar cada fase completa de tareas (T001-T015, T016-T030, etc.)
+- Mensajes en formato: "feat(modulo): descripción breve"
+- Commits atómicos: una funcionalidad completa por commit
+- Siempre verificar que no hay errores antes del commit
+- Incluir archivos de documentación actualizados
+
+**Stack Tecnológico Obligatorio:**
+- React 18 + Inertia.js + Laravel
+- Zustand para estado global
+- React Hook Form + Zod para validación
+- Vitest + Testing Library para testing frontend
+- PHPUnit para testing backend
+- shadcn/ui + Tailwind CSS para UI
+- Spatie Laravel Permission para roles y permisos
+
+**Dependencias Instaladas:**
+- zustand, react-hook-form, @hookform/resolvers, zod
+- @tanstack/react-query para cache de datos
+- vitest, @testing-library/react para testing
+- spatie/laravel-permission para autorización
+
+**Roles de Sistema Definidos:**
+- Administrador: Acceso completo (22 permisos)
+- Cajero: Operación básica de caja (10 permisos)
+- Auditor: Solo lectura y reportes (9 permisos)
+- Gerente: Supervisión y autorización (14 permisos)
+
+**Patrones Arquitectónicos:**
+- Single Responsibility Principle en todas las capas
+- Flujo unidireccional: API ← Services ← Hooks ← Components ← Pages
+- Container/Presentational pattern
+- Custom Hooks para reutilización de lógica
+- Compound Components para UI compleja
+- Render Props/Children as Function para flexibilidad
+
+**Estructura de Respuesta Backend Estandarizada:**
+- 200: {success: true, data: {...}, message: "..."}
+- 400: {success: false, errors: {...}, message: "..."}
+- 500: {success: false, message: "...", error_code: "..."}
+
+IV. Fases Controladas (Phase-Gate Methodology)
 
 El desarrollo avanza en fases obligatorias:
 
@@ -27,7 +70,7 @@ Especificación → Planificación → Generación de Tareas → Implementación
 
 Cada fase debe completarse y aprobarse antes de pasar a la siguiente.
 
-IV. Entregas Independientes (Independent Delivery)
+V. Entregas Independientes (Independent Delivery)
 
 Cada módulo o historia de usuario debe ser independiente, testeable y desplegable, permitiendo integración progresiva y pruebas paralelas.
 
