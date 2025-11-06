@@ -6,6 +6,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property string $auditable_type
+ * @property int $auditable_id
+ * @property string $event
+ * @property array|null $old_values
+ * @property array|null $new_values
+ * @property int|null $user_id
+ * @property string|null $user_agent
+ * @property string|null $ip_address
+ * @property string|null $description
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read Model $auditable
+ * @property-read User|null $user
+ */
 class AuditLog extends Model
 {
     use HasFactory;

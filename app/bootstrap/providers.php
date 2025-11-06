@@ -2,5 +2,6 @@
 
 return [
     App\Providers\AppServiceProvider::class,
-    App\Providers\CashRegisterServiceProvider::class,
+    App\Providers\FortifyServiceProvider::class,
+    Spatie\Permission\PermissionServiceProvider::class,
 ];

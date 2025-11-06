@@ -6,6 +6,32 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $cash_register_session_id
+ * @property string $type
+ * @property string $category
+ * @property float $amount
+ * @property string $concept
+ * @property int|null $patient_id
+ * @property int|null $professional_id
+ * @property int|null $liquidation_id
+ * @property int $user_id
+ * @property string $status
+ * @property int|null $original_transaction_id
+ * @property string|null $cancellation_reason
+ * @property int|null $cancelled_by
+ * @property \Illuminate\Support\Carbon|null $cancelled_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property string|null $payment_method
+ * @property array|null $metadata
+ * @property int|null $service_id
+ * @property-read CashRegisterSession $cashRegisterSession
+ * @property-read User $user
+ * @property-read User|null $cancelledBy
+ * @property-read Service|null $service
+ */
 class Transaction extends Model
 {
     use HasFactory;
@@ -25,11 +51,15 @@ class Transaction extends Model
         'cancellation_reason',
         'cancelled_by',
         'cancelled_at',
+        'payment_method',
+        'metadata',
+        'service_id',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'cancelled_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     // Relationships
@@ -46,6 +76,11 @@ class Transaction extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
     }
 
     public function originalTransaction(): BelongsTo

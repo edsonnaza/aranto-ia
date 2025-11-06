@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -13,23 +13,20 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Administrador',
-            'email' => 'admin@aranto.com',
-            'password' => Hash::make('4r4nt0'),
-        ]);
-
-        User::factory()->create([
-            'name' => 'Cajero',
-            'email' => 'cajero@aranto.com',
-            'password' => Hash::make('4r4nt0'),
-        ]);
-
+        // Seed cash register permissions and roles first
         $this->call([
-            ServiceSeeder::class,
-            RolesAndPermissionsSeeder::class,
+            CashRegisterPermissionsSeeder::class,
+            ServicesSeeder::class,
+            CashRegisterUsersSeeder::class,
         ]);
+
+        // Create default test user if not using cash register users
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+            ]
+        );
     }
 }
