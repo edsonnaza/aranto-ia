@@ -6,17 +6,17 @@ services:
       context: ./app
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     environment:
-      - APP_ENV=local
-      - APP_DEBUG=true
-      - DB_HOST=mysql
-      - DB_DATABASE=aranto_medical
-      - DB_USERNAME=aranto_user
-      - DB_PASSWORD=4r4nt0
-      - REDIS_HOST=redis
-      - REDIS_PASSWORD=null
-      - REDIS_PORT=6379
+      - APP_ENV=${APP_ENV:-local}
+      - APP_DEBUG=${APP_DEBUG:-true}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_DATABASE=${MYSQL_DATABASE:-aranto_medical}
+      - DB_USERNAME=${MYSQL_USER:-aranto_user}
+      - DB_PASSWORD=${MYSQL_PASSWORD:-password}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     volumes:
       - ./app:/var/www/html
     depends_on:
@@ -30,30 +30,30 @@ services:
   mysql:
     image: mysql:8.0
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT:-3307}:3306"
     environment:
-      - MYSQL_ROOT_PASSWORD=4r4nt0
-      - MYSQL_DATABASE=aranto_medical
-      - MYSQL_USER=aranto_user
-      - MYSQL_PASSWORD=4r4nt0
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-aranto_medical}
+      - MYSQL_USER=${MYSQL_USER:-aranto_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p4r4nt0"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-password}"]
       timeout: 20s
       retries: 10
 
   phpmyadmin:
     image: phpmyadmin:latest
     ports:
-      - "8081:80"
+      - "${PHPMYADMIN_PORT:-8081}:80"
     environment:
-      - PMA_HOST=mysql
-      - PMA_PORT=3306
-      - PMA_USER=root
-      - PMA_PASSWORD=4r4nt0
-      - MYSQL_ROOT_PASSWORD=4r4nt0
+      - PMA_HOST=${PMA_HOST:-mysql}
+      - PMA_PORT=${PMA_PORT:-3306}
+      - PMA_USER=${PMA_USER:-root}
+      - PMA_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}
       - PMA_ARBITRARY=1
     depends_on:
       mysql:
@@ -62,7 +62,7 @@ services:
   redis:
     image: redis:alpine
     ports:
-      - "6380:6379"
+      - "${REDIS_PORT_EXTERNAL:-6380}:6379"
     volumes:
       - redis_data:/data
 
