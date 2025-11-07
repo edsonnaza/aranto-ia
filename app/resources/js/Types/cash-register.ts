@@ -3,14 +3,18 @@
 export interface CashRegisterSession {
     id: number;
     user_id: number;
-    opening_balance: number;
-    closing_balance?: number;
-    opened_at: string;
-    closed_at?: string;
-    notes?: string;
-    is_forced_close: boolean;
-    forced_close_reason?: string;
-    forced_close_by?: number;
+    initial_amount: number;
+    final_physical_amount?: number;
+    calculated_balance: number;
+    total_income?: number;
+    total_expenses?: number;
+    difference?: number;
+    opening_date: string;
+    closing_date?: string;
+    status: string;
+    difference_justification?: string;
+    authorized_by?: number;
+    notes?: Record<string, unknown> | null;
     created_at: string;
     updated_at: string;
     user?: User;

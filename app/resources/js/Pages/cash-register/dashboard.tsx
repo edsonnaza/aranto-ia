@@ -1,6 +1,9 @@
 import { Head } from '@inertiajs/react';
+import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
+import TestModal from '@/components/cash-register/test-modal';
+import TransactionModal from '@/components/cash-register/transaction-modal';
 import { type BreadcrumbItem } from '@/types';
 import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
 
@@ -28,6 +31,18 @@ export default function CashRegisterDashboard({
     todayTransactions = [],
     balance,
 }: CashRegisterDashboardProps) {
+    const [isOpenModalVisible, setIsOpenModalVisible] = useState(false);
+    const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
+    const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
+
+    console.log('Dashboard rendered, activeSession:', activeSession);
+    console.log('isOpenModalVisible:', isOpenModalVisible);
+
+    const handleOpenModal = () => {
+        console.log('Button clicked, opening modal...');
+        setIsOpenModalVisible(true);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tesorería - Dashboard" />
@@ -63,7 +78,7 @@ export default function CashRegisterDashboard({
                         </div>
                         <p className="text-xs text-muted-foreground">
                             {activeSession 
-                                ? `Abierta desde: ${new Date(activeSession.opened_at).toLocaleTimeString()}`
+                                ? `Abierta desde: ${new Date(activeSession.opening_date).toLocaleTimeString()}`
                                 : 'Caja cerrada'
                             }
                         </p>
@@ -158,7 +173,10 @@ export default function CashRegisterDashboard({
                     <div className="p-6 pt-0">
                         <div className="flex gap-4">
                             {!activeSession ? (
-                                <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+                                <button 
+                                    onClick={handleOpenModal}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                                >
                                     <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
                                         <path d="M9 12l2 2 4-4" />
                                         <path d="M21 12c.552 0 1-.449 1-1s-.448-1-1-1" />
@@ -167,13 +185,19 @@ export default function CashRegisterDashboard({
                                 </button>
                             ) : (
                                 <>
-                                    <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-primary-foreground hover:bg-green-700 h-10 px-4 py-2">
+                                    <button 
+                                        onClick={() => setIsIncomeModalVisible(true)}
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-primary-foreground hover:bg-green-700 h-10 px-4 py-2"
+                                    >
                                         <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
                                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                                         </svg>
                                         Registrar Ingreso
                                     </button>
-                                    <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-orange-600 text-primary-foreground hover:bg-orange-700 h-10 px-4 py-2">
+                                    <button 
+                                        onClick={() => setIsExpenseModalVisible(true)}
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-orange-600 text-primary-foreground hover:bg-orange-700 h-10 px-4 py-2"
+                                    >
                                         <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
                                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                                         </svg>
@@ -263,6 +287,27 @@ export default function CashRegisterDashboard({
                     </div>
                 </div>
             </div>
+
+            {/* Modal for opening cash register */}
+            <TestModal 
+                isOpen={isOpenModalVisible}
+                onClose={() => setIsOpenModalVisible(false)}
+            />
+
+            {/* Modal for income transactions */}
+            <TransactionModal 
+                isOpen={isIncomeModalVisible}
+                onClose={() => setIsIncomeModalVisible(false)}
+                type="INCOME"
+                services={[]} // We'll need to pass services from props later
+            />
+
+            {/* Modal for expense transactions */}
+            <TransactionModal 
+                isOpen={isExpenseModalVisible}
+                onClose={() => setIsExpenseModalVisible(false)}
+                type="EXPENSE"
+            />
         </AppLayout>
     );
 }

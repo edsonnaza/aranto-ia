@@ -44,11 +44,11 @@ class CashRegisterController extends Controller
                 ->get();
             
             $balance = [
-                'opening' => $activeSession->opening_balance,
+                'opening' => $activeSession->initial_amount,
                 'income' => $todayTransactions->where('type', 'INCOME')->sum('amount') + 
                            $todayTransactions->where('type', 'PAYMENT')->sum('amount'),
                 'expense' => $todayTransactions->where('type', 'EXPENSE')->sum('amount'),
-                'current' => $activeSession->opening_balance + 
+                'current' => $activeSession->initial_amount + 
                            $todayTransactions->where('type', 'INCOME')->sum('amount') +
                            $todayTransactions->where('type', 'PAYMENT')->sum('amount') -
                            $todayTransactions->where('type', 'EXPENSE')->sum('amount'),
