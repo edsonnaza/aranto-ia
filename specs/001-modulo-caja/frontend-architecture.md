@@ -17,6 +17,15 @@
 - **Backend**: PHPUnit (Laravel estándar)
 - **Frontend**: Vitest + Testing Library (mejor integración con Vite)
 
+### Convenciones de Nomenclatura
+- **Archivos TSX/JSX**: PascalCase con primera letra mayúscula
+  - ✅ Correcto: `Dashboard.tsx`, `CashRegister.tsx`, `TransactionModal.tsx`
+  - ❌ Incorrecto: `dashboard.tsx`, `cashRegister.tsx`, `transactionModal.tsx`
+- **Componentes React**: PascalCase (igual que el archivo)
+- **Variables/funciones**: camelCase
+- **Constantes**: SCREAMING_SNAKE_CASE
+- **Interfaces TypeScript**: PascalCase con prefijo 'I' opcional
+
 ### Manejo de Errores y Notificaciones
 - **Error Boundaries** - Captura de errores de componentes
 - **shadcn/ui Toast** - Notificaciones consistentes
@@ -110,6 +119,58 @@ API ← Services ← Hooks ← Components ← Pages
     "error_code": "INTERNAL_ERROR"
 }
 ```
+
+## Configuración Monetaria Global
+
+### Sistema de Configuración de Moneda
+El sistema debe soportar configuración global de formato monetario que afecte toda la aplicación.
+
+#### Configuración Backend (config/app.php)
+```php
+'currency' => [
+    'code' => env('CURRENCY_CODE', 'PYG'), // Código ISO 4217
+    'symbol' => env('CURRENCY_SYMBOL', '₲'), 
+    'name' => env('CURRENCY_NAME', 'Guaraní Paraguayo'),
+    'decimal_places' => env('CURRENCY_DECIMALS', 0), // Paraguay no usa decimales
+    'thousands_separator' => env('CURRENCY_THOUSANDS', '.'),
+    'decimal_separator' => env('CURRENCY_DECIMAL', ','),
+    'symbol_position' => env('CURRENCY_POSITION', 'before'), // before|after
+]
+```
+
+#### Helper Global Frontend (TypeScript)
+```typescript
+// services/currency.ts
+interface CurrencyConfig {
+  code: string;
+  symbol: string;
+  name: string;
+  decimalPlaces: number;
+  thousandsSeparator: string;
+  decimalSeparator: string;
+  symbolPosition: 'before' | 'after';
+}
+
+// Formatear montos según configuración
+export const formatCurrency = (amount: number): string => {
+  // Ejemplo Paraguay: 1500000 → "₲ 1.500.000"
+  // Ejemplo USA: 1500000 → "$1,500,000.00"
+}
+```
+
+#### Store Global de Configuración (Zustand)
+```typescript
+// stores/configStore.ts
+interface ConfigStore {
+  currency: CurrencyConfig;
+  updateCurrency: (config: CurrencyConfig) => void;
+}
+```
+
+#### Integración con Backend
+- Endpoint `/api/config/currency` para obtener configuración
+- Middleware para aplicar configuración por usuario/empresa
+- Cache de configuración en frontend
 
 ## Manejo de Permisos y Roles
 

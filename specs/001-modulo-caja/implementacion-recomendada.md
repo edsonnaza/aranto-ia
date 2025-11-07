@@ -78,6 +78,41 @@ cp /ruta/original/app/Http/Controllers/Api/* app/Http/Controllers/Api/
 cp /ruta/original/routes/api.php routes/
 cp /ruta/original/routes/web.php routes/
 
+# Configurar variables de entorno para moneda
+echo "
+# Configuración Monetaria Global
+CURRENCY_CODE=PYG
+CURRENCY_SYMBOL=₲
+CURRENCY_NAME='Guaraní Paraguayo'
+CURRENCY_DECIMALS=0
+CURRENCY_THOUSANDS=.
+CURRENCY_DECIMAL=,
+CURRENCY_POSITION=before
+" >> .env
+```
+
+### 3. Estándares de Desarrollo Frontend
+
+#### 3.1 Convenciones de Nomenclatura
+- **Archivos TSX**: PascalCase - `Dashboard.tsx`, `TransactionModal.tsx`
+- **Componentes**: PascalCase - igual que el nombre del archivo
+- **Variables/funciones**: camelCase
+- **Constantes**: SCREAMING_SNAKE_CASE
+
+#### 3.2 Sistema Monetario Global
+Implementar configuración unificada que afecte toda la aplicación:
+
+```typescript
+// Para Paraguay: ₲ 1.500.000 (sin decimales, separador de miles: punto)
+// Para otros países: $1,500,000.00 (con decimales, separador: coma)
+```
+
+**Componentes del sistema:**
+- Configuración backend en `config/app.php`
+- Helper frontend `services/currency.ts`
+- Store global Zustand para configuración
+- Formateo automático en todos los componentes
+
 # Instalar spatie/laravel-permission
 composer require spatie/laravel-permission
 php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"

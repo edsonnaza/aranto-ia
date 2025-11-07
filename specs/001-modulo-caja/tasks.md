@@ -121,6 +121,27 @@ description: "Task list for implementing Módulo de Caja (Cash Register Module)"
 - [ ] T053 [US2] Add receipt printing functionality with service origin details
 - [ ] T054 [US2] Implement inpatient period tracking for discharge payments
 
+## Phase 4.5: Integración con Módulo de Recepción (P1)
+
+**Purpose**: Integration with reception module for service payment processing
+
+**Independent Test**: Can display pending services from reception and process payments with proper linking
+
+- [ ] T054.1 [INT] Create ServiceRequest model in app/Models/ServiceRequest.php
+- [ ] T054.2 [INT] Create migration for service_requests table
+- [ ] T054.3 [INT] Add service_request_id field to movement_details table migration
+- [ ] T054.4 [INT] Create PendingServicesController in app/Http/Controllers/PendingServicesController.php
+- [ ] T054.5 [INT] Implement pending services queue logic in CashRegisterService
+- [ ] T054.6 [INT] Create PendingServicesList component in resources/js/components/cash-register/PendingServicesList.tsx
+- [ ] T054.7 [INT] Create ServicePaymentModal component in resources/js/components/cash-register/ServicePaymentModal.tsx
+- [ ] T054.8 [INT] Add service origin tracking in TransactionModal
+- [ ] T054.9 [INT] Implement service request status updates (pending_payment → paid)
+- [ ] T054.10 [INT] Add service_request_id linking in MovementDetail creation
+- [ ] T054.11 [INT] Create mock data for pending services testing
+- [ ] T054.12 [INT] Add pending services view to cash register dashboard
+- [ ] T054.13 [INT] Implement service payment processing with proper traceability
+- [ ] T054.14 [INT] Add service origin validation in backend
+
 ## Phase 5: User Story 3 - Liquidación de Comisiones de Profesionales (P2)
 
 **Purpose**: Commission liquidation system linked to reception services

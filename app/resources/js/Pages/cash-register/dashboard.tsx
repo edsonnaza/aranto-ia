@@ -2,8 +2,9 @@ import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
-import TestModal from '@/components/cash-register/test-modal';
+import OpenCashModal from '@/components/cash-register/open-cash-modal';
 import TransactionModal from '@/components/cash-register/transaction-modal';
+import CloseCashModal from '@/components/cash-register/CloseCashModal';
 import { type BreadcrumbItem } from '@/types';
 import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
 
@@ -34,6 +35,7 @@ export default function CashRegisterDashboard({
     const [isOpenModalVisible, setIsOpenModalVisible] = useState(false);
     const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
+    const [isCloseModalVisible, setIsCloseModalVisible] = useState(false);
 
     console.log('Dashboard rendered, activeSession:', activeSession);
     console.log('isOpenModalVisible:', isOpenModalVisible);
@@ -102,7 +104,7 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold">
-                            ${balance?.opening?.toFixed(2) || '0.00'}
+                            ${Number(balance?.opening || 0).toFixed(2)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Balance inicial del día
@@ -129,7 +131,7 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold text-green-600">
-                            ${balance?.income?.toFixed(2) || '0.00'}
+                            ${Number(balance?.income || 0).toFixed(2)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Total de ingresos del día
@@ -154,7 +156,7 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold">
-                            ${balance?.current?.toFixed(2) || '0.00'}
+                            ${Number(balance?.current || 0).toFixed(2)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Balance total disponible
@@ -203,7 +205,10 @@ export default function CashRegisterDashboard({
                                         </svg>
                                         Registrar Egreso
                                     </button>
-                                    <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-primary-foreground hover:bg-red-700 h-10 px-4 py-2">
+                                    <button 
+                                        onClick={() => setIsCloseModalVisible(true)}
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-primary-foreground hover:bg-red-700 h-10 px-4 py-2"
+                                    >
                                         <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
                                             <path d="M18 6L6 18M6 6l12 12" />
                                         </svg>
@@ -266,7 +271,7 @@ export default function CashRegisterDashboard({
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                     <span className={transaction.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
-                                                        {transaction.type === 'INCOME' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                                                        {transaction.type === 'INCOME' ? '+' : '-'}${Number(transaction.amount).toFixed(2)}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
@@ -289,7 +294,7 @@ export default function CashRegisterDashboard({
             </div>
 
             {/* Modal for opening cash register */}
-            <TestModal 
+            <OpenCashModal 
                 isOpen={isOpenModalVisible}
                 onClose={() => setIsOpenModalVisible(false)}
             />
@@ -307,6 +312,14 @@ export default function CashRegisterDashboard({
                 isOpen={isExpenseModalVisible}
                 onClose={() => setIsExpenseModalVisible(false)}
                 type="EXPENSE"
+            />
+
+            {/* Modal for close cash register */}
+            <CloseCashModal 
+                isOpen={isCloseModalVisible}
+                onClose={() => setIsCloseModalVisible(false)}
+                balance={balance}
+                transactions={todayTransactions}
             />
         </AppLayout>
     );

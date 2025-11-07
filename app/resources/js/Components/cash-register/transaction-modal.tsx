@@ -84,7 +84,9 @@ export default function TransactionModal({
         ...(formData.patient_name && { patient_name: formData.patient_name }),
       };
 
-      router.post('/cash-register/transaction', submitData, {
+      const endpoint = type === 'INCOME' ? '/cash-register/income' : '/cash-register/expense';
+      
+      router.post(endpoint, submitData, {
         onSuccess: () => {
           setFormData({
             amount: '',

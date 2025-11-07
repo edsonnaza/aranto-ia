@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Services\CashRegisterService;
 use App\Services\PaymentService;
+use App\Services\AuditService;
 use App\Models\CashRegisterSession;
 use App\Models\Transaction;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -88,27 +90,69 @@ class CashRegisterController extends Controller
      */
     public function close(Request $request)
     {
-        $request->validate([
-            'final_amount' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:1000',
+        Log::info('🔧 DEBUG: Close cash method called');
+        Log::info('🔧 DEBUG: Request data:', $request->all());
+        Log::info('🔧 DEBUG: User ID:', ['user_id' => auth()->id()]);
+
+        $session = CashRegisterSession::where('user_id', auth()->id())
+            ->whereNull('closing_date')  // Cambio de closed_at a closing_date
+            ->first();
+
+        Log::info('🔧 DEBUG: Found session:', ['session_id' => $session?->id, 'exists' => !!$session]);
+
+        if (!$session) {
+            Log::warning('🔧 DEBUG: No active session found');
+            return response()->json(['error' => 'No hay una sesión de caja abierta'], 422);
+        }
+
+        $validated = $request->validate([
+            'physical_amount' => 'required|numeric|min:0',
+            'calculated_balance' => 'required|numeric',
+            'difference' => 'required|numeric',
+            'notes' => 'nullable|string|max:500',
         ]);
 
-        try {
-            $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
-            if (!$activeSession) {
-                throw new \Exception('No hay sesión de caja activa.');
-            }
+        Log::info('🔧 DEBUG: Validation passed:', $validated);
 
-            $session = $this->cashRegisterService->closeSession(
-                $activeSession,
-                $request->final_amount,
-                Auth::user(),
-                $request->notes
+        try {
+            $updated = $session->update([
+                'closing_date' => now(),  // Cambio de closed_at a closing_date
+                'final_physical_amount' => $validated['physical_amount'],  // Cambio de closing_amount a final_physical_amount
+                'calculated_balance' => $validated['calculated_balance'],
+                'difference' => $validated['difference'],
+                'difference_justification' => $validated['notes'],  // Cambio de closing_notes a difference_justification
+                'status' => 'closed',  // Agregar cambio de status
+            ]);
+
+            Log::info('🔧 DEBUG: Update result:', ['updated' => $updated]);
+            Log::info('🔧 DEBUG: Session after update:', $session->fresh()->toArray());
+
+            // Log audit
+            app(AuditService::class)->logActivity(
+                $session,
+                'cash_register_closed',
+                null,
+                [
+                    'session_id' => $session->id,
+                    'closing_amount' => $validated['physical_amount'],
+                    'calculated_balance' => $validated['calculated_balance'],
+                    'difference' => $validated['difference'],
+                ],
+                'Caja cerrada exitosamente'
             );
 
-            return redirect()->route('cash-register.index')->with('success', 'Caja cerrada exitosamente.');
+            Log::info('🔧 DEBUG: Audit logged successfully');
+
+            // Redirect back to dashboard with success message
+            return redirect()->route('cash-register.index')->with('success', 'Caja cerrada exitosamente');
+
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+            Log::error('🔧 DEBUG: Exception caught:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return redirect()->back()->with('error', 'Error al cerrar la caja: ' . $e->getMessage());
         }
     }
 
@@ -157,24 +201,28 @@ class CashRegisterController extends Controller
     {
         $request->validate([
             'amount' => 'required|numeric|min:0.01',
-            'concept' => 'required|string|max:255',
-            'notes' => 'nullable|string|max:500',
+            'description' => 'required|string|max:255',
+            'service_id' => 'nullable|integer|exists:services,id',
+            'patient_name' => 'nullable|string|max:255',
         ]);
 
         try {
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                throw new \Exception('No hay sesión de caja activa.');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay sesión de caja activa.'
+                ], 400);
             }
 
             $transaction = Transaction::create([
                 'cash_register_session_id' => $activeSession->id,
                 'type' => 'INCOME',
+                'category' => 'SERVICE_PAYMENT', // Default category for income
                 'amount' => $request->amount,
-                'concept' => $request->concept,
-                'notes' => $request->notes,
+                'concept' => $request->description, // Map description to concept
+                'patient_id' => $request->service_id, // Temporary mapping
                 'user_id' => Auth::id(),
-                'payment_method' => 'CASH',
             ]);
 
             return redirect()->route('cash-register.index')->with('success', 'Ingreso registrado exitosamente.');
@@ -190,24 +238,28 @@ class CashRegisterController extends Controller
     {
         $request->validate([
             'amount' => 'required|numeric|min:0.01',
-            'concept' => 'required|string|max:255',
-            'notes' => 'nullable|string|max:500',
+            'description' => 'required|string|max:255',
+            'service_id' => 'nullable|integer|exists:services,id',
+            'patient_name' => 'nullable|string|max:255',
         ]);
 
         try {
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                throw new \Exception('No hay sesión de caja activa.');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay sesión de caja activa.'
+                ], 400);
             }
 
             $transaction = Transaction::create([
                 'cash_register_session_id' => $activeSession->id,
                 'type' => 'EXPENSE',
+                'category' => 'OTHER', // Default category for expense
                 'amount' => $request->amount,
-                'concept' => $request->concept,
-                'notes' => $request->notes,
+                'concept' => $request->description, // Map description to concept
+                'patient_id' => $request->service_id, // Temporary mapping
                 'user_id' => Auth::id(),
-                'payment_method' => 'CASH',
             ]);
 
             return redirect()->route('cash-register.index')->with('success', 'Egreso registrado exitosamente.');
