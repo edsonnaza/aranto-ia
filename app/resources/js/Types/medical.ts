@@ -2,9 +2,19 @@
 export interface InsuranceType {
   id: number
   name: string
+  code: string
   description?: string
+  requires_authorization: boolean
   coverage_percentage: number
+  has_copay: boolean
+  copay_amount: number
+  contact_name?: string
+  contact_phone?: string
+  contact_email?: string
+  billing_address?: string
+  status: 'active' | 'inactive'
   active: boolean
+  deductible_amount?: number
   created_at: string
   updated_at: string
 }
@@ -36,37 +46,74 @@ export interface MedicalService {
   updated_at: string
 }
 
+export interface Specialty {
+  id: number
+  name: string
+  code?: string
+  description?: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Professional {
   id: number
   first_name: string
   last_name: string
-  email: string
+  email?: string
   phone?: string
-  specialty: string
-  license_number: string
-  commission_percentage: number
-  active: boolean
-  hire_date: string
+  identification?: string
+  license_number?: string
+  commission_percentage?: number
+  is_active: boolean
+  address?: string
+  status: string
+  specialties?: Specialty[]
+  services?: MedicalService[]
   created_at: string
   updated_at: string
 }
 
 export interface Patient {
   id: number
+  document_type: string
+  document_number: string
   first_name: string
   last_name: string
   email?: string
   phone?: string
   birth_date?: string
-  gender?: 'male' | 'female' | 'other'
+  gender?: 'M' | 'F' | 'OTHER'
   address?: string
   city?: string
-  emergency_contact?: string
-  emergency_phone?: string
+  state?: string
+  postal_code?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
   insurance_type_id?: number
   insurance_number?: string
-  active: boolean
+  insurance_valid_until?: string
+  insurance_coverage_percentage?: number
+  status: 'active' | 'inactive'
+  notes?: string
   insurance_type?: InsuranceType
+  
+  // Campos computados para múltiples seguros
+  insurance_info?: string
+  primary_insurance_info?: {
+    name: string
+    code: string
+    number?: string
+    valid_until?: string
+    coverage_percentage: number
+  }
+  total_insurances?: number
+  
+  // Atributos legacy
+  full_name?: string
+  formatted_document?: string
+  age?: number
+  
   created_at: string
   updated_at: string
 }

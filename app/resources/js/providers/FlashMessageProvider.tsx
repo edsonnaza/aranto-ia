@@ -8,9 +8,15 @@ interface FlashMessageProviderProps {
 
 export default function FlashMessageProvider({ children }: FlashMessageProviderProps) {
     const { props } = usePage();
-    const { message, error } = props as { message?: string; error?: string };
+    const { message, error, flash } = props as { 
+        message?: string; 
+        error?: string;
+        flash?: { success?: string; error?: string };
+    };
     const lastMessage = useRef<string | undefined>(undefined);
     const lastError = useRef<string | undefined>(undefined);
+    const lastFlashSuccess = useRef<string | undefined>(undefined);
+    const lastFlashError = useRef<string | undefined>(undefined);
     const toastTimeouts = useRef<Set<string>>(new Set());
 
     const showToast = (type: 'success' | 'error', text: string) => {
@@ -35,21 +41,40 @@ export default function FlashMessageProvider({ children }: FlashMessageProviderP
     };
 
     useEffect(() => {
-        console.log('FlashMessageProvider - Props received:', { message, error, lastMessage: lastMessage.current, lastError: lastError.current });
+        console.log('FlashMessageProvider - Props received:', { 
+            message, 
+            error, 
+            flash,
+            lastMessage: lastMessage.current, 
+            lastError: lastError.current 
+        });
         
-        // Solo mostrar toast si el mensaje cambió y no es undefined
+        // Manejar formato antiguo (message/error)
         if (message && message !== lastMessage.current) {
-            console.log('Showing success toast:', message);
+            console.log('Showing success toast (old format):', message);
             lastMessage.current = message;
             showToast('success', message);
         }
         
         if (error && error !== lastError.current) {
-            console.log('Showing error toast:', error);
+            console.log('Showing error toast (old format):', error);
             lastError.current = error;
             showToast('error', error);
         }
-    }, [message, error]);
+
+        // Manejar formato nuevo (flash.success/flash.error)
+        if (flash?.success && flash.success !== lastFlashSuccess.current) {
+            console.log('Showing success toast (new format):', flash.success);
+            lastFlashSuccess.current = flash.success;
+            showToast('success', flash.success);
+        }
+        
+        if (flash?.error && flash.error !== lastFlashError.current) {
+            console.log('Showing error toast (new format):', flash.error);
+            lastFlashError.current = flash.error;
+            showToast('error', flash.error);
+        }
+    }, [message, error, flash]);
 
     return <>{children}</>;
 }

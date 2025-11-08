@@ -185,8 +185,8 @@ export default function InsuranceTypesShow({
                       </div>
                     </div>
                     <div className="text-right">
-                      <Badge variant={patient.active ? 'default' : 'secondary'}>
-                        {patient.active ? 'Activo' : 'Inactivo'}
+                      <Badge variant={patient.status === 'active' ? 'default' : 'secondary'}>
+                        {patient.status === 'active' ? 'Activo' : 'Inactivo'}
                       </Badge>
                       <p className="text-sm text-gray-600 mt-1">
                         {patient.insurance_number || 'Sin número de póliza'}

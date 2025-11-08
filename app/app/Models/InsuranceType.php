@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * @property int $id
@@ -34,17 +35,10 @@ class InsuranceType extends Model
      */
     protected $fillable = [
         'name',
-        'code',
         'description',
-        'requires_authorization',
         'coverage_percentage',
-        'has_copay',
-        'copay_amount',
-        'contact_name',
-        'contact_phone',
-        'contact_email',
-        'billing_address',
-        'status',
+        'deductible_amount',
+        'active',
     ];
 
     /**
@@ -53,10 +47,9 @@ class InsuranceType extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'requires_authorization' => 'boolean',
+        'active' => 'boolean',
         'coverage_percentage' => 'float',
-        'has_copay' => 'boolean',
-        'copay_amount' => 'float',
+        'deductible_amount' => 'float',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -70,11 +63,29 @@ class InsuranceType extends Model
     }
 
     /**
-     * Get all patients with this insurance type.
+     * Get all patients with this insurance type (legacy single insurance).
      */
     public function patients(): HasMany
     {
         return $this->hasMany(Patient::class);
+    }
+
+    /**
+     * Get all patients with this insurance type via many-to-many.
+     */
+    public function patientsWithInsurance(): BelongsToMany
+    {
+        return $this->belongsToMany(Patient::class, 'patient_insurances')
+            ->withPivot([
+                'insurance_number',
+                'valid_from',
+                'valid_until', 
+                'coverage_percentage',
+                'is_primary',
+                'status',
+                'notes'
+            ])
+            ->withTimestamps();
     }
 
     /**

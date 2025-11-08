@@ -43,7 +43,7 @@ class InsuranceTypeController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return Inertia::render('Medical/InsuranceTypes/Index', [
+        return Inertia::render('medical/insurance-types/Index', [
             'insuranceTypes' => $insuranceTypes,
             'filters' => $request->only(['search', 'status', 'requires_authorization']),
             'stats' => [
@@ -59,7 +59,7 @@ class InsuranceTypeController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Medical/InsuranceTypes/Create', [
+        return Inertia::render('medical/insurance-types/Create', [
             'statusOptions' => [
                 ['value' => 'active', 'label' => 'Activo'],
                 ['value' => 'inactive', 'label' => 'Inactivo'],
@@ -74,23 +74,16 @@ class InsuranceTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100', 'unique:insurance_types'],
-            'code' => ['required', 'string', 'max:20', 'unique:insurance_types'],
             'description' => ['nullable', 'string', 'max:500'],
-            'requires_authorization' => ['required', 'boolean'],
             'coverage_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'has_copay' => ['required', 'boolean'],
-            'copay_amount' => ['required_if:has_copay,true', 'nullable', 'numeric', 'min:0'],
-            'contact_name' => ['nullable', 'string', 'max:100'],
-            'contact_phone' => ['nullable', 'string', 'max:20'],
-            'contact_email' => ['nullable', 'email', 'max:100'],
-            'billing_address' => ['nullable', 'string', 'max:200'],
-            'status' => ['required', 'in:active,inactive'],
+            'deductible_amount' => ['nullable', 'numeric', 'min:0'],
+            'active' => ['required', 'boolean'],
         ]);
 
         InsuranceType::create($validated);
 
         return redirect()
-            ->route('insurance-types.index')
+            ->route('medical.insurance-types.index')
             ->with('message', 'Tipo de seguro creado exitosamente.');
     }
 
@@ -119,7 +112,7 @@ class InsuranceTypeController extends Controller
             ->limit(5)
             ->get();
 
-        return Inertia::render('Medical/InsuranceTypes/Show', [
+        return Inertia::render('medical/insurance-types/Show', [
             'insuranceType' => $insuranceType,
             'recentPrices' => $recentPrices,
             'recentPatients' => $recentPatients,
@@ -131,7 +124,7 @@ class InsuranceTypeController extends Controller
      */
     public function edit(InsuranceType $insuranceType): Response
     {
-        return Inertia::render('Medical/InsuranceTypes/Edit', [
+        return Inertia::render('medical/insurance-types/Edit', [
             'insuranceType' => $insuranceType,
             'statusOptions' => [
                 ['value' => 'active', 'label' => 'Activo'],
@@ -147,23 +140,16 @@ class InsuranceTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('insurance_types')->ignore($insuranceType)],
-            'code' => ['required', 'string', 'max:20', Rule::unique('insurance_types')->ignore($insuranceType)],
             'description' => ['nullable', 'string', 'max:500'],
-            'requires_authorization' => ['required', 'boolean'],
             'coverage_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'has_copay' => ['required', 'boolean'],
-            'copay_amount' => ['required_if:has_copay,true', 'nullable', 'numeric', 'min:0'],
-            'contact_name' => ['nullable', 'string', 'max:100'],
-            'contact_phone' => ['nullable', 'string', 'max:20'],
-            'contact_email' => ['nullable', 'email', 'max:100'],
-            'billing_address' => ['nullable', 'string', 'max:200'],
-            'status' => ['required', 'in:active,inactive'],
+            'deductible_amount' => ['nullable', 'numeric', 'min:0'],
+            'active' => ['required', 'boolean'],
         ]);
 
         $insuranceType->update($validated);
 
         return redirect()
-            ->route('insurance-types.index')
+            ->route('medical.insurance-types.index')
             ->with('message', 'Tipo de seguro actualizado exitosamente.');
     }
 
@@ -175,20 +161,20 @@ class InsuranceTypeController extends Controller
         // Verificar si tiene dependencias
         if ($insuranceType->servicePrices()->exists()) {
             return redirect()
-                ->route('insurance-types.index')
+                ->route('medical.insurance-types.index')
                 ->with('error', 'No se puede eliminar el tipo de seguro porque tiene precios asociados.');
         }
 
         if ($insuranceType->patients()->exists()) {
             return redirect()
-                ->route('insurance-types.index')
+                ->route('medical.insurance-types.index')
                 ->with('error', 'No se puede eliminar el tipo de seguro porque tiene pacientes asociados.');
         }
 
         $insuranceType->delete();
 
         return redirect()
-            ->route('insurance-types.index')
+            ->route('medical.insurance-types.index')
             ->with('message', 'Tipo de seguro eliminado exitosamente.');
     }
 

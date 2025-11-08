@@ -74,16 +74,24 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
 
     // Patients Management
     Route::resource('patients', PatientController::class)->names([
-        'index' => 'patients.index',
-        'create' => 'patients.create',
-        'store' => 'patients.store',
-        'show' => 'patients.show',
-        'edit' => 'patients.edit',
-        'update' => 'patients.update',
-        'destroy' => 'patients.destroy'
+        'index' => 'medical.patients.index',
+        'create' => 'medical.patients.create',
+        'store' => 'medical.patients.store',
+        'show' => 'medical.patients.show',
+        'edit' => 'medical.patients.edit',
+        'update' => 'medical.patients.update',
+        'destroy' => 'medical.patients.destroy'
     ]);
     Route::get('patients-search', [PatientController::class, 'search'])
-        ->name('patients.search');
+        ->name('medical.patients.search');
+    
+    // Patient Insurance Management
+    Route::post('patients/{patient}/insurances', [PatientController::class, 'addInsurance'])
+        ->name('medical.patients.add-insurance');
+    Route::patch('patients/{patient}/insurances/{insuranceTypeId}', [PatientController::class, 'updateInsurance'])
+        ->name('medical.patients.update-insurance');
+    Route::delete('patients/{patient}/insurances/{insuranceTypeId}', [PatientController::class, 'removeInsurance'])
+        ->name('medical.patients.remove-insurance');
 
     // Professionals Management
     Route::resource('professionals', ProfessionalController::class)->names([

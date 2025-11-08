@@ -42,6 +42,8 @@ class Professional extends Model
     protected $fillable = [
         'document_type',
         'document_number',
+        'identification',
+        'license_number',
         'first_name',
         'last_name',
         'date_of_birth',
@@ -56,6 +58,7 @@ class Professional extends Model
         'status',
         'hire_date',
         'termination_date',
+        'is_active',
     ];
 
     /**

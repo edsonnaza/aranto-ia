@@ -35,7 +35,7 @@ class ProfessionalController extends Controller
     public function index(Request $request): Response
     {
         $query = Professional::query()
-            ->with(['commissions', 'services'])
+            ->with(['commissions', 'services', 'specialties'])
             ->withCount(['commissions', 'services']);
 
         // Search functionality
@@ -43,9 +43,11 @@ class ProfessionalController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('identification', 'like', "%{$search}%")
+                  ->orWhere('document_number', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('specialty', 'like', "%{$search}%");
+                  ->orWhereHas('specialties', function($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -55,8 +57,10 @@ class ProfessionalController extends Controller
         }
 
         // Specialty filter
-        if ($specialty = $request->get('specialty')) {
-            $query->where('specialty', $specialty);
+        if ($specialtyId = $request->get('specialty_id')) {
+            $query->whereHas('specialties', function($q) use ($specialtyId) {
+                $q->where('specialty_id', $specialtyId);
+            });
         }
 
         // Commission rate filter
@@ -85,21 +89,19 @@ class ProfessionalController extends Controller
             'total' => Professional::count(),
             'active' => Professional::where('status', 'active')->count(),
             'inactive' => Professional::where('status', 'inactive')->count(),
-            'with_services' => Professional::has('services')->count(),
-            'avg_commission' => Professional::where('status', 'active')->avg('commission_percentage'),
-            'total_commissions' => ProfessionalCommission::sum('commission_amount')
+            'specialties' => Professional::has('specialties')->count(),
+            'avg_commission' => (float) (Professional::where('status', 'active')->avg('commission_percentage') ?? 0),
+            'total_commissions' => (float) (ProfessionalCommission::sum('commission_amount') ?? 0)
         ];
 
         // Available specialties for filter
-        $specialties = Professional::distinct('specialty')
-            ->whereNotNull('specialty')
-            ->pluck('specialty')
-            ->sort()
-            ->values();
+        $specialties = \App\Models\Specialty::where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return Inertia::render('Medical/Professionals/Index', [
+        return Inertia::render('medical/professionals/Index', [
             'professionals' => $professionals,
-            'filters' => $request->only(['search', 'status', 'specialty', 'min_commission', 'max_commission', 'sort', 'direction']),
+            'filters' => $request->only(['search', 'status', 'specialty_id', 'min_commission', 'max_commission', 'sort', 'direction']),
             'stats' => $stats,
             'specialties' => $specialties,
         ]);
@@ -112,12 +114,17 @@ class ProfessionalController extends Controller
      */
     public function create(): Response
     {
-        $services = MedicalService::where('is_active', true)
+        $services = MedicalService::where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
+            
+        $specialties = \App\Models\Specialty::where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return Inertia::render('Medical/Professionals/Create', [
+        return Inertia::render('medical/professionals/Create', [
             'services' => $services,
+            'specialties' => $specialties,
         ]);
     }
 
@@ -132,21 +139,36 @@ class ProfessionalController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'identification' => ['required', 'string', 'max:20', 'unique:professionals,identification'],
-            'email' => ['required', 'email', 'max:255', 'unique:professionals,email'],
+            'identification' => ['nullable', 'string', 'max:20', 'unique:professionals,identification'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:professionals,email'],
             'phone' => ['nullable', 'string', 'max:15'],
-            'specialty' => ['required', 'string', 'max:100'],
-            'license_number' => ['required', 'string', 'max:50', 'unique:professionals,license_number'],
-            'commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'license_number' => ['nullable', 'string', 'max:50', 'unique:professionals,license_number'],
+            'commission_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
             'services' => ['array'],
-            'services.*' => ['exists:medical_services,id']
+            'services.*' => ['exists:medical_services,id'],
+            'specialties' => ['required', 'array', 'min:1'],
+            'specialties.*' => ['exists:specialties,id']
         ]);
 
         $validated['is_active'] = $request->boolean('is_active', true);
+        
+        // Set additional required fields
+        $validated['document_type'] = 'CI';
+        $validated['document_number'] = $validated['identification'] ?: 'Sin identificación';
+        $validated['status'] = $validated['is_active'] ? 'active' : 'inactive';
 
         $professional = Professional::create($validated);
+
+        // Attach specialties with first one as primary
+        if (!empty($validated['specialties'])) {
+            $specialtyData = [];
+            foreach ($validated['specialties'] as $index => $specialtyId) {
+                $specialtyData[$specialtyId] = ['is_primary' => $index === 0];
+            }
+            $professional->specialties()->attach($specialtyData);
+        }
 
         // Attach services if provided
         if (!empty($validated['services'])) {
@@ -154,7 +176,7 @@ class ProfessionalController extends Controller
         }
 
         return redirect()->route('medical.professionals.index')
-            ->with('success', "Profesional {$professional->full_name} creado exitosamente.");
+            ->with('message', "Profesional {$professional->full_name} creado exitosamente.");
     }
 
     /**
@@ -185,7 +207,7 @@ class ProfessionalController extends Controller
             'avg_per_service' => $professional->commissions()->avg('commission_amount'),
         ];
 
-        return Inertia::render('Medical/Professionals/Show', [
+        return Inertia::render('medical/professionals/Show', [
             'professional' => $professional,
             'commissionStats' => $commissionStats,
         ]);
@@ -199,15 +221,20 @@ class ProfessionalController extends Controller
      */
     public function edit(Professional $professional): Response
     {
-        $professional->load('services');
+        $professional->load(['services', 'specialties']);
         
-        $services = MedicalService::where('is_active', true)
+        $services = MedicalService::where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
+            
+        $specialties = \App\Models\Specialty::where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return Inertia::render('Medical/Professionals/Edit', [
+        return Inertia::render('medical/professionals/Edit', [
             'professional' => $professional,
             'services' => $services,
+            'specialties' => $specialties,
         ]);
     }
 
@@ -223,21 +250,31 @@ class ProfessionalController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'identification' => ['required', 'string', 'max:20', Rule::unique('professionals')->ignore($professional->id)],
-            'email' => ['required', 'email', 'max:255', Rule::unique('professionals')->ignore($professional->id)],
+            'identification' => ['nullable', 'string', 'max:20', Rule::unique('professionals')->ignore($professional->id)],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('professionals')->ignore($professional->id)],
             'phone' => ['nullable', 'string', 'max:15'],
-            'specialty' => ['required', 'string', 'max:100'],
-            'license_number' => ['required', 'string', 'max:50', Rule::unique('professionals')->ignore($professional->id)],
-            'commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'license_number' => ['nullable', 'string', 'max:50', Rule::unique('professionals')->ignore($professional->id)],
+            'commission_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
             'services' => ['array'],
-            'services.*' => ['exists:medical_services,id']
+            'services.*' => ['exists:medical_services,id'],
+            'specialties' => ['required', 'array', 'min:1'],
+            'specialties.*' => ['exists:specialties,id']
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
 
         $professional->update($validated);
+
+        // Sync specialties with first one as primary
+        if (!empty($validated['specialties'])) {
+            $specialtyData = [];
+            foreach ($validated['specialties'] as $index => $specialtyId) {
+                $specialtyData[$specialtyId] = ['is_primary' => $index === 0];
+            }
+            $professional->specialties()->sync($specialtyData);
+        }
 
         // Sync services
         if (array_key_exists('services', $validated)) {
@@ -245,7 +282,7 @@ class ProfessionalController extends Controller
         }
 
         return redirect()->route('medical.professionals.show', $professional)
-            ->with('success', "Profesional {$professional->full_name} actualizado exitosamente.");
+            ->with('message', "Profesional {$professional->full_name} actualizado exitosamente.");
     }
 
     /**
@@ -267,7 +304,7 @@ class ProfessionalController extends Controller
         $professional->delete();
 
         return redirect()->route('medical.professionals.index')
-            ->with('success', "Profesional {$fullName} eliminado exitosamente.");
+            ->with('message', "Profesional {$fullName} eliminado exitosamente.");
     }
 
     /**
@@ -309,7 +346,7 @@ class ProfessionalController extends Controller
             ]
         ];
 
-        return Inertia::render('Medical/Professionals/CommissionReport', [
+        return Inertia::render('medical/professionals/CommissionReport', [
             'professional' => $professional,
             'commissions' => $commissions,
             'summary' => $summary,

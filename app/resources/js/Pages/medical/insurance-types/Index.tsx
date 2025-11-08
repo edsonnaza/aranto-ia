@@ -252,6 +252,7 @@ export default function InsuranceTypesIndex({
               data={insuranceTypes}
               columns={columns}
               searchPlaceholder="Buscar por nombre o descripción..."
+              searchKey="search"
             />
           </div>
         </div>

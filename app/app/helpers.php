@@ -139,3 +139,39 @@ if (!function_exists('cents_to_currency')) {
         return $cents / 100;
     }
 }
+
+if (!function_exists('format_percentage')) {
+    /**
+     * Format a number as percentage with smart decimal handling
+     * Only shows decimals if they're not zero
+     * 
+     * @param float|string|null $percentage The percentage to format
+     * @param bool $includeSymbol Whether to include % symbol
+     * @return string Formatted percentage (e.g., "70%" or "70.5%")
+     */
+    function format_percentage($percentage, bool $includeSymbol = true): string
+    {
+        if ($percentage === null || $percentage === '') {
+            return $includeSymbol ? '0%' : '0';
+        }
+
+        $numericPercentage = is_string($percentage) ? (float) $percentage : $percentage;
+        
+        if (!is_numeric($numericPercentage)) {
+            return $includeSymbol ? '0%' : '0';
+        }
+
+        // Check if we have significant decimals
+        $hasSignificantDecimals = $numericPercentage != floor($numericPercentage);
+        
+        if ($hasSignificantDecimals) {
+            // Show decimals when they exist: 70.5%
+            $formatted = rtrim(rtrim(number_format($numericPercentage, 2, '.', ','), '0'), '.');
+        } else {
+            // Show as integer when no decimals: 70%
+            $formatted = (string) (int) $numericPercentage;
+        }
+
+        return $includeSymbol ? $formatted . '%' : $formatted;
+    }
+}
