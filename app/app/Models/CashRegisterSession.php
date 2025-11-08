@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Casts\CurrencyCast;
+use App\Traits\HasCurrencyHelpers;
 
 /**
  * @property int $id
@@ -18,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property float|null $total_income
  * @property float|null $total_expenses
  * @property float|null $difference
+ * @property float|null $opening_balance
  * @property string $status
  * @property string|null $difference_justification
  * @property int|null $authorized_by
@@ -37,7 +40,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class CashRegisterSession extends Model
 {
-    use HasFactory;
+    use HasFactory, HasCurrencyHelpers;
 
     protected $fillable = [
         'user_id',
@@ -58,12 +61,12 @@ class CashRegisterSession extends Model
     protected $casts = [
         'opening_date' => 'datetime',
         'closing_date' => 'datetime',
-        'initial_amount' => 'decimal:2',
-        'final_physical_amount' => 'decimal:2',
-        'calculated_balance' => 'decimal:2',
-        'total_income' => 'decimal:2',
-        'total_expenses' => 'decimal:2',
-        'difference' => 'decimal:2',
+        'initial_amount' => CurrencyCast::class,
+        'final_physical_amount' => CurrencyCast::class,
+        'calculated_balance' => CurrencyCast::class,
+        'total_income' => CurrencyCast::class,
+        'total_expenses' => CurrencyCast::class,
+        'difference' => CurrencyCast::class,
         'notes' => 'array',
     ];
 

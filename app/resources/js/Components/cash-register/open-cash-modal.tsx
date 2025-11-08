@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -10,21 +11,20 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { formatCurrency } from '@/services/currency';
 
 interface OpenCashModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-export default function OpenCashModal({ isOpen, onClose }: OpenCashModalProps) {
-    const [initialAmount, setInitialAmount] = useState<string>('');
-    const [isLoading, setIsLoading] = useState(false);
+export const OpenCashModal: React.FC<OpenCashModalProps> = ({ isOpen, onClose }) => {
+    const [initialAmount, setInitialAmount] = useState<number>(0);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-
-    console.log('OpenCashModal rendered, isOpen:', isOpen);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,20 +32,23 @@ export default function OpenCashModal({ isOpen, onClose }: OpenCashModalProps) {
         setErrors({});
 
         // Validación básica
-        if (!initialAmount || parseFloat(initialAmount) < 0) {
+        if (!initialAmount || initialAmount < 0) {
             setErrors({ initial_amount: 'El monto inicial debe ser mayor o igual a 0' });
             setIsLoading(false);
+            toast.error('El monto inicial debe ser mayor o igual a 0');
             return;
         }
 
         // Enviar datos al backend
         router.post('/cash-register/open', 
             {
-                initial_amount: parseFloat(initialAmount),
+                initial_amount: initialAmount,
             },
             {
                 onSuccess: () => {
-                    setInitialAmount('');
+                    const formattedAmount = formatCurrency(initialAmount);
+                    toast.success(`Caja abierta exitosamente con ${formattedAmount}`);
+                    setInitialAmount(0);
                     setIsLoading(false);
                     onClose();
                     // Recargar la página para mostrar el nuevo estado
@@ -53,6 +56,7 @@ export default function OpenCashModal({ isOpen, onClose }: OpenCashModalProps) {
                 },
                 onError: (errors) => {
                     setErrors(errors);
+                    toast.error('Error al abrir la caja. Verifique los datos ingresados.');
                     setIsLoading(false);
                 },
                 onFinish: () => {
@@ -64,7 +68,7 @@ export default function OpenCashModal({ isOpen, onClose }: OpenCashModalProps) {
 
     const handleClose = () => {
         if (!isLoading) {
-            setInitialAmount('');
+            setInitialAmount(0);
             setErrors({});
             onClose();
         }
@@ -101,28 +105,16 @@ export default function OpenCashModal({ isOpen, onClose }: OpenCashModalProps) {
                             <Label htmlFor="initial_amount">
                                 Monto Inicial *
                             </Label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                                    $
-                                </span>
-                                <Input
-                                    id="initial_amount"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    placeholder="0.00"
-                                    value={initialAmount}
-                                    onChange={(e) => setInitialAmount(e.target.value)}
-                                    className="pl-8"
-                                    disabled={isLoading}
-                                    required
-                                />
-                            </div>
-                            {errors.initial_amount && (
-                                <p className="text-sm text-red-600">
-                                    {errors.initial_amount}
-                                </p>
-                            )}
+                            <CurrencyInput
+                                id="initial_amount"
+                                placeholder="0"
+                                value={initialAmount}
+                                onChange={setInitialAmount}
+                                disabled={isLoading}
+                                showPrefix={true}
+                                error={errors.initial_amount}
+                                minValue={0}
+                            />
                         </div>
 
                         <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">

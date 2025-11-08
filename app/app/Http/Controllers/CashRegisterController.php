@@ -26,24 +26,37 @@ class CashRegisterController extends Controller
      */
     public function index(): Response
     {
+        \Log::info('🔧 DEBUG: CashRegister index method called');
+        
         $user = Auth::user();
+        \Log::info('🔧 DEBUG: User retrieved', ['user_id' => $user?->id]);
+        
         $activeSession = $this->cashRegisterService->getActiveSession($user);
+        \Log::info('🔧 DEBUG: Active session retrieved', ['session' => $activeSession?->toArray()]);
         
         // Get today's transactions
         $todayTransactions = collect();
         $balance = [
-            'opening' => 0,
-            'income' => 0,
-            'expense' => 0,
-            'current' => 0,
+            'opening' => 0.0,
+            'income' => 0.0,
+            'expense' => 0.0,
+            'current' => 0.0,
         ];
 
         if ($activeSession) {
+            \Log::info('🔧 DEBUG: Processing active session', [
+                'session_id' => $activeSession->id,
+                'initial_amount' => $activeSession->initial_amount,
+                'status' => $activeSession->status
+            ]);
+            
             $todayTransactions = $activeSession->transactions()
                 ->whereDate('created_at', today())
                 ->with('user', 'service')
                 ->latest()
                 ->get();
+            
+            \Log::info('🔧 DEBUG: Transactions retrieved', ['count' => $todayTransactions->count()]);
             
             $balance = [
                 'opening' => $activeSession->initial_amount,
@@ -55,11 +68,27 @@ class CashRegisterController extends Controller
                            $todayTransactions->where('type', 'PAYMENT')->sum('amount') -
                            $todayTransactions->where('type', 'EXPENSE')->sum('amount'),
             ];
+            
+            \Log::info('🔧 DEBUG: Balance calculated', $balance);
         }
 
         return Inertia::render('cash-register/dashboard', [
             'activeSession' => $activeSession,
-            'todayTransactions' => $todayTransactions,
+            'todayTransactions' => $todayTransactions->map(function ($transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'type' => $transaction->type,
+                    'amount' => (float) $transaction->amount,
+                    'description' => $transaction->concept ?? '',
+                    'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
+                    'user' => $transaction->user ? [
+                        'name' => $transaction->user->name,
+                    ] : null,
+                    'service' => $transaction->service ? [
+                        'name' => $transaction->service->name,
+                    ] : null,
+                ];
+            }),
             'balance' => $balance,
         ]);
     }

@@ -123,4 +123,26 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Currency Configuration (Paraguay)
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Paraguay's currency (Guaraní) formatting.
+    | Used throughout the application for consistent monetary display.
+    |
+    */
+
+    'currency' => [
+        'code' => 'PYG',
+        'name' => 'Paraguayan Guaraní',
+        'symbol' => '₲',
+        'symbol_position' => 'before', // 'before' or 'after'
+        'decimal_places' => 2,
+        'decimal_separator' => ',',
+        'thousands_separator' => '.',
+        'format' => '₲ {amount}', // {amount} will be replaced with formatted number
+        'smart_decimals' => true, // Show decimals only when needed
+    ],
+
 ];

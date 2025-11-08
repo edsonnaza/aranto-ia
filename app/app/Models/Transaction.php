@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Casts\CurrencyCast;
+use App\Traits\HasCurrencyHelpers;
 
 /**
  * @property int $id
@@ -34,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Transaction extends Model
 {
-    use HasFactory;
+    use HasFactory, HasCurrencyHelpers;
 
     protected $fillable = [
         'cash_register_session_id',
@@ -57,7 +59,7 @@ class Transaction extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
+        'amount' => CurrencyCast::class,
         'cancelled_at' => 'datetime',
         'metadata' => 'array',
     ];

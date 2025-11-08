@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import { toast } from 'sonner';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { formatCurrency } from '@/services/currency';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -24,7 +27,7 @@ export default function TransactionModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    amount: '',
+    amount: 0,
     description: '',
     service_id: '',
     patient_name: '',
@@ -39,7 +42,7 @@ export default function TransactionModal({
       setFormData(prev => ({
         ...prev,
         service_id: serviceId,
-        amount: service.price.toString(),
+        amount: service.price,
         description: `Servicio: ${service.name}`,
       }));
     } else {
@@ -50,10 +53,17 @@ export default function TransactionModal({
     }
   };
 
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
+  const handleInputChange = (field: keyof typeof formData, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+  const handleAmountChange = (value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      amount: value,
     }));
   };
 
@@ -63,14 +73,16 @@ export default function TransactionModal({
     setError(null);
 
     // Basic validation
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+    if (!formData.amount || formData.amount <= 0) {
       setError('El monto debe ser mayor a 0');
+      toast.error('El monto debe ser mayor a 0');
       setIsLoading(false);
       return;
     }
 
     if (!formData.description || formData.description.length < 3) {
       setError('La descripción debe tener al menos 3 caracteres');
+      toast.error('La descripción debe tener al menos 3 caracteres');
       setIsLoading(false);
       return;
     }
@@ -78,7 +90,7 @@ export default function TransactionModal({
     try {
       const submitData = {
         type,
-        amount: parseFloat(formData.amount),
+        amount: formData.amount,
         description: formData.description,
         ...(formData.service_id && { service_id: parseInt(formData.service_id) }),
         ...(formData.patient_name && { patient_name: formData.patient_name }),
@@ -88,8 +100,11 @@ export default function TransactionModal({
       
       router.post(endpoint, submitData, {
         onSuccess: () => {
+          const formattedAmount = formatCurrency(formData.amount);
+          const transactionType = type === 'INCOME' ? 'Ingreso' : 'Egreso';
+          toast.success(`${transactionType} registrado exitosamente: ${formattedAmount}`);
           setFormData({
-            amount: '',
+            amount: 0,
             description: '',
             service_id: '',
             patient_name: '',
@@ -98,7 +113,9 @@ export default function TransactionModal({
         },
         onError: (errors) => {
           console.error('Transaction error:', errors);
-          setError(errors.message || 'Error al registrar la transacción');
+          const errorMessage = errors.message || 'Error al registrar la transacción';
+          setError(errorMessage);
+          toast.error(errorMessage);
         },
         onFinish: () => {
           setIsLoading(false);
@@ -106,7 +123,9 @@ export default function TransactionModal({
       });
     } catch (err) {
       console.error('Transaction submission error:', err);
-      setError('Error al procesar la transacción');
+      const errorMessage = 'Error al procesar la transacción';
+      setError(errorMessage);
+      toast.error(errorMessage);
       setIsLoading(false);
     }
   };
@@ -114,7 +133,7 @@ export default function TransactionModal({
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
-        amount: '',
+        amount: 0,
         description: '',
         service_id: '',
         patient_name: '',
@@ -181,18 +200,17 @@ export default function TransactionModal({
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               Monto *
             </label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
+            <CurrencyInput
+              placeholder="0"
               value={formData.amount}
-              onChange={(e) => handleInputChange('amount', e.target.value)}
+              onChange={handleAmountChange}
               disabled={isLoading}
+              showPrefix={true}
+              minValue={0}
             />
             {selectedService && (
               <p className="text-sm text-muted-foreground">
-                Precio del servicio: ${selectedService.price.toFixed(2)}
+                Precio del servicio: {formatCurrency(selectedService.price)}
               </p>
             )}
           </div>

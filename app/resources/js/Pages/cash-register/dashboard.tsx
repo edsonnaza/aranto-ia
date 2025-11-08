@@ -2,9 +2,10 @@ import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
-import OpenCashModal from '@/components/cash-register/open-cash-modal';
+import { OpenCashModal } from '@/components/cash-register/open-cash-modal';
 import TransactionModal from '@/components/cash-register/transaction-modal';
 import CloseCashModal from '@/components/cash-register/CloseCashModal';
+import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
 
@@ -37,8 +38,12 @@ export default function CashRegisterDashboard({
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
     const [isCloseModalVisible, setIsCloseModalVisible] = useState(false);
 
+    // Use Paraguay Guaraní formatter
+    const { format: formatCurrency } = useCurrencyFormatter();
+
     console.log('Dashboard rendered, activeSession:', activeSession);
     console.log('isOpenModalVisible:', isOpenModalVisible);
+    console.log('isCloseModalVisible:', isCloseModalVisible);
 
     const handleOpenModal = () => {
         console.log('Button clicked, opening modal...');
@@ -55,7 +60,7 @@ export default function CashRegisterDashboard({
                     description="Gestión de caja registradora y transacciones diarias"
                 />
 
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-5">
                     {/* Session Status Card */}
                     <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
                         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -104,7 +109,7 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold">
-                            ${Number(balance?.opening || 0).toFixed(2)}
+                            {formatCurrency(Number(balance?.opening) || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Balance inicial del día
@@ -131,10 +136,37 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold text-green-600">
-                            ${Number(balance?.income || 0).toFixed(2)}
+                            {formatCurrency(Number(balance?.income) || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Total de ingresos del día
+                        </p>
+                    </div>
+
+                    {/* Egresos */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Egresos</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-red-600"
+                            >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold text-red-600">
+                            {formatCurrency(Number(balance?.expense) || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Total de egresos del día
                         </p>
                     </div>
 
@@ -156,7 +188,7 @@ export default function CashRegisterDashboard({
                             </svg>
                         </div>
                         <div className="text-2xl font-bold">
-                            ${Number(balance?.current || 0).toFixed(2)}
+                            {formatCurrency(Number(balance?.current) || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Balance total disponible
@@ -206,7 +238,11 @@ export default function CashRegisterDashboard({
                                         Registrar Egreso
                                     </button>
                                     <button 
-                                        onClick={() => setIsCloseModalVisible(true)}
+                                        onClick={() => {
+                                            console.log('Cerrar Caja button clicked!');
+                                            console.log('Setting isCloseModalVisible to true');
+                                            setIsCloseModalVisible(true);
+                                        }}
                                         className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-primary-foreground hover:bg-red-700 h-10 px-4 py-2"
                                     >
                                         <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
@@ -271,7 +307,7 @@ export default function CashRegisterDashboard({
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                     <span className={transaction.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
-                                                        {transaction.type === 'INCOME' ? '+' : '-'}${Number(transaction.amount).toFixed(2)}
+                                                        {transaction.type === 'INCOME' ? '+' : '-'}{formatCurrency(Number(transaction.amount))}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
