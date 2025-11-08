@@ -7,6 +7,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string|null $code
+ * @property string|null $description
+ * @property int|null $category_id
+ * @property int $duration_minutes
+ * @property bool $requires_appointment
+ * @property bool $requires_preparation
+ * @property string|null $preparation_instructions
+ * @property float $default_commission_percentage
+ * @property string $status
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $formatted_duration
+ */
 class MedicalService extends Model
 {
     /**
@@ -35,7 +52,7 @@ class MedicalService extends Model
     protected $casts = [
         'requires_appointment' => 'boolean',
         'requires_preparation' => 'boolean',
-        'default_commission_percentage' => 'decimal:2',
+        'default_commission_percentage' => 'float',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -61,7 +78,7 @@ class MedicalService extends Model
      */
     public function currentPrices(): HasMany
     {
-        $today = Carbon::now()->format('Y-m-d');
+        $today = Carbon::now()->toDateString();
         
         return $this->servicePrices()
             ->where('effective_from', '<=', $today)
@@ -122,10 +139,10 @@ class MedicalService extends Model
     /**
      * Get price for specific insurance type.
      */
-    public function getPriceForInsurance(InsuranceType $insuranceType, Carbon $date = null): ?ServicePrice
+    public function getPriceForInsurance(InsuranceType $insuranceType, ?Carbon $date = null): ?ServicePrice
     {
         $date = $date ?? Carbon::now();
-        $dateString = $date->format('Y-m-d');
+        $dateString = $date->toDateString();
 
         return $this->servicePrices()
             ->where('insurance_type_id', $insuranceType->id)
@@ -179,7 +196,7 @@ class MedicalService extends Model
     /**
      * Calculate commission amount for this service.
      */
-    public function calculateCommission(float $servicePrice, float $customPercentage = null): float
+    public function calculateCommission(float $servicePrice, ?float $customPercentage = null): float
     {
         $percentage = $customPercentage ?? $this->default_commission_percentage;
         return $servicePrice * ($percentage / 100);

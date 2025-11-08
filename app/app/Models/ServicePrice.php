@@ -6,6 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Carbon\Carbon;
 
+/**
+ * @property int $id
+ * @property int $service_id
+ * @property int $insurance_type_id
+ * @property float $price
+ * @property \Illuminate\Support\Carbon $effective_from
+ * @property \Illuminate\Support\Carbon|null $effective_until
+ * @property int|null $created_by
+ * @property string|null $notes
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $formatted_price
+ * @property-read string $status
+ * @property-read int|null $days_until_expiry
+ */
 class ServicePrice extends Model
 {
     /**
@@ -29,7 +45,7 @@ class ServicePrice extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'price' => 'decimal:2',
+        'price' => 'float',
         'effective_from' => 'date',
         'effective_until' => 'date',
         'created_at' => 'datetime',
@@ -63,44 +79,44 @@ class ServicePrice extends Model
     /**
      * Check if this price is currently active.
      */
-    public function isActive(Carbon $date = null): bool
+    public function isActive(?Carbon $date = null): bool
     {
         $date = $date ?? Carbon::now();
-        $dateString = $date->format('Y-m-d');
+        $checkDate = $date->toDateString();
 
-        return $this->effective_from <= $dateString && 
-               ($this->effective_until === null || $this->effective_until >= $dateString);
+        return Carbon::parse($this->effective_from)->toDateString() <= $checkDate && 
+               ($this->effective_until === null || Carbon::parse($this->effective_until)->toDateString() >= $checkDate);
     }
 
     /**
      * Check if this price is expired.
      */
-    public function isExpired(Carbon $date = null): bool
+    public function isExpired(?Carbon $date = null): bool
     {
         if ($this->effective_until === null) {
             return false;
         }
 
         $date = $date ?? Carbon::now();
-        return $this->effective_until < $date->format('Y-m-d');
+        return Carbon::parse($this->effective_until)->toDateString() < $date->toDateString();
     }
 
     /**
      * Check if this price is future.
      */
-    public function isFuture(Carbon $date = null): bool
+    public function isFuture(?Carbon $date = null): bool
     {
         $date = $date ?? Carbon::now();
-        return $this->effective_from > $date->format('Y-m-d');
+        return Carbon::parse($this->effective_from)->toDateString() > $date->toDateString();
     }
 
     /**
      * Scope to get only active prices.
      */
-    public function scopeActive($query, Carbon $date = null)
+    public function scopeActive($query, ?Carbon $date = null)
     {
         $date = $date ?? Carbon::now();
-        $dateString = $date->format('Y-m-d');
+        $dateString = $date->toDateString();
 
         return $query->where('effective_from', '<=', $dateString)
                     ->where(function ($query) use ($dateString) {

@@ -5,6 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property string $document_type
+ * @property string $document_number
+ * @property string $first_name
+ * @property string $last_name
+ * @property \Illuminate\Support\Carbon $date_of_birth
+ * @property string|null $phone
+ * @property string|null $email
+ * @property string|null $address
+ * @property string|null $emergency_contact_name
+ * @property string|null $emergency_contact_phone
+ * @property int|null $insurance_type_id
+ * @property string|null $insurance_number
+ * @property \Illuminate\Support\Carbon|null $insurance_expiry_date
+ * @property string $status
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $full_name
+ * @property-read string $formatted_document
+ * @property-read int $age
+ * @property-read string $insurance_info
+ */
 class Patient extends Model
 {
     /**
@@ -35,8 +59,8 @@ class Patient extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'date_of_birth' => 'date',
-        'insurance_expiry_date' => 'date',
+        'date_of_birth' => 'datetime',
+        'insurance_expiry_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

@@ -5,6 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $professional_id
+ * @property int $specialty_id
+ * @property \Illuminate\Support\Carbon|null $certification_date
+ * @property string|null $certification_number
+ * @property bool $is_primary
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $formatted_certification
+ */
 class ProfessionalSpecialty extends Pivot
 {
     /**
@@ -40,7 +52,7 @@ class ProfessionalSpecialty extends Pivot
      * @var array<string, string>
      */
     protected $casts = [
-        'certification_date' => 'date',
+        'certification_date' => 'datetime',
         'is_primary' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

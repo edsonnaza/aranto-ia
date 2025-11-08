@@ -5,6 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $code
+ * @property string|null $description
+ * @property bool $requires_authorization
+ * @property float $coverage_percentage
+ * @property bool $has_copay
+ * @property float $copay_amount
+ * @property string|null $contact_name
+ * @property string|null $contact_phone
+ * @property string|null $contact_email
+ * @property string|null $billing_address
+ * @property string $status
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $formatted_copay
+ * @property-read string $formatted_coverage
+ */
 class InsuranceType extends Model
 {
     /**
@@ -34,9 +54,9 @@ class InsuranceType extends Model
      */
     protected $casts = [
         'requires_authorization' => 'boolean',
-        'coverage_percentage' => 'decimal:2',
+        'coverage_percentage' => 'float',
         'has_copay' => 'boolean',
-        'copay_amount' => 'decimal:2',
+        'copay_amount' => 'float',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -122,18 +142,21 @@ class InsuranceType extends Model
      */
     public function calculatePatientAmount(float $totalAmount): array
     {
-        $coverageAmount = $totalAmount * ($this->coverage_percentage / 100);
+        $coveragePercentage = $this->coverage_percentage;
+        $copayAmount = $this->copay_amount;
+        
+        $coverageAmount = $totalAmount * ($coveragePercentage / 100);
         $patientAmount = $totalAmount - $coverageAmount;
         
         if ($this->has_copay) {
-            $patientAmount += $this->copay_amount;
+            $patientAmount += $copayAmount;
         }
 
         return [
             'total_amount' => $totalAmount,
             'coverage_amount' => $coverageAmount,
             'patient_amount' => $patientAmount,
-            'copay_amount' => $this->has_copay ? $this->copay_amount : 0,
+            'copay_amount' => $this->has_copay ? $copayAmount : 0,
         ];
     }
 }

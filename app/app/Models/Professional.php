@@ -5,6 +5,32 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+/**
+ * @property int $id
+ * @property string $document_type
+ * @property string $document_number
+ * @property string $first_name
+ * @property string $last_name
+ * @property \Illuminate\Support\Carbon|null $date_of_birth
+ * @property string|null $phone
+ * @property string|null $email
+ * @property string|null $address
+ * @property string|null $professional_license
+ * @property \Illuminate\Support\Carbon|null $license_expiry_date
+ * @property string|null $title
+ * @property float $commission_percentage
+ * @property string $commission_calculation_method
+ * @property string $status
+ * @property \Illuminate\Support\Carbon $hire_date
+ * @property \Illuminate\Support\Carbon|null $termination_date
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * 
+ * @property-read string $full_name
+ * @property-read string $formatted_document
+ * @property-read float $years_of_service
+ * @property-read string $commission_method_description
+ */
 class Professional extends Model
 {
     /**
@@ -37,11 +63,11 @@ class Professional extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'date_of_birth' => 'date',
-        'license_expiry_date' => 'date',
-        'commission_percentage' => 'decimal:2',
-        'hire_date' => 'date',
-        'termination_date' => 'date',
+        'date_of_birth' => 'datetime',
+        'license_expiry_date' => 'datetime',
+        'commission_percentage' => 'float',
+        'hire_date' => 'datetime',
+        'termination_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -122,7 +148,8 @@ class Professional extends Model
      */
     public function calculateCommission(float $amount): float
     {
-        return $amount * ($this->commission_percentage / 100);
+        $percentage = $this->commission_percentage;
+        return $amount * ($percentage / 100);
     }
 
     /**
