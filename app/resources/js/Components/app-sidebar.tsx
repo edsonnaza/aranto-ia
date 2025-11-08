@@ -13,7 +13,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, DollarSign } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, DollarSign, Stethoscope } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -26,6 +26,11 @@ const mainNavItems: NavItem[] = [
         title: 'Tesorería',
         href: { url: '/cash-register', method: 'get' },
         icon: DollarSign,
+    },
+    {
+        title: 'Sistema Médico',
+        href: { url: '/medical', method: 'get' },
+        icon: Stethoscope,
     },
 ];
 

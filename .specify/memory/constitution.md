@@ -29,7 +29,7 @@ III. Arquitectura Frontend Estandarizada
 - Incluir archivos de documentación actualizados
 
 **Stack Tecnológico Obligatorio:**
-- React 18 + Inertia.js + Laravel
+- React 19 + Inertia.js + Laravel
 - Zustand para estado global
 - React Hook Form + Zod para validación
 - Vitest + Testing Library para testing frontend
