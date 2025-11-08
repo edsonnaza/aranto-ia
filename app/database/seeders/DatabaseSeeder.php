@@ -18,6 +18,11 @@ class DatabaseSeeder extends Seeder
             CashRegisterPermissionsSeeder::class,
             ServicesSeeder::class,
             CashRegisterUsersSeeder::class,
+            
+            // New medical system seeders
+            InsuranceTypesSeeder::class,
+            ServiceCategoriesSeeder::class,
+            MedicalServicesSeeder::class,
         ]);
 
         // Create default test user if not using cash register users
