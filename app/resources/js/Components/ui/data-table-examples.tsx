@@ -9,6 +9,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { DataTable, DataTableColumnHeader, DataTableRowActions, PaginatedData } from "@/components/ui/data-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,9 +82,7 @@ export const insuranceTypesColumns: ColumnDef<InsuranceType>[] = [
   {
     id: "actions",
     enableHiding: false,
-    cell: ({ row }) => {
-      const insuranceType = row.original
-
+    cell: () => {
       return (
         <DataTableRowActions>
           <DropdownMenu>
@@ -167,24 +166,20 @@ export const patientsColumns: ColumnDef<Patient>[] = [
   {
     id: "select",
     header: ({ table }) => (
-      <input
-        type="checkbox"
+      <Checkbox
         checked={
           table.getIsAllPageRowsSelected() ||
           (table.getIsSomePageRowsSelected() && "indeterminate")
         }
-        onChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Seleccionar todos"
-        className="rounded"
       />
     ),
     cell: ({ row }) => (
-      <input
-        type="checkbox"
+      <Checkbox
         checked={row.getIsSelected()}
-        onChange={(value) => row.toggleSelected(!!value)}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
         aria-label="Seleccionar fila"
-        className="rounded"
       />
     ),
     enableSorting: false,
@@ -248,9 +243,7 @@ export const patientsColumns: ColumnDef<Patient>[] = [
   {
     id: "actions",
     enableHiding: false,
-    cell: ({ row }) => {
-      const patient = row.original
-
+    cell: () => {
       return (
         <DataTableRowActions>
           <Button variant="outline" size="sm">
@@ -333,11 +326,16 @@ export function PatientsTable({
 }
 
 // Example 3: Simple table with custom loading and error states
+interface SimpleService {
+  name: string
+  price: number
+}
+
 export function ServicesTable({ 
   data, 
   loading = false 
 }: { 
-  data: PaginatedData<any>
+  data: PaginatedData<SimpleService>
   loading?: boolean 
 }) {
   return (

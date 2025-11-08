@@ -112,6 +112,7 @@ export function DataTable<TData, TValue>({
   const [searchValue, setSearchValue] = React.useState("")
 
   // Create table instance
+  // Note: React Compiler warning is expected - TanStack Table returns non-memoizable functions by design
   const table = useReactTable({
     data: data.data,
     columns,
