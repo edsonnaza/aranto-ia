@@ -5,6 +5,7 @@ use App\Http\Controllers\InsuranceTypeController;
 use App\Http\Controllers\ServiceCategoryController;
 use App\Http\Controllers\MedicalServiceController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\ProfessionalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -70,5 +71,20 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     ]);
     Route::get('patients-search', [PatientController::class, 'search'])
         ->name('patients.search');
+
+    // Professionals Management
+    Route::resource('professionals', ProfessionalController::class)->names([
+        'index' => 'professionals.index',
+        'create' => 'professionals.create',
+        'store' => 'professionals.store',
+        'show' => 'professionals.show',
+        'edit' => 'professionals.edit',
+        'update' => 'professionals.update',
+        'destroy' => 'professionals.destroy'
+    ]);
+    Route::get('professionals/{professional}/commission-report', [ProfessionalController::class, 'commissionReport'])
+        ->name('professionals.commission-report');
+    Route::patch('professionals/{professional}/toggle-status', [ProfessionalController::class, 'toggleStatus'])
+        ->name('professionals.toggle-status');
 
 });
