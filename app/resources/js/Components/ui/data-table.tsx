@@ -423,12 +423,12 @@ export function DataTable<TData, TValue>({
 }
 
 // Utility component for sortable column headers
-export function DataTableColumnHeader({
+export function DataTableColumnHeader<TData, TValue>({
   column,
   title,
   className,
 }: {
-  column: Column<any, unknown>
+  column: Column<TData, TValue>
   title: string
   className?: string
 }) {
