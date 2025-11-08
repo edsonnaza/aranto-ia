@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property \Illuminate\Support\Carbon|null $termination_date
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
- * 
+ * @property boolean $is_active
  * @property-read string $full_name
  * @property-read string $formatted_document
  * @property-read float $years_of_service
@@ -88,6 +89,23 @@ class Professional extends Model
     public function primarySpecialty()
     {
         return $this->specialties()->wherePivot('is_primary', true)->first();
+    }
+
+    /**
+     * Get commissions for this professional.
+     */
+    public function commissions(): HasMany
+    {
+        return $this->hasMany(ProfessionalCommission::class);
+    }
+
+    /**
+     * Get services associated with this professional.
+     */
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(MedicalService::class, 'professional_services')
+                    ->withTimestamps();
     }
 
     /**
