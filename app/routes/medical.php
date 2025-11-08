@@ -20,6 +20,19 @@ use App\Http\Controllers\ProfessionalController;
 
 Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->group(function () {
     
+    // Medical System Dashboard
+    Route::get('/', function () {
+        return \Inertia\Inertia::render('medical/Dashboard', [
+            'stats' => [
+                'total_patients' => \App\Models\Patient::count(),
+                'total_professionals' => \App\Models\Professional::count(),
+                'total_services' => \App\Models\MedicalService::count(),
+                'total_insurance_types' => \App\Models\InsuranceType::count(),
+            ],
+            'recentActivity' => []
+        ]);
+    })->name('dashboard');
+    
     // Insurance Types Management
     Route::resource('insurance-types', InsuranceTypeController::class)->names([
         'index' => 'insurance-types.index',

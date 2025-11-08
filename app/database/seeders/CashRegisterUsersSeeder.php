@@ -33,7 +33,7 @@ class CashRegisterUsersSeeder extends Seeder
                 'email' => 'cajero@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'cajero',
+                'role' => 'cajero', // Specific role for detailed permissions
             ],
             [
                 'name' => 'Carlos Supervisor',
@@ -60,9 +60,14 @@ class CashRegisterUsersSeeder extends Seeder
                 $userData
             );
 
-            // Assign role to user
+            // Assign specific role to user
             if (!$user->hasRole($role)) {
                 $user->assignRole($role);
+            }
+
+            // For cashier, also assign navigation role
+            if ($role === 'cajero' && !$user->hasRole('cashier')) {
+                $user->assignRole('cashier');
             }
         }
 

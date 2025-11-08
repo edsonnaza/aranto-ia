@@ -12,27 +12,19 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, DollarSign, Stethoscope } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { BookOpen, Folder } from 'lucide-react';
+import { getNavigationForUser } from '@/utils/navigation';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Tesorería',
-        href: { url: '/cash-register', method: 'get' },
-        icon: DollarSign,
-    },
-    {
-        title: 'Sistema Médico',
-        href: { url: '/medical', method: 'get' },
-        icon: Stethoscope,
-    },
-];
+interface AuthUser {
+    id: number;
+    name: string;
+    email: string;
+    permissions?: string[];
+    roles?: string[];
+    [key: string]: unknown;
+}
 
 const footerNavItems: NavItem[] = [
     {
@@ -48,6 +40,10 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const page = usePage<{ auth: { user: AuthUser | null } }>();
+    const userPermissions = page.props.auth.user?.permissions || [];
+    const mainNavItems = getNavigationForUser(userPermissions);
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>

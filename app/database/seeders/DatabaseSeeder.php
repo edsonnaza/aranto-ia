@@ -13,8 +13,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed cash register permissions and roles first
+        // Seed permissions and roles first
         $this->call([
+            NavigationPermissionsSeeder::class,
             CashRegisterPermissionsSeeder::class,
             ServicesSeeder::class,
             CashRegisterUsersSeeder::class,
@@ -31,6 +32,8 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Test User',
                 'email' => 'test@example.com',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'email_verified_at' => now(),
             ]
         );
     }

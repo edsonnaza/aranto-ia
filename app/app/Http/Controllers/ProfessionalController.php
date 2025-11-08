@@ -51,7 +51,7 @@ class ProfessionalController extends Controller
 
         // Status filter
         if ($status = $request->get('status')) {
-            $query->where('is_active', $status === 'active');
+            $query->where('status', $status);
         }
 
         // Specialty filter
@@ -83,10 +83,10 @@ class ProfessionalController extends Controller
         // Statistics
         $stats = [
             'total' => Professional::count(),
-            'active' => Professional::where('is_active', true)->count(),
-            'inactive' => Professional::where('is_active', false)->count(),
+            'active' => Professional::where('status', 'active')->count(),
+            'inactive' => Professional::where('status', 'inactive')->count(),
             'with_services' => Professional::has('services')->count(),
-            'avg_commission' => Professional::where('is_active', true)->avg('commission_percentage'),
+            'avg_commission' => Professional::where('status', 'active')->avg('commission_percentage'),
             'total_commissions' => ProfessionalCommission::sum('commission_amount')
         ];
 

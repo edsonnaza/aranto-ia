@@ -39,7 +39,7 @@ class ServiceCategoryController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return Inertia::render('Medical/ServiceCategories/Index', [
+        return Inertia::render('medical/ServiceCategories/Index', [
             'categories' => $categories,
             'filters' => $request->only(['search', 'status']),
             'stats' => [
@@ -55,7 +55,7 @@ class ServiceCategoryController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Medical/ServiceCategories/Create', [
+        return Inertia::render('medical/ServiceCategories/Create', [
             'statusOptions' => [
                 ['value' => 'active', 'label' => 'Activo'],
                 ['value' => 'inactive', 'label' => 'Inactivo'],
@@ -77,7 +77,7 @@ class ServiceCategoryController extends Controller
         ServiceCategory::create($validated);
 
         return redirect()
-            ->route('service-categories.index')
+            ->route('medical.service-categories.index')
             ->with('message', 'Categoría de servicio creada exitosamente.');
     }
 
@@ -99,7 +99,7 @@ class ServiceCategoryController extends Controller
             ->orderBy('name')
             ->paginate(10);
 
-        return Inertia::render('Medical/ServiceCategories/Show', [
+        return Inertia::render('medical/ServiceCategories/Show', [
             'category' => $serviceCategory,
             'services' => $services,
         ]);
@@ -110,7 +110,7 @@ class ServiceCategoryController extends Controller
      */
     public function edit(ServiceCategory $serviceCategory): Response
     {
-        return Inertia::render('Medical/ServiceCategories/Edit', [
+        return Inertia::render('medical/ServiceCategories/Edit', [
             'category' => $serviceCategory,
             'statusOptions' => [
                 ['value' => 'active', 'label' => 'Activo'],
@@ -133,7 +133,7 @@ class ServiceCategoryController extends Controller
         $serviceCategory->update($validated);
 
         return redirect()
-            ->route('service-categories.index')
+            ->route('medical.service-categories.index')
             ->with('message', 'Categoría de servicio actualizada exitosamente.');
     }
 
@@ -145,14 +145,14 @@ class ServiceCategoryController extends Controller
         // Verificar si tiene servicios médicos asociados
         if ($serviceCategory->medicalServices()->exists()) {
             return redirect()
-                ->route('service-categories.index')
+                ->route('medical.service-categories.index')
                 ->with('error', 'No se puede eliminar la categoría porque tiene servicios médicos asociados.');
         }
 
         $serviceCategory->delete();
 
         return redirect()
-            ->route('service-categories.index')
+            ->route('medical.service-categories.index')
             ->with('message', 'Categoría de servicio eliminada exitosamente.');
     }
 }
