@@ -6,6 +6,8 @@ use App\Http\Controllers\ServiceCategoryController;
 use App\Http\Controllers\MedicalServiceController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\ProfessionalController;
+use App\Http\Controllers\ServiceRequestController;
+use App\Http\Controllers\ReceptionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -71,6 +73,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('medical-services.store-price');
     Route::post('medical-services/{medicalService}/calculate-commission', [MedicalServiceController::class, 'calculateCommission'])
         ->name('medical-services.calculate-commission');
+    Route::get('medical-services-search', [MedicalServiceController::class, 'search'])
+        ->name('medical-services.search');
 
     // Patients Management
     Route::resource('patients', PatientController::class)->names([
@@ -107,5 +111,33 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('professionals.commission-report');
     Route::patch('professionals/{professional}/toggle-status', [ProfessionalController::class, 'toggleStatus'])
         ->name('professionals.toggle-status');
+
+    // Service Requests Management
+    Route::resource('service-requests', ServiceRequestController::class)->names([
+        'index' => 'service-requests.index',
+        'create' => 'service-requests.create',
+        'store' => 'service-requests.store',
+        'show' => 'service-requests.show',
+        'edit' => 'service-requests.edit',
+        'update' => 'service-requests.update',
+        'destroy' => 'service-requests.destroy'
+    ]);
+    
+    // Service Request Actions
+    Route::patch('service-requests/{serviceRequest}/confirm', [ServiceRequestController::class, 'confirm'])
+        ->name('service-requests.confirm');
+    Route::patch('service-requests/{serviceRequest}/cancel', [ServiceRequestController::class, 'cancel'])
+        ->name('service-requests.cancel');
+
+    // Reception Module
+    Route::prefix('reception')->name('reception.')->group(function () {
+        // Reception Dashboard
+        Route::get('/', [ReceptionController::class, 'index'])
+            ->name('index');
+        
+        // New Service Request (Cart Interface)
+        Route::get('/create', [ReceptionController::class, 'create'])
+            ->name('create');
+    });
 
 });

@@ -146,10 +146,13 @@ class Patient extends Model
     }
 
     /**
-     * Get age attribute.
+     * Get the patient's age in years.
      */
     public function getAgeAttribute(): int
     {
+        if (!$this->date_of_birth) {
+            return 0;
+        }
         return $this->date_of_birth->age;
     }
 

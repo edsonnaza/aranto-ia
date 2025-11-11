@@ -11,7 +11,13 @@ export function AppContent({
     ...props
 }: AppContentProps) {
     if (variant === 'sidebar') {
-        return <SidebarInset {...props}>{children}</SidebarInset>;
+        return (
+            <SidebarInset {...props}>
+                <div className="p-4 md:p-6">
+                    {children}
+                </div>
+            </SidebarInset>
+        );
     }
 
     return (

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Patient, InsuranceType } from '@/types/medical'
 import { type BreadcrumbItem } from '@/types'
+import MultipleInsuranceSelector, { PatientInsurance } from '@/components/medical/MultipleInsuranceSelector'
 
 interface PatientsEditProps {
   patient: Patient
@@ -37,6 +38,66 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
       href: `/medical/patients/${patient.id}/edit`,
     },
   ]
+
+  // Convertir datos existentes del paciente al formato de múltiples seguros
+  const initializeInsurances = (): PatientInsurance[] => {
+    const insurances: PatientInsurance[] = []
+
+    // Tipado local para los seguros con pivot (relación many-to-many)
+    type InsuranceWithPivot = {
+      id: number
+      pivot?: {
+        insurance_number?: string
+        valid_from?: string
+        valid_until?: string
+        coverage_percentage?: number
+        is_primary?: boolean
+        status?: string
+        notes?: string
+      }
+    }
+
+    const patientWithInsurances = patient as Patient & { insurances?: InsuranceWithPivot[] }
+
+    // Normaliza el estado para que coincida con el tipo '"active" | "inactive" | "expired"'
+    const normalizeStatus = (s?: string): 'active' | 'inactive' | 'expired' => {
+      if (s === 'inactive' || s === 'expired') return s
+      return 'active'
+    }
+    
+    // Si el paciente tiene seguros asociados (many-to-many), usarlos
+    if (patientWithInsurances.insurances && patientWithInsurances.insurances.length > 0) {
+      patientWithInsurances.insurances.forEach((insurance, index: number) => {
+        insurances.push({
+          id: 1000 + index, // ID estático para evitar re-renders
+          insurance_type_id: insurance.id.toString(),
+          insurance_number: insurance.pivot?.insurance_number || '',
+          valid_from: insurance.pivot?.valid_from || '',
+          valid_until: insurance.pivot?.valid_until || '',
+          coverage_percentage: insurance.pivot?.coverage_percentage || 100,
+          is_primary: insurance.pivot?.is_primary || false,
+          status: normalizeStatus(insurance.pivot?.status),
+          notes: insurance.pivot?.notes || ''
+        })
+      })
+    } else if (patient.insurance_type_id) {
+      // Compatibilidad con formato anterior - convertir seguro único
+      insurances.push({
+        id: 1000,
+        insurance_type_id: patient.insurance_type_id.toString(),
+        insurance_number: patient.insurance_number || '',
+        valid_from: '',
+        valid_until: patient.insurance_valid_until || '',
+        coverage_percentage: patient.insurance_coverage_percentage || 100,
+        is_primary: true,
+        status: 'active',
+        notes: ''
+      })
+    }
+    
+    return insurances
+  }
+
   const { data, setData, processing, errors } = useForm({
     document_type: patient.document_type || 'CI',
     document_number: patient.document_number || '',
@@ -52,10 +113,7 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
     postal_code: patient.postal_code || '',
     emergency_contact_name: patient.emergency_contact_name || '',
     emergency_contact_phone: patient.emergency_contact_phone || '',
-    insurance_type_id: patient.insurance_type_id?.toString() || '0',
-    insurance_number: patient.insurance_number || '',
-    insurance_valid_until: patient.insurance_valid_until || '',
-    insurance_coverage_percentage: patient.insurance_coverage_percentage || '',
+    insurances: initializeInsurances(),
     status: patient.status || 'active',
     notes: patient.notes || '',
   })
@@ -63,13 +121,22 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Preparar los datos, convirtiendo "0" a null para insurance_type_id
+    // Preparar datos para envío - solo el seguro primario por ahora para compatibilidad
+    const primaryInsurance = data.insurances.find(ins => ins.is_primary)
     const submissionData = {
       ...data,
-      insurance_type_id: data.insurance_type_id === '0' ? null : data.insurance_type_id,
+      // Si hay seguros, tomar el primario para backward compatibility
+      primary_insurance_type_id: primaryInsurance?.insurance_type_id || '',
+      primary_insurance_number: primaryInsurance?.insurance_number || '',
+      primary_insurance_valid_until: primaryInsurance?.valid_until || '',
+      primary_insurance_coverage_percentage: primaryInsurance?.coverage_percentage || '',
     }
+
+    // Crear objeto sin el array de seguros para que no interfiera
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { insurances: _, ...submissionDataClean } = submissionData
     
-    router.put(`/medical/patients/${patient.id}`, submissionData, {
+    router.put(`/medical/patients/${patient.id}`, submissionDataClean, {
       preserveScroll: true,
       onSuccess: () => {
         toast.success('Paciente actualizado correctamente')
@@ -285,49 +352,15 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Heart className="h-5 w-5" />
-                Información de Seguro Médico
+                Información de Seguros Médicos
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="insurance_type_id">Tipo de Seguro</Label>
-                  <Select 
-                    value={data.insurance_type_id} 
-                    onValueChange={(value) => setData('insurance_type_id', value)}
-                  >
-                    <SelectTrigger className={errors.insurance_type_id ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccionar tipo de seguro" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Sin seguro</SelectItem>
-                      {insuranceTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id.toString()}>
-                          {type.name} - {type.coverage_percentage}% cobertura
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.insurance_type_id && (
-                    <p className="text-sm text-red-500">{errors.insurance_type_id}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="insurance_number">Número de Póliza</Label>
-                  <Input
-                    id="insurance_number"
-                    type="text"
-                    value={data.insurance_number}
-                    onChange={(e) => setData('insurance_number', e.target.value)}
-                    placeholder="Número de la póliza de seguro"
-                    className={errors.insurance_number ? 'border-red-500' : ''}
-                  />
-                  {errors.insurance_number && (
-                    <p className="text-sm text-red-500">{errors.insurance_number}</p>
-                  )}
-                </div>
-              </div>
+              <MultipleInsuranceSelector
+                value={data.insurances}
+                insuranceTypes={insuranceTypes}
+                onChange={(insurances) => setData('insurances', insurances)}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="status">Estado del Paciente</Label>
@@ -351,7 +384,7 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
           </Card>
 
           {/* Acciones */}
-          <div className="flex justify-between pt-6">
+          <div className="flex justify-between pt-6 mb-6">
             <Button type="button" variant="outline" asChild>
               <Link href="/medical/patients">
                 <ArrowLeft className="h-4 w-4 mr-2" />

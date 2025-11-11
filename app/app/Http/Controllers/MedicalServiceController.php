@@ -262,4 +262,40 @@ class MedicalServiceController extends Controller
             'percentage_used' => $request->get('custom_percentage') ?? $medicalService->default_commission_percentage,
         ]);
     }
+
+    /**
+     * Search medical services for autocomplete
+     */
+    public function search(Request $request)
+    {
+        $request->validate([
+            'q' => 'required|string|min:2|max:50'
+        ]);
+
+        $query = $request->get('q');
+        
+        $services = MedicalService::with('category')
+            ->where('status', 'active')
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'like', "%{$query}%")
+                  ->orWhere('code', 'like', "%{$query}%")
+                  ->orWhere('description', 'like', "%{$query}%");
+            })
+            ->orderBy('name')
+            ->limit(5)
+            ->get()
+            ->map(function ($service) {
+                return [
+                    'id' => $service->id,
+                    'label' => $service->name,
+                    'subtitle' => $service->category->name . ' - ₲ ' . number_format($service->base_price, 0, ',', '.'),
+                    'code' => $service->code,
+                    'base_price' => $service->base_price,
+                    'estimated_duration' => $service->estimated_duration,
+                    'category' => $service->category->name
+                ];
+            });
+
+        return response()->json($services);
+    }
 }

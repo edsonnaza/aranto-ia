@@ -1,0 +1,277 @@
+import { Head } from '@inertiajs/react'
+import AppLayout from '@/layouts/app-layout'
+import { useReception } from '@/hooks/medical'
+import type { ReceptionStats, RecentRequest } from '@/hooks/medical'
+
+// Simple SVG Icons
+const ClockIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const CalendarIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+)
+
+const UserGroupIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+)
+
+const DocumentTextIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+)
+
+const PlusIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+  </svg>
+)
+
+const RefreshIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+)
+
+interface ReceptionIndexProps {
+  stats: ReceptionStats
+  recentRequests: RecentRequest[]
+}
+
+export default function ReceptionIndex({ stats, recentRequests }: ReceptionIndexProps) {
+  const { 
+    loading, 
+    error, 
+    navigateToCreateServiceRequest, 
+    refreshCurrentPage 
+  } = useReception()
+
+  const breadcrumbs = [
+    { href: '/medical', title: 'Sistema Médico' },
+    { href: '/medical/reception', title: 'Recepción', current: true }
+  ]
+
+  const statsCards = [
+    {
+      title: 'Pendientes Confirmación',
+      value: stats.pending_requests,
+      icon: ClockIcon,
+      color: 'bg-yellow-500',
+      textColor: 'text-yellow-700',
+      bgColor: 'bg-yellow-50'
+    },
+    {
+      title: 'Confirmadas',
+      value: stats.confirmed_requests,
+      icon: CalendarIcon,
+      color: 'bg-blue-500',
+      textColor: 'text-blue-700',
+      bgColor: 'bg-blue-50'
+    },
+    {
+      title: 'En Proceso',
+      value: stats.in_progress_requests,
+      icon: UserGroupIcon,
+      color: 'bg-orange-500',
+      textColor: 'text-orange-700',
+      bgColor: 'bg-orange-50'
+    },
+    {
+      title: 'Completadas Hoy',
+      value: stats.completed_requests,
+      icon: DocumentTextIcon,
+      color: 'bg-green-500',
+      textColor: 'text-green-700',
+      bgColor: 'bg-green-50'
+    }
+  ]
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending_confirmation: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
+      confirmed: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800' },
+      in_progress: { label: 'En Proceso', className: 'bg-orange-100 text-orange-800' },
+      pending_payment: { label: 'Pend. Pago', className: 'bg-purple-100 text-purple-800' },
+      paid: { label: 'Pagado', className: 'bg-green-100 text-green-800' },
+      cancelled: { label: 'Cancelado', className: 'bg-red-100 text-red-800' }
+    }
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending_confirmation
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
+        {config.label}
+      </span>
+    )
+  }
+
+  const getPriorityBadge = (priority: string) => {
+    const priorityConfig = {
+      low: { label: 'Baja', className: 'bg-gray-100 text-gray-800' },
+      normal: { label: 'Normal', className: 'bg-blue-100 text-blue-800' },
+      high: { label: 'Alta', className: 'bg-yellow-100 text-yellow-800' },
+      urgent: { label: 'Urgente', className: 'bg-red-100 text-red-800' }
+    }
+    
+    const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.normal
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
+        {config.label}
+      </span>
+    )
+  }
+
+  return (
+    <AppLayout breadcrumbs={breadcrumbs}>
+      <Head title="Recepción - Dashboard" />
+      
+      <div className="p-4 md:p-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Dashboard de Recepción</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Gestión de solicitudes de servicio y atención de pacientes
+            </p>
+          </div>
+          
+          <div className="flex space-x-3 mt-4 sm:mt-0">
+            <button
+              onClick={refreshCurrentPage}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              <RefreshIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+            
+            <button
+              onClick={navigateToCreateServiceRequest}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Nueva Solicitud
+            </button>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {statsCards.map((stat, index) => {
+            const Icon = stat.icon
+            return (
+              <div key={index} className={`${stat.bgColor} overflow-hidden shadow rounded-lg`}>
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="shrink-0">
+                      <Icon className={`h-6 w-6 ${stat.textColor}`} />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-500 truncate">
+                          {stat.title}
+                        </dt>
+                        <dd>
+                          <div className="text-lg font-medium text-gray-900">
+                            {stat.value}
+                          </div>
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Recent Requests */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+          <div className="px-4 py-5 sm:px-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              Solicitudes Recientes
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Últimas 10 solicitudes del día de hoy
+            </p>
+          </div>
+          
+          {recentRequests.length > 0 ? (
+            <ul className="divide-y divide-gray-200">
+              {recentRequests.map((request) => (
+                <li key={request.id}>
+                  <div className="px-4 py-4 flex items-center justify-between">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center space-x-3">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {request.request_number}
+                          </p>
+                          {getStatusBadge(request.status)}
+                          {getPriorityBadge(request.priority)}
+                        </div>
+                        <div className="mt-1">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">{request.patient_name}</span>
+                            <span className="mx-2">•</span>
+                            <span className="text-gray-500">{request.patient_document}</span>
+                          </p>
+                        </div>
+                        <div className="mt-1 flex items-center text-sm text-gray-500 space-x-4">
+                          <span>{request.services_count} servicio{request.services_count !== 1 ? 's' : ''}</span>
+                          <span>€{Number(request.total_amount).toFixed(2)}</span>
+                          <span>Hora: {request.created_at}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Sin solicitudes</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                No hay solicitudes de servicio para mostrar hoy.
+              </p>
+              <div className="mt-6">
+                <button
+                  onClick={navigateToCreateServiceRequest}
+                  disabled={loading}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Crear Primera Solicitud
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </AppLayout>
+  )
+}

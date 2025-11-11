@@ -1,15 +1,84 @@
 # Aranto-ia Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-10-25
+Auto-generated from all feature plans. Last updated: 2025-11-08
 
 ## Active Technologies
 
 - PHP 8.2+ con Laravel 10.x + Laravel, Inertia.js, React 18, Tailwind CSS, MySQL 8.0 (001-modulo-caja)
 
+## Architecture Constraints - CRITICAL RESTRICTIONS
+
+### NO API Controllers - Use Inertia.js Pattern ONLY
+- **NEVER** create API controllers (app/Http/Controllers/Api/*)
+- **ALWAYS** use Laravel controllers that render Inertia responses
+- **PATTERN**: Follow existing controllers like PatientController, InsuranceTypeController
+- **ROUTING**: Use web.php and included files (medical.php, cashregister.php, settings.php)
+- **FRONTEND**: React components receive data as props from Inertia
+- **DATA EXCHANGE**: Use Inertia form submissions, not AJAX/fetch to API endpoints
+
+### Custom Hooks Pattern - MANDATORY DATA ACCESS
+- **NEVER** use direct fetch/router calls in React components
+- **ALWAYS** use custom hooks as data access layer
+- **PATTERN**: Frontend -> Hooks -> Backend -> Database
+- **STRUCTURE**: hooks/use[Entity][Action].ts (e.g., useServiceRequests.ts, usePatients.ts)
+- **BENEFITS**: Route abstraction, error handling, loading states, cache management
+- **RESPONSIBILITY**: Components only handle UI, hooks handle all data operations
+
+### Custom Hooks Examples:
+```typescript
+// ✅ CORRECT - Component uses hook
+const ServiceRequestsIndex = () => {
+  const { data, loading, error, refresh } = useServiceRequests()
+  // Only UI logic here
+}
+
+// ✅ CORRECT - Hook handles all data logic
+const useServiceRequests = () => {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(false)
+  
+  const fetchData = () => {
+    router.get('/medical/service-requests', ...)
+  }
+  
+  return { data, loading, error, refresh: fetchData }
+}
+
+// ❌ INCORRECT - Direct route calls in component
+const ServiceRequestsIndex = () => {
+  const handleSubmit = () => {
+    router.post('/medical/service-requests', data) // ❌ NO!
+  }
+}
+```
+
+### Correct Controller Pattern Example:
+```php
+public function index(): Response
+{
+    return Inertia::render('medical/patients/Index', [
+        'patients' => Patient::paginate(20),
+        'filters' => request()->only(['search', 'status'])
+    ]);
+}
+```
+
+### Route Structure Pattern:
+- Main routes in web.php with require statements
+- Medical routes in routes/medical.php
+- Use Route::resource for CRUD operations
+- Additional actions as named routes
+
 ## Project Structure
 
 ```text
-src/
+app/
+routes/
+  web.php (main file with requires)
+  medical.php 
+  cashregister.php
+  settings.php
+resources/js/
 tests/
 ```
 

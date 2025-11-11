@@ -261,14 +261,23 @@ class PatientController extends Controller
             'q' => ['required', 'string', 'min:2']
         ]);
 
-        $patients = Patient::search($request->get('q'))
-            ->active()
+        $query = $request->get('q');
+        
+        $patients = Patient::where('status', 'active')
+            ->where(function ($q) use ($query) {
+                $q->where('first_name', 'like', "%{$query}%")
+                  ->orWhere('last_name', 'like', "%{$query}%")
+                  ->orWhere('document_number', 'like', "%{$query}%")
+                  ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$query}%"]);
+            })
             ->with('insuranceType')
-            ->limit(10)
+            ->limit(5)
             ->get()
             ->map(function ($patient) {
                 return [
                     'id' => $patient->id,
+                    'label' => $patient->full_name,
+                    'subtitle' => $patient->formatted_document . ' - ' . $patient->age . ' años - ' . $patient->insurance_info,
                     'full_name' => $patient->full_name,
                     'document' => $patient->formatted_document,
                     'age' => $patient->age,

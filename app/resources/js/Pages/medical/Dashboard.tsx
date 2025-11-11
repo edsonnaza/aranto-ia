@@ -1,6 +1,6 @@
 import React from 'react'
 import { Head, Link } from '@inertiajs/react'
-import { Users, Shield, Heart, UserCheck, Calendar, Activity, TrendingUp, AlertCircle } from 'lucide-react'
+import { Users, Shield, Heart, UserCheck, Calendar, Activity, TrendingUp, AlertCircle, ClipboardList, Plus } from 'lucide-react'
 import HeadingSmall from '@/components/heading-small'
 import AppLayout from '@/layouts/app-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -121,6 +121,27 @@ export default function MedicalDashboard({ stats, recentActivity = [] }: Medical
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-2">
                 <Button asChild className="justify-start">
+                  <Link href="/medical/reception">
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Dashboard de Recepción
+                  </Link>
+                </Button>
+                
+                <Button asChild className="justify-start">
+                  <Link href="/medical/reception/create">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nueva Solicitud de Servicio
+                  </Link>
+                </Button>
+                
+                <Button asChild variant="outline" className="justify-start">
+                  <Link href="/medical/service-requests">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Ver Solicitudes de Servicio
+                  </Link>
+                </Button>
+                
+                <Button asChild variant="outline" className="justify-start">
                   <Link href="/medical/patients/create">
                     <Users className="h-4 w-4 mr-2" />
                     Registrar Nuevo Paciente
