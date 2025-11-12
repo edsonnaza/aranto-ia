@@ -75,6 +75,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('medical-services.calculate-commission');
     Route::get('medical-services-search', [MedicalServiceController::class, 'search'])
         ->name('medical-services.search');
+    Route::post('medical-services-generate-code', [MedicalServiceController::class, 'generateCodePreview'])
+        ->name('medical-services.generate-code');
 
     // Patients Management
     Route::resource('patients', PatientController::class)->names([
