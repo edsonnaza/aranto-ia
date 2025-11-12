@@ -6,7 +6,7 @@ interface SearchResult {
   subtitle?: string
 }
 
-interface PatientSearchResult extends SearchResult {
+export interface PatientSearchResult extends SearchResult {
   full_name: string
   document: string
   age: number
@@ -14,14 +14,14 @@ interface PatientSearchResult extends SearchResult {
   has_valid_insurance: boolean
 }
 
-interface ServiceSearchResult extends SearchResult {
+export interface ServiceSearchResult extends SearchResult {
   code: string
   base_price: number
   estimated_duration: number
   category: string
 }
 
-interface UseSearchReturn {
+export interface UseSearchReturn {
   // Patient search
   searchPatients: (query: string) => Promise<PatientSearchResult[]>
   

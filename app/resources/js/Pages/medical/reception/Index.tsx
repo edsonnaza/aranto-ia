@@ -2,6 +2,9 @@ import { Head } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { useReception } from '@/hooks/medical'
 import type { ReceptionStats, RecentRequest } from '@/hooks/medical'
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
+import { ColumnDef } from '@tanstack/react-table'
+import { Link } from '@inertiajs/react'
 
 // interface ReceptionStats {
 //   pending_requests: number
@@ -135,15 +138,117 @@ const RefreshIcon = ({ className }: { className?: string }) => (
 interface ReceptionIndexProps {
   stats: ReceptionStats
   recentRequests: RecentRequest[]
+  // paginated server-side data
+  requests: PaginatedRequests
 }
 
-export default function ReceptionIndex({ stats, recentRequests }: ReceptionIndexProps) {
+type RequestRow = {
+  id: number
+  request_number: string
+  patient_name: string
+  patient_document: string
+  status: string
+  priority: string
+  services_count: number
+  total_amount: number
+  request_date: string
+  created_at: string
+}
+
+interface PaginatedRequests {
+  data: RequestRow[]
+  current_page: number
+  per_page: number
+  total: number
+  last_page: number
+  from: number
+  to: number
+  links: Array<{ url: string | null; label: string; active: boolean }>
+}
+
+export default function ReceptionIndex({ stats, recentRequests, requests }: ReceptionIndexProps) {
   const { 
     loading, 
     error, 
     navigateToCreateServiceRequest, 
     refreshCurrentPage 
   } = useReception()
+
+  // Define columns for DataTable (service requests table)
+  const columns: ColumnDef<RequestRow>[] = [
+    {
+      accessorKey: 'request_number',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Número" />
+      ),
+      cell: ({ row }) => (
+        <Link 
+          href={`/medical/service-requests/${row.original.id}`}
+          className="font-mono text-sm font-medium text-blue-600 hover:text-blue-800"
+        >
+          {row.getValue('request_number')}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: 'patient_name',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Paciente" />
+      ),
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium">{row.getValue('patient_name')}</div>
+          <div className="text-sm text-gray-500">{row.original.patient_document}</div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: 'Estado',
+      cell: ({ row }) => getStatusBadge(row.getValue('status')),
+    },
+    {
+      accessorKey: 'priority',
+      header: 'Prioridad',
+      cell: ({ row }) => getPriorityBadge(row.getValue('priority')),
+    },
+    {
+      accessorKey: 'services_count',
+      header: 'Servicios',
+      cell: ({ row }) => (
+        <span className="text-sm">
+          {row.getValue('services_count')} servicio{row.getValue('services_count') !== 1 ? 's' : ''}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'total_amount',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Total" />
+      ),
+      cell: ({ row }) => (
+        <span className="font-mono">
+          ₲ {Number(row.getValue('total_amount')).toLocaleString('es-PY')}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'created_at',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Fecha y Hora" />
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <div className="font-medium text-gray-900">
+            {row.original.request_date}
+          </div>
+          <div className="text-gray-500">
+            {row.getValue('created_at')}
+          </div>
+        </div>
+      ),
+    },
+  ]
 
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
@@ -300,14 +405,37 @@ export default function ReceptionIndex({ stats, recentRequests }: ReceptionIndex
           })}
         </div>
 
-        {/* Recent Requests */}
+        {/* Requests Data Table */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              Solicitudes Recientes (Últimos 7 días)
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Todas las solicitudes de servicios con paginación y búsqueda
+            </p>
+          </div>
+          
+          <div className="px-4 pb-5">
+            <DataTable
+              columns={columns}
+              data={requests}
+              searchable={true}
+              searchPlaceholder="Buscar por número, paciente o documento..."
+              emptyMessage="No hay solicitudes registradas hoy."
+              loading={loading}
+            />
+          </div>
+        </div>
+
+        {/* Recent Requests Summary (keeping original component for quick overview) */}
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
           <div className="px-4 py-5 sm:px-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Solicitudes Recientes
+              Resumen de Últimas Solicitudes
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              Últimas 10 solicitudes del día de hoy
+              Vista rápida de las últimas 10 solicitudes
             </p>
           </div>
           

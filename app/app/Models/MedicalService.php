@@ -74,6 +74,14 @@ class MedicalService extends Model
     }
 
     /**
+     * Alias for servicePrices (for frontend compatibility)
+     */
+    public function prices(): HasMany
+    {
+        return $this->servicePrices();
+    }
+
+    /**
      * Get current active prices for this service.
      */
     public function currentPrices(): HasMany

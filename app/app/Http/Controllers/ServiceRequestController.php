@@ -179,10 +179,10 @@ class ServiceRequestController extends Controller
             'patient_id' => $validated['patient_id'],
             'created_by' => auth()->id(),
             'request_date' => $validated['request_date'],
-            'request_time' => $validated['request_time'],
+            'request_time' => $validated['request_time'] ?? null,
             'reception_type' => $validated['reception_type'],
             'priority' => $validated['priority'],
-            'notes' => $validated['notes'],
+            'notes' => $validated['notes'] ?? null,
             'status' => ServiceRequest::STATUS_PENDING_CONFIRMATION,
             'payment_status' => ServiceRequest::PAYMENT_PENDING,
             'total_amount' => 0, // Se calculará automáticamente
@@ -219,7 +219,7 @@ class ServiceRequestController extends Controller
     public function show(ServiceRequest $serviceRequest): Response
     {
         $serviceRequest->load([
-            'patient.insurances.insuranceType',
+            'patient.insurances',
             'createdBy',
             'cancelledBy',
             'details.medicalService.category',

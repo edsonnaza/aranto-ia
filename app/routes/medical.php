@@ -140,6 +140,10 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         // New Service Request (Cart Interface)
         Route::get('/create', [ReceptionController::class, 'create'])
             ->name('create');
+        
+        // Get service price by insurance type
+        Route::get('/service-price', [ReceptionController::class, 'getServicePrice'])
+            ->name('service-price');
     });
 
 });

@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import AppLayout from '@/layouts/app-layout'
-import { useServiceRequests, useSearch } from '@/hooks/medical'
+import { useServiceRequests, useSearch, useServicePricing } from '@/hooks/medical'
 import type { ReceptionCreateData } from '@/hooks/medical'
 import SearchableInput from '@/components/ui/SearchableInput'
 import TotalDisplay from '@/components/ui/TotalDisplay'
@@ -45,6 +45,7 @@ export default function ReceptionCreate({
 }: ReceptionCreateProps) {
   const { loading, error, createServiceRequest } = useServiceRequests()
   const { searchPatients, searchServices } = useSearch()
+  const { getServicePriceFromData } = useServicePricing()
 
   // Form state
   const [selectedPatient, setSelectedPatient] = useState<{ id: number, name: string } | null>(null)
@@ -119,7 +120,7 @@ export default function ReceptionCreate({
     setServices(services.filter(service => service.id !== id))
   }
 
-  const updateService = (id: string, field: keyof ServiceItem, value: string | number) => {
+  const updateService = useCallback((id: string, field: keyof ServiceItem, value: string | number) => {
     setServices(services.map(service => {
       if (service.id === id) {
         const updated = { ...service, [field]: value }
@@ -128,8 +129,21 @@ export default function ReceptionCreate({
         if (field === 'medical_service_id') {
           const selectedService = flatServices.find(s => s.value === value)
           if (selectedService) {
-            updated.unit_price = selectedService.base_price
+            // Si ya hay un tipo de seguro seleccionado, usar el precio específico
+            if (service.insurance_type_id > 0) {
+              updated.unit_price = getServicePriceFromData(selectedService, service.insurance_type_id)
+            } else {
+              updated.unit_price = selectedService.base_price
+            }
             updated.estimated_duration = selectedService.estimated_duration || 30
+          }
+        }
+        
+        // Auto-update price when insurance type changes
+        if (field === 'insurance_type_id' && service.medical_service_id > 0) {
+          const selectedService = flatServices.find(s => s.value === service.medical_service_id)
+          if (selectedService) {
+            updated.unit_price = getServicePriceFromData(selectedService, Number(value))
           }
         }
         
@@ -137,7 +151,7 @@ export default function ReceptionCreate({
       }
       return service
     }))
-  }
+  }, [services, flatServices, getServicePriceFromData])
 
   const calculateServiceTotal = (service: ServiceItem) => {
     const subtotal = service.unit_price * service.quantity

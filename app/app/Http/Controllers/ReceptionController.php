@@ -17,7 +17,7 @@ class ReceptionController extends Controller
     /**
      * Show the reception dashboard.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $today = Carbon::today();
         
@@ -59,9 +59,49 @@ class ReceptionController extends Controller
             ];
         });
 
+        // Server-side paginated table for requests (last 7 days by default, supports ?page & ?per_page & ?search)
+        $perPage = (int) $request->get('per_page', 10);
+        $search = $request->get('search');
+        $dateFrom = $request->get('date_from', Carbon::today()->subDays(6)->toDateString());
+        $dateTo = $request->get('date_to', Carbon::today()->toDateString());
+
+        $requestsQuery = ServiceRequest::with(['patient', 'details'])
+            ->whereBetween('request_date', [$dateFrom, $dateTo]);
+
+        if ($search) {
+            $requestsQuery->where(function ($q) use ($search) {
+                $q->where('request_number', 'like', "%{$search}%")
+                  ->orWhereHas('patient', function ($qp) use ($search) {
+                      $qp->where('first_name', 'like', "%{$search}%")
+                         ->orWhere('last_name', 'like', "%{$search}%")
+                         ->orWhereRaw("concat(first_name, ' ', last_name) like ?", ["%{$search}%"])
+                         ->orWhere('document_number', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $requests = $requestsQuery->latest('created_at')
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'request_number' => $request->request_number,
+                    'patient_name' => $request->patient->full_name,
+                    'patient_document' => $request->patient->formatted_document,
+                    'status' => $request->status,
+                    'priority' => $request->priority,
+                    'services_count' => $request->details->count(),
+                    'total_amount' => $request->total_amount,
+                    'request_date' => $request->request_date->format('d/m/Y'),
+                    'created_at' => $request->created_at->format('H:i'),
+                ];
+            });
+
         return Inertia::render('medical/reception/Index', [
             'stats' => $stats,
             'recentRequests' => $recentRequests,
+            'requests' => $requests,
         ]);
     }
 
@@ -83,7 +123,7 @@ class ReceptionController extends Controller
                         'document' => $patient->formatted_document,
                     ];
                 }),
-            'medicalServices' => MedicalService::with('category')
+            'medicalServices' => MedicalService::with(['category', 'currentPrices.insuranceType'])
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get()
@@ -92,13 +132,20 @@ class ReceptionController extends Controller
                     return [
                         'category' => $categoryName,
                         'services' => $services->map(function ($service) {
+                            // Obtener precios por seguro usando la relación currentPrices
+                            $pricesByInsurance = $service->currentPrices
+                                ->mapWithKeys(function ($price) {
+                                    return [$price->insurance_type_id => $price->price];
+                                });
+
                             return [
                                 'value' => $service->id,
-                                'label' => $service->name . ' - $' . number_format($service->base_price, 2),
+                                'label' => $service->name . ' (' . $service->code . ')',
                                 'name' => $service->name,
                                 'code' => $service->code,
                                 'base_price' => $service->base_price,
                                 'estimated_duration' => $service->estimated_duration,
+                                'prices_by_insurance' => $pricesByInsurance->toArray(),
                             ];
                         })->values()
                     ];
@@ -133,6 +180,39 @@ class ReceptionController extends Controller
                         'coverage_percentage' => $insurance->coverage_percentage,
                     ];
                 }),
+        ]);
+    }
+
+    /**
+     * Get service price by insurance type
+     */
+    public function getServicePrice(Request $request)
+    {
+        $validated = $request->validate([
+            'service_id' => 'required|exists:medical_services,id',
+            'insurance_type_id' => 'required|exists:insurance_types,id',
+        ]);
+
+        $service = MedicalService::find($validated['service_id']);
+        
+        // Buscar precio específico para el seguro
+        $servicePrice = $service->currentPrices()
+            ->where('insurance_type_id', $validated['insurance_type_id'])
+            ->first();
+
+        if ($servicePrice) {
+            return response()->json([
+                'price' => $servicePrice->price,
+                'found' => true,
+                'source' => 'insurance_specific'
+            ]);
+        }
+
+        // Si no hay precio específico, usar base_price
+        return response()->json([
+            'price' => $service->base_price,
+            'found' => false,
+            'source' => 'base_price'
         ]);
     }
 }

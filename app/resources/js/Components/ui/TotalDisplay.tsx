@@ -7,16 +7,9 @@ interface TotalDisplayProps {
 
 const sizeClasses = {
   sm: 'text-2xl px-4 py-3',
-  md: 'text-3xl px-6 py-4',
-  lg: 'text-4xl px-8 py-6',
-  xl: 'text-5xl px-10 py-8'
-}
-
-const borderClasses = {
-  sm: 'border-4',
-  md: 'border-4',
-  lg: 'border-6',
-  xl: 'border-8'
+  md: 'text-3xl px-5 py-4',
+  lg: 'text-4xl px-6 py-5',
+  xl: 'text-5xl px-8 py-6'
 }
 
 export default function TotalDisplay({ 
@@ -34,68 +27,55 @@ export default function TotalDisplay({
 
   return (
     <div className={`relative ${className}`}>
-      {/* LED Display Container */}
+      {/* Modern Minimal Display Container */}
       <div className={`
-        bg-black rounded-lg shadow-2xl 
-        ${borderClasses[size]} border-gray-700
-        transform transition-all duration-300 hover:scale-105
+        bg-gradient-to-br from-slate-50 to-slate-100
+        border border-slate-200
+        rounded-2xl shadow-lg 
+        transform transition-all duration-300 hover:shadow-xl
+        overflow-hidden
       `}>
-        {/* Inner LED Screen */}
+        {/* Subtle top accent */}
+        <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+        
+        {/* Main content area */}
         <div className={`
-          bg-gradient-to-br from-gray-900 to-black 
-          rounded-md p-1 
-          shadow-inner
+          bg-white/80 backdrop-blur-sm
+          ${sizeClasses[size]}
+          text-center
         `}>
-          {/* LED Text Display */}
-          <div className={`
-            bg-black rounded 
-            font-mono font-bold text-center
-            text-green-400 
-            ${sizeClasses[size]}
-            tracking-widest
-            shadow-lg
-            border-2 border-green-900/50
-          `}
-          style={{
-            textShadow: '0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor, 0 0 20px #00ff00, 0 0 25px #00ff00'
-          }}>
-            <div className="relative">
-              {/* Glow effect background */}
-              <div className="absolute inset-0 text-green-400 blur-sm opacity-50">
-                {currency} {formatTotal(total)}
-              </div>
-              
-              {/* Main text */}
-              <div className="relative z-10">
-                {currency} {formatTotal(total)}
-              </div>
-              
-              {/* Scan line effect */}
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-400/10 to-transparent 
-                             animate-pulse opacity-30">
-              </div>
+          {/* Currency and amount */}
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+              Total
+            </div>
+            <div className={`
+              font-mono font-bold 
+              text-slate-800
+              tracking-tight
+              leading-none
+            `}>
+              <span className="text-emerald-600">{currency}</span>{' '}
+              <span className="text-slate-800">{formatTotal(total)}</span>
             </div>
           </div>
         </div>
         
-        {/* LED indicator lights */}
-        <div className="absolute top-2 right-2 flex space-x-1">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse opacity-60"></div>
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse opacity-80" 
-               style={{ animationDelay: '75ms' }}></div>
+        {/* Subtle bottom border */}
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+        
+        {/* Modern status indicator */}
+        <div className="absolute top-4 right-4">
+          <div className="flex items-center space-x-1">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+            <div className="text-xs text-slate-400 font-medium">ACTIVO</div>
+          </div>
         </div>
         
-        {/* Screen reflection effect */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent 
-                       rounded-lg pointer-events-none">
+        {/* Subtle glass reflection */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent 
+                       rounded-2xl pointer-events-none">
         </div>
-      </div>
-      
-      {/* Label */}
-      <div className="text-center mt-3">
-        <span className="text-sm font-medium text-gray-600 uppercase tracking-wider">
-          Total General
-        </span>
       </div>
     </div>
   )

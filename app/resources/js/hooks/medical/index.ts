@@ -11,6 +11,10 @@ export type {
   UseServiceRequestsReturn 
 } from './useServiceRequests'
 
+// Service Code Generator Hook
+export { useServiceCodeGenerator } from './useServiceCodeGenerator'
+export type { UseServiceCodeGeneratorReturn } from './useServiceCodeGenerator'
+
 // Reception Module Hooks  
 export { useReception } from './useReception'
 export type { 
@@ -46,3 +50,7 @@ export type {
 //     router.get('/medical/service-requests/create') // ❌ NO!
 //   }
 // }
+
+// Service Pricing Hooks
+export { useServicePricing } from './useServicePricing'
+export type { UseServicePricingReturn } from './useServicePricing'
