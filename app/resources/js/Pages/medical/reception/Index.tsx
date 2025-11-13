@@ -1,10 +1,12 @@
 import { Head } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { useReception } from '@/hooks/medical'
-import type { ReceptionStats, RecentRequest } from '@/hooks/medical'
+import type { ReceptionStats } from '@/hooks/medical'
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import { Link } from '@inertiajs/react'
+import { useState } from 'react'
+import ServiceRequestDetailsModal from '@/components/medical/ServiceRequestDetailsModal'
 
 // interface ReceptionStats {
 //   pending_requests: number
@@ -135,9 +137,15 @@ const RefreshIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
+const EyeIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+)
+
 interface ReceptionIndexProps {
   stats: ReceptionStats
-  recentRequests: RecentRequest[]
   // paginated server-side data
   requests: PaginatedRequests
 }
@@ -166,13 +174,32 @@ interface PaginatedRequests {
   links: Array<{ url: string | null; label: string; active: boolean }>
 }
 
-export default function ReceptionIndex({ stats, recentRequests, requests }: ReceptionIndexProps) {
+export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps) {
   const { 
     loading, 
     error, 
     navigateToCreateServiceRequest, 
     refreshCurrentPage 
   } = useReception()
+
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null)
+
+  const handleViewDetails = (requestId: number) => {
+    setSelectedRequestId(requestId)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedRequestId(null)
+  }
+
+  const handleCancelRequest = () => {
+    // Refresh the page to show updated data
+    refreshCurrentPage()
+  }
 
   // Define columns for DataTable (service requests table)
   const columns: ColumnDef<RequestRow>[] = [
@@ -245,6 +272,21 @@ export default function ReceptionIndex({ stats, recentRequests, requests }: Rece
           <div className="text-gray-500">
             {row.getValue('created_at')}
           </div>
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ row }) => (
+        <div className="flex space-x-2">
+          <button
+            onClick={() => handleViewDetails(row.original.id)}
+            className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            title="Ver detalles"
+          >
+            <EyeIcon className="h-4 w-4" />
+          </button>
         </div>
       ),
     },
@@ -428,69 +470,13 @@ export default function ReceptionIndex({ stats, recentRequests, requests }: Rece
           </div>
         </div>
 
-        {/* Recent Requests Summary (keeping original component for quick overview) */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Resumen de Últimas Solicitudes
-            </h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              Vista rápida de las últimas 10 solicitudes
-            </p>
-          </div>
-          
-          {recentRequests.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {recentRequests.map((request) => (
-                <li key={request.id}>
-                  <div className="px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center min-w-0 flex-1">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center space-x-3">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {request.request_number}
-                          </p>
-                          {getStatusBadge(request.status)}
-                          {getPriorityBadge(request.priority)}
-                        </div>
-                        <div className="mt-1">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">{request.patient_name}</span>
-                            <span className="mx-2">•</span>
-                            <span className="text-gray-500">{request.patient_document}</span>
-                          </p>
-                        </div>
-                        <div className="mt-1 flex items-center text-sm text-gray-500 space-x-4">
-                          <span>{request.services_count} servicio{request.services_count !== 1 ? 's' : ''}</span>
-                          <span>€{Number(request.total_amount).toFixed(2)}</span>
-                          <span>Hora: {request.created_at}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="px-4 py-8 text-center">
-              <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Sin solicitudes</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                No hay solicitudes de servicio para mostrar hoy.
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={navigateToCreateServiceRequest}
-                  disabled={loading}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  Crear Primera Solicitud
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Service Request Details Modal */}
+        <ServiceRequestDetailsModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          requestId={selectedRequestId}
+          onCancelRequest={handleCancelRequest}
+        />
       </div>
     </AppLayout>
   )

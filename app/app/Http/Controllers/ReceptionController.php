@@ -36,29 +36,6 @@ class ReceptionController extends Controller
                 ->count(),
         ];
 
-        $recentRequests = ServiceRequest::with([
-            'patient',
-            'details.medicalService',
-            'details.professional'
-        ])
-        ->whereDate('created_at', $today)
-        ->latest()
-        ->take(10)
-        ->get()
-        ->map(function ($request) {
-            return [
-                'id' => $request->id,
-                'request_number' => $request->request_number,
-                'patient_name' => $request->patient->full_name,
-                'patient_document' => $request->patient->formatted_document,
-                'status' => $request->status,
-                'priority' => $request->priority,
-                'services_count' => $request->details->count(),
-                'total_amount' => $request->total_amount,
-                'created_at' => $request->created_at->format('H:i'),
-            ];
-        });
-
         // Server-side paginated table for requests (last 7 days by default, supports ?page & ?per_page & ?search)
         $perPage = (int) $request->get('per_page', 10);
         $search = $request->get('search');
@@ -100,7 +77,6 @@ class ReceptionController extends Controller
 
         return Inertia::render('medical/reception/Index', [
             'stats' => $stats,
-            'recentRequests' => $recentRequests,
             'requests' => $requests,
         ]);
     }

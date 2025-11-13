@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 
 class ServiceRequestController extends Controller
@@ -216,7 +217,7 @@ class ServiceRequestController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(ServiceRequest $serviceRequest): Response
+    public function show(ServiceRequest $serviceRequest)
     {
         $serviceRequest->load([
             'patient.insurances',
@@ -227,69 +228,96 @@ class ServiceRequestController extends Controller
             'details.insuranceType',
         ]);
 
-        return Inertia::render('medical/service-requests/Show', [
-            'serviceRequest' => [
-                'id' => $serviceRequest->id,
-                'request_number' => $serviceRequest->request_number,
-                'patient' => [
-                    'id' => $serviceRequest->patient->id,
-                    'full_name' => $serviceRequest->patient->full_name,
-                    'formatted_document' => $serviceRequest->patient->formatted_document,
-                    'email' => $serviceRequest->patient->email,
-                    'phone' => $serviceRequest->patient->phone,
-                    'insurance_info' => $serviceRequest->patient->insurance_info,
-                ],
-                'request_date' => $serviceRequest->request_date->format('Y-m-d'),
-                'request_time' => $serviceRequest->request_time,
-                'status' => $serviceRequest->status,
-                'reception_type' => $serviceRequest->reception_type,
-                'priority' => $serviceRequest->priority,
-                'notes' => $serviceRequest->notes,
-                'total_amount' => $serviceRequest->total_amount,
-                'paid_amount' => $serviceRequest->paid_amount,
-                'remaining_amount' => $serviceRequest->remaining_amount,
-                'payment_status' => $serviceRequest->payment_status,
-                'created_by' => $serviceRequest->createdBy->name,
-                'confirmed_at' => $serviceRequest->confirmed_at?->format('Y-m-d H:i'),
-                'cancelled_at' => $serviceRequest->cancelled_at?->format('Y-m-d H:i'),
-                'cancelled_by' => $serviceRequest->cancelledBy?->name,
-                'cancellation_reason' => $serviceRequest->cancellation_reason,
-                'created_at' => $serviceRequest->created_at->format('Y-m-d H:i'),
-                'details' => $serviceRequest->details->map(function ($detail) {
-                    return [
-                        'id' => $detail->id,
-                        'medical_service' => [
-                            'id' => $detail->medicalService->id,
-                            'name' => $detail->medicalService->name,
-                            'code' => $detail->medicalService->code,
-                            'category' => $detail->medicalService->category->name,
-                        ],
-                        'professional' => [
-                            'id' => $detail->professional->id,
-                            'full_name' => $detail->professional->full_name,
-                            'specialty' => $detail->professional->specialty,
-                        ],
-                        'insurance_type' => [
-                            'id' => $detail->insuranceType->id,
-                            'name' => $detail->insuranceType->name,
-                            'coverage_percentage' => $detail->insuranceType->coverage_percentage,
-                        ],
-                        'scheduled_date' => $detail->scheduled_date?->format('Y-m-d'),
-                        'scheduled_time' => $detail->scheduled_time,
-                        'estimated_duration' => $detail->estimated_duration,
-                        'unit_price' => $detail->unit_price,
-                        'quantity' => $detail->quantity,
-                        'subtotal' => $detail->subtotal,
-                        'discount_percentage' => $detail->discount_percentage,
-                        'discount_amount' => $detail->discount_amount,
-                        'total_amount' => $detail->total_amount,
-                        'status' => $detail->status,
-                        'paid_at' => $detail->paid_at?->format('Y-m-d H:i'),
-                        'preparation_instructions' => $detail->preparation_instructions,
-                        'notes' => $detail->notes,
-                    ];
-                }),
+        $serviceRequestData = [
+            'id' => $serviceRequest->id,
+            'request_number' => $serviceRequest->request_number,
+            'patient_name' => $serviceRequest->patient->full_name,
+            'patient_document' => $serviceRequest->patient->formatted_document,
+            'request_date' => $serviceRequest->request_date->format('d/m/Y'),
+            'request_time' => $serviceRequest->request_time,
+            'status' => $serviceRequest->status,
+            'priority' => $serviceRequest->priority,
+            'total_amount' => $serviceRequest->total_amount,
+            'notes' => $serviceRequest->notes,
+            'services' => $serviceRequest->details->map(function ($detail) {
+                return [
+                    'id' => $detail->id,
+                    'service_id' => $detail->medical_service_id,
+                    'service_name' => $detail->medicalService->name,
+                    'service_code' => $detail->medicalService->code,
+                    'quantity' => $detail->quantity,
+                    'unit_price' => $detail->unit_price,
+                    'total_price' => $detail->quantity * $detail->unit_price,
+                    'insurance_type' => $detail->insuranceType->name,
+                    'professional_name' => $detail->professional ? $detail->professional->full_name : 'No asignado',
+                    'notes' => $detail->notes,
+                ];
+            })->toArray(),
+            'patient' => [
+                'id' => $serviceRequest->patient->id,
+                'full_name' => $serviceRequest->patient->full_name,
+                'formatted_document' => $serviceRequest->patient->formatted_document,
+                'email' => $serviceRequest->patient->email,
+                'phone' => $serviceRequest->patient->phone,
+                'insurance_info' => $serviceRequest->patient->insurance_info,
             ],
+            'reception_type' => $serviceRequest->reception_type,
+            'paid_amount' => $serviceRequest->paid_amount,
+            'remaining_amount' => $serviceRequest->remaining_amount,
+            'payment_status' => $serviceRequest->payment_status,
+            'created_by' => $serviceRequest->createdBy->name,
+            'confirmed_at' => $serviceRequest->confirmed_at?->format('Y-m-d H:i'),
+            'cancelled_at' => $serviceRequest->cancelled_at?->format('Y-m-d H:i'),
+            'cancelled_by' => $serviceRequest->cancelledBy?->name,
+            'cancellation_reason' => $serviceRequest->cancellation_reason,
+            'created_at' => $serviceRequest->created_at->format('Y-m-d H:i'),
+            'details' => $serviceRequest->details->map(function ($detail) {
+                return [
+                    'id' => $detail->id,
+                    'medical_service' => [
+                        'id' => $detail->medicalService->id,
+                        'name' => $detail->medicalService->name,
+                        'code' => $detail->medicalService->code,
+                        'category' => $detail->medicalService->category->name,
+                    ],
+                    'professional' => [
+                        'id' => $detail->professional->id,
+                        'full_name' => $detail->professional->full_name,
+                        'specialty' => $detail->professional->specialty,
+                    ],
+                    'insurance_type' => [
+                        'id' => $detail->insuranceType->id,
+                        'name' => $detail->insuranceType->name,
+                        'coverage_percentage' => $detail->insuranceType->coverage_percentage,
+                    ],
+                    'scheduled_date' => $detail->scheduled_date?->format('Y-m-d'),
+                    'scheduled_time' => $detail->scheduled_time,
+                    'estimated_duration' => $detail->estimated_duration,
+                    'unit_price' => $detail->unit_price,
+                    'quantity' => $detail->quantity,
+                    'subtotal' => $detail->subtotal,
+                    'discount_percentage' => $detail->discount_percentage,
+                    'discount_amount' => $detail->discount_amount,
+                    'total_amount' => $detail->total_amount,
+                    'status' => $detail->status,
+                    'paid_at' => $detail->paid_at?->format('Y-m-d H:i'),
+                    'preparation_instructions' => $detail->preparation_instructions,
+                    'notes' => $detail->notes,
+                ];
+            })->toArray(),
+        ];
+
+        // If JSON request (for modal), return JSON
+        if (request()->expectsJson()) {
+            return response()->json([
+                'props' => [
+                    'serviceRequest' => $serviceRequestData
+                ]
+            ]);
+        }
+
+        return Inertia::render('medical/service-requests/Show', [
+            'serviceRequest' => $serviceRequestData,
         ]);
     }
 
@@ -408,17 +436,33 @@ class ServiceRequestController extends Controller
     /**
      * Cancel a service request.
      */
-    public function cancel(Request $request, ServiceRequest $serviceRequest): RedirectResponse
+    public function cancel(Request $request, ServiceRequest $serviceRequest)
     {
         if ($serviceRequest->isCancelled()) {
             abort(403, 'La solicitud ya está cancelada.');
         }
 
+        // Solo permitir cancelar si está pendiente de pago
+        if ($serviceRequest->payment_status !== ServiceRequest::PAYMENT_PENDING) {
+            abort(403, 'Solo se pueden cancelar solicitudes pendientes de pago.');
+        }
+
         $validated = $request->validate([
-            'cancellation_reason' => ['required', 'string', 'max:500'],
+            'cancellation_reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $serviceRequest->cancel(auth()->id(), $validated['cancellation_reason']);
+        // Si no se proporciona razón, usar una por defecto
+        $reason = $validated['cancellation_reason'] ?? 'Cancelación solicitada desde la recepción';
+        
+        $serviceRequest->cancel(auth()->id(), $reason);
+
+        // Si la solicitud es cancelada desde una petición AJAX (modal), devolver JSON
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Solicitud cancelada exitosamente.'
+            ]);
+        }
 
         return redirect()
             ->route('medical.service-requests.show', $serviceRequest)
