@@ -10,9 +10,23 @@ export interface PendingServicesFilters {
   [key: string]: string | undefined
 }
 
+export interface ServiceRequest {
+  id: number
+  status: string
+  date: string
+  professional_id: number
+  // Add other relevant fields as needed
+}
+
+export interface Professional {
+  id: number
+  name: string
+  // Add other relevant fields as needed
+}
+
 export interface PendingServicesHookResult {
-  serviceRequests: any
-  professionals: any
+  serviceRequests: ServiceRequest[]
+  professionals: Professional[]
   filters: PendingServicesFilters
   loading: boolean
   error: string | null
@@ -29,7 +43,12 @@ export function usePendingServices(initialFilters: PendingServicesFilters): Pend
   const updateFilters = useCallback((newFilters: PendingServicesFilters) => {
     setLoading(true)
     setFilters(prev => ({ ...prev, ...newFilters }))
-    const params = new URLSearchParams({ ...filters, ...newFilters })
+    const mergedFilters = { ...filters, ...newFilters }
+    const filteredFilters: Record<string, string> = Object.fromEntries(
+      Object.entries(mergedFilters).filter(([, v]) => typeof v === "string" && v !== undefined)
+        .map(([k, v]) => [k, v as string])
+    )
+    const params = new URLSearchParams(filteredFilters)
     router.get(
       window.location.pathname + "?" + params.toString(),
       {},
@@ -44,8 +63,8 @@ export function usePendingServices(initialFilters: PendingServicesFilters): Pend
 
   // Los datos se actualizan automáticamente por Inertia
   return {
-    serviceRequests: props.serviceRequests,
-    professionals: props.professionals,
+    serviceRequests: props.serviceRequests as ServiceRequest[],
+    professionals: props.professionals as Professional[],
     filters,
     loading,
     error,

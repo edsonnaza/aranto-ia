@@ -29,14 +29,14 @@ export default function TotalDisplay({
     <div className={`relative ${className}`}>
       {/* Modern Minimal Display Container */}
       <div className={`
-        bg-gradient-to-br from-slate-50 to-slate-100
+        bg-linear-to-br from-slate-50 to-slate-100
         border border-slate-200
         rounded-2xl shadow-lg 
         transform transition-all duration-300 hover:shadow-xl
         overflow-hidden
       `}>
         {/* Subtle top accent */}
-        <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+        <div className="h-1 bg-linear-to-r from-emerald-400 to-teal-500"></div>
         
         {/* Main content area */}
         <div className={`
@@ -62,7 +62,7 @@ export default function TotalDisplay({
         </div>
         
         {/* Subtle bottom border */}
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+        <div className="h-0.5 bg-linear-to-r from-transparent via-slate-200 to-transparent"></div>
         
         {/* Modern status indicator */}
         <div className="absolute top-4 right-4">
@@ -73,7 +73,7 @@ export default function TotalDisplay({
         </div>
         
         {/* Subtle glass reflection */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent 
+        <div className="absolute inset-0 bg-linear-to-br from-white/20 via-transparent to-transparent 
                        rounded-2xl pointer-events-none">
         </div>
       </div>

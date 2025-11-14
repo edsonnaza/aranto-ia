@@ -123,7 +123,10 @@ export function DataTable<TData, TValue>({
   const [dateTo, setDateTo] = React.useState<string|null>(initialDateTo || null)
 
   // Create table instance
-  // Note: React Compiler warning is expected - TanStack Table returns non-memoizable functions by design
+  // ⚠️ Do NOT pass `table` to memoized components/hooks.
+  // TanStack Table returns non-memoizable functions by design.
+  // This prevents React Compiler errors and stale UI issues.
+  // Only use `table` directly in this component, never in memoized children or hooks.
   const table = useReactTable({
     data: data.data,
     columns,
@@ -147,6 +150,7 @@ export function DataTable<TData, TValue>({
       },
     },
   })
+  // NOTE: Never pass `table` to memoized components or hooks.
 
   // Handle search with debounce
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined)

@@ -262,7 +262,7 @@ export default function ServiceRequestDetailsModal({
                   </div>
 
                   {/* Fila 2: Total destacado */}
-                  <div className="bg-gradient-to-r rounded-lg p-4 border border-emerald-200">
+                  <div className="bg-linear-to-r rounded-lg p-4 border border-emerald-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-right gap-3">
                          

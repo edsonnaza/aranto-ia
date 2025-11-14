@@ -14,10 +14,20 @@ export interface DateInputWithCalendarProps {
 
 export function DateInputWithCalendar({ value, onChange, placeholder, disabled }: DateInputWithCalendarProps) {
   const [open, setOpen] = React.useState(false)
-  const handleSelect = (date: Date | undefined) => {
+  type DateRange = { from: Date | undefined; to?: Date | undefined }
+  const handleSelect = (date: Date | Date[] | DateRange | undefined) => {
     if (!date) return
+    let selectedDate: Date | undefined
+    if (date instanceof Date) {
+      selectedDate = date
+    } else if (Array.isArray(date) && date.length > 0 && date[0] instanceof Date) {
+      selectedDate = date[0]
+    } else if (typeof date === "object" && "from" in date && date.from instanceof Date) {
+      selectedDate = date.from
+    }
+    if (!selectedDate) return
     // Formatear dd/mm/yyyy
-    const formatted = date.toLocaleDateString("es-ES", {
+    const formatted = selectedDate.toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric"

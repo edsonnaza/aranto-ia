@@ -21,6 +21,8 @@ use Carbon\Carbon;
  * @property float $total_amount
  * @property float $paid_amount
  * @property string $payment_status
+ * @property float|null $remaining_amount
+ * @property \Carbon\Carbon|null $payment_date
  * @property \Carbon\Carbon|null $confirmed_at
  * @property \Carbon\Carbon|null $cancelled_at
  * @property int|null $cancelled_by

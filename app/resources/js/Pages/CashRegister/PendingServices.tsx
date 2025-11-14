@@ -5,8 +5,6 @@ import { ColumnDef } from '@tanstack/react-table';
 
 import HeadingSmall from '@/components/heading-small';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DataTable, PaginatedData } from '@/components/ui/data-table';
 import { 
@@ -19,7 +17,7 @@ import {
 import { PaymentModal } from '@/components/cash-register/payment-modal';
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
-import { Search, CreditCard, Eye, Filter } from 'lucide-react';
+import {  CreditCard, Eye } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 
@@ -88,7 +86,6 @@ interface PendingServicesProps {
 
 export default function PendingServices({
   serviceRequests,
-  professionals,
   filters,
   summary,
 }: PendingServicesProps) {
