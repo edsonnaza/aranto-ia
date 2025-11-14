@@ -1,4 +1,5 @@
 import { Head } from '@inertiajs/react'
+import { useDateFormat } from '@/hooks/useDateFormat'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
 
@@ -91,6 +92,7 @@ interface ServiceRequestShowProps {
 }
 
 export default function ServiceRequestShow({ serviceRequest }: ServiceRequestShowProps) {
+  const { toFrontend } = useDateFormat();
   const { 
     loading, 
     error, 
@@ -157,23 +159,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
     return typeConfig[type as keyof typeof typeConfig] || type
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-ES', {
@@ -212,7 +198,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                 {getPriorityBadge(serviceRequest.priority)}
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                {getReceptionTypeLabel(serviceRequest.reception_type)} • {formatDate(serviceRequest.request_date)}
+                {getReceptionTypeLabel(serviceRequest.reception_type)} • {toFrontend(serviceRequest.request_date)}
                 {serviceRequest.request_time && ` • ${serviceRequest.request_time}`}
               </p>
             </div>
@@ -314,7 +300,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
               <div className="space-y-3">
                 <div className="text-sm">
                   <span className="font-medium text-gray-900">Fecha de Solicitud:</span>
-                  <div className="text-gray-600">{formatDate(serviceRequest.request_date)}</div>
+                  <div className="text-gray-600">{toFrontend(serviceRequest.request_date)}</div>
                 </div>
                 
                 {serviceRequest.request_time && (
@@ -336,13 +322,13 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                 
                 <div className="text-sm">
                   <span className="font-medium text-gray-900">Fecha de Creación:</span>
-                  <div className="text-gray-600">{formatDateTime(serviceRequest.created_at)}</div>
+                  <div className="text-gray-600">{toFrontend(serviceRequest.created_at)}{serviceRequest.request_time ? ` ${serviceRequest.request_time}` : ''}</div>
                 </div>
                 
                 {serviceRequest.updated_at && serviceRequest.updated_by_name && (
                   <div className="text-sm">
                     <span className="font-medium text-gray-900">Última Actualización:</span>
-                    <div className="text-gray-600">{formatDateTime(serviceRequest.updated_at)} por {serviceRequest.updated_by_name}</div>
+                    <div className="text-gray-600">{toFrontend(serviceRequest.updated_at || '')} por {serviceRequest.updated_by_name}</div>
                   </div>
                 )}
               </div>
@@ -453,7 +439,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                         {service.scheduled_date ? (
                           <div>
                             <div className="text-sm text-gray-900">
-                              {formatDate(service.scheduled_date)}
+                              {toFrontend(service.scheduled_date || '')}
                             </div>
                             {service.scheduled_time && (
                               <div className="text-sm text-gray-500">

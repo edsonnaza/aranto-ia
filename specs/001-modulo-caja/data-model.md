@@ -86,7 +86,7 @@ Registro individual de cada transacción financiera.
 - `id` (Primary Key): Identificador único
 - `cash_register_id` (Foreign Key): Caja donde ocurrió el movimiento
 - `type` (Enum): 'INCOME', 'EXPENSE'
-- `category` (Enum): 'SERVICE_PAYMENT', 'SUPPLIER_PAYMENT', 'COMMISSION_LIQUIDATION', 'CASH_DIFFERENCE', 'OTHER'
+- `category` (Enum): Ver clasificación detallada de categorías más abajo
 - `amount` (Decimal 12,2): Cantidad de dinero del movimiento
 - `concept` (String 255): Descripción del movimiento
 - `patient_id` (Foreign Key, nullable): Paciente relacionado (si aplica)
@@ -99,6 +99,22 @@ Registro individual de cada transacción financiera.
 - `cancelled_by` (Foreign Key, nullable): Usuario que canceló
 - `cancelled_at` (DateTime, nullable): Timestamp de cancelación
 - `created_at`, `updated_at` (Timestamps)
+
+#### Clasificación de Categorías por Tipo
+
+**INGRESOS (type: 'INCOME'):**
+- `SERVICE_PAYMENT`: Cobro de Servicios (consultas, procedimientos médicos regulares)
+- `INPATIENT_DISCHARGE_PAYMENT`: Cobro de Alta Internado (servicios de hospitalización)
+- `EMERGENCY_DISCHARGE_PAYMENT`: Cobro de Alta Urgencia (servicios de emergencia)
+- `SANATORIUM_DEPOSIT`: Depósito Sanatorial (anticipos, garantías de internación)
+- `OTHER_INCOME`: Otros Ingresos (conceptos diversos no clasificados)
+
+**EGRESOS (type: 'EXPENSE'):**
+- `SUPPLIER_PAYMENT`: Pago a Proveedores (medicamentos, insumos, servicios)
+- `COMMISSION_LIQUIDATION`: Pago de Comisiones a Profesionales
+- `CASH_DIFFERENCE`: Diferencias de Caja (faltantes o sobrantes al cierre)
+- `SANATORIUM_REFUND`: Devolución de Depósitos Sanatoriales
+- `OTHER_EXPENSE`: Otros Egresos (gastos operativos diversos)
 
 **Relaciones:**
 - Pertenece a CashRegister (cash_register_id)

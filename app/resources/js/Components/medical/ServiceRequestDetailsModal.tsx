@@ -295,7 +295,7 @@ export default function ServiceRequestDetailsModal({
                         </svg>
                       </div>
                       <div>
-                        <h4 className="font-medium text-amber-800 mb-1">Notas Adicionales</h4>
+                        <h4 className="font-medium text-gray-800 mb-1">Notas Adicionales</h4>
                         <p className="text-gray-700 text-sm italic">"{details.notes}"</p>
                       </div>
                     </div>

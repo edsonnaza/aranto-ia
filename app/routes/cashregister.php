@@ -40,4 +40,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('cash-register/services', [CashRegisterController::class, 'services'])
         ->name('cash-register.services')
         ->middleware('permission:services.view');
+
+    // Service Payment Management
+    Route::get('cash-register/pending-services', [CashRegisterController::class, 'pendingServices'])
+        ->name('cash-register.pending-services')
+        ->middleware('permission:cash_register.view');
+
+    Route::post('cash-register/process-service-payment', [CashRegisterController::class, 'processServicePayment'])
+        ->name('cash-register.process-service-payment')
+        ->middleware('permission:cash_register.process_payments');
 });

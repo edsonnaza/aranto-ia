@@ -52,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DateInputWithCalendar } from "@/components/ui/date-input-with-calendar"
 
 // Types for server-side pagination
 export interface PaginatedData<T> {
@@ -77,7 +78,9 @@ export interface DataTableProps<TData, TValue> {
   searchKey?: string
   filterable?: boolean
   selectable?: boolean
+  dateRangeFilterable?: boolean
   onSearch?: (search: string) => void
+  onDateRangeChange?: (dateRange: { from: string|null, to: string|null }) => void
   onPageChange?: (page: number) => void
   onPageSizeChange?: (pageSize: number) => void
   onSelectionChange?: (selectedRows: TData[]) => void
@@ -85,6 +88,8 @@ export interface DataTableProps<TData, TValue> {
   className?: string
   emptyMessage?: string
   pageSizes?: number[]
+  initialDateFrom?: string
+  initialDateTo?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -95,7 +100,9 @@ export function DataTable<TData, TValue>({
   searchKey = "search",
   filterable = true,
   selectable = false,
+  dateRangeFilterable = false,
   onSearch,
+  onDateRangeChange,
   onPageChange,
   onPageSizeChange, 
   onSelectionChange,
@@ -103,6 +110,8 @@ export function DataTable<TData, TValue>({
   className,
   emptyMessage = "No se encontraron resultados.",
   pageSizes = [10, 20, 30, 50, 100],
+  initialDateFrom = "",
+  initialDateTo = "",
 }: DataTableProps<TData, TValue>) {
   // State management
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -110,6 +119,8 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
   const [searchValue, setSearchValue] = React.useState("")
+  const [dateFrom, setDateFrom] = React.useState<string|null>(initialDateFrom || null)
+  const [dateTo, setDateTo] = React.useState<string|null>(initialDateTo || null)
 
   // Create table instance
   // Note: React Compiler warning is expected - TanStack Table returns non-memoizable functions by design
@@ -226,6 +237,30 @@ export function DataTable<TData, TValue>({
                   <X className="h-4 w-4" />
                 </Button>
               )}
+            </div>
+          )}
+          {/* Date range filter */}
+          {dateRangeFilterable && (
+            <div className="flex items-center space-x-2 ml-4">
+              <DateInputWithCalendar
+                value={dateFrom}
+                onChange={val => {
+                  setDateFrom(val)
+                  if (onDateRangeChange) onDateRangeChange({ from: val, to: dateTo })
+                }}
+                placeholder="Desde (dd/mm/yyyy)"
+                disabled={loading}
+              />
+              <span className="mx-1">-</span>
+              <DateInputWithCalendar
+                value={dateTo}
+                onChange={val => {
+                  setDateTo(val)
+                  if (onDateRangeChange) onDateRangeChange({ from: dateFrom, to: val })
+                }}
+                placeholder="Hasta (dd/mm/yyyy)"
+                disabled={loading}
+              />
             </div>
           )}
         </div>

@@ -4,7 +4,41 @@
 **Estado**: Especificación de Integración  
 **Propósito**: Definir el flujo completo desde solicitud de servicios hasta liquidación de comisiones
 
-## 🔄 Flujo General del Sistema
+## � Tipos de Movimientos de Caja
+
+### **INGRESOS - Tipos Básicos de Cobros**
+
+1. **Cobro de Servicio** (`SERVICE_PAYMENT`)
+   - Consultas médicas regulares
+   - Procedimientos ambulatorios
+   - Servicios programados de recepción
+
+2. **Cobro de Alta Internado** (`INPATIENT_DISCHARGE_PAYMENT`)
+   - Facturación al momento del alta hospitalaria
+   - Incluye servicios de hospitalización, medicamentos, procedimientos durante la internación
+
+3. **Cobro de Alta Urgencia** (`EMERGENCY_DISCHARGE_PAYMENT`)
+   - Atención de emergencias y urgencias
+   - Servicios prestados en sala de emergencias
+
+4. **Depósito Sanatorial** (`SANATORIUM_DEPOSIT`)
+   - Anticipos para internación
+   - Garantías de pago para tratamientos
+   - Depósitos de seguridad
+
+5. **Otros Ingresos** (`OTHER_INCOME`)
+   - Conceptos diversos no clasificados
+   - Ingresos extraordinarios
+
+### **EGRESOS - Tipos de Salidas**
+
+1. **Pago de Comisiones** (`COMMISSION_LIQUIDATION`)
+2. **Pago a Proveedores** (`SUPPLIER_PAYMENT`)
+3. **Diferencias de Caja** (`CASH_DIFFERENCE`)
+4. **Devolución de Depósitos** (`SANATORIUM_REFUND`)
+5. **Otros Egresos** (`OTHER_EXPENSE`)
+
+## �🔄 Flujo General del Sistema
 
 ### **1. RECEPCIÓN** 📋
 **Responsable**: Recepcionista  
@@ -56,10 +90,19 @@
 #### Procesamiento del Cobro:
 1. **Se crea Transaction (Movimiento)**:
    ```php
+   // Determinar categoría según el origen del servicio
+   $category = match($serviceRequest->origin) {
+       'RECEPTION_SCHEDULED', 'RECEPTION_WALK_IN' => 'SERVICE_PAYMENT',
+       'INPATIENT_DISCHARGE' => 'INPATIENT_DISCHARGE_PAYMENT', 
+       'EMERGENCY' => 'EMERGENCY_DISCHARGE_PAYMENT',
+       'SANATORIUM_DEPOSIT' => 'SANATORIUM_DEPOSIT',
+       default => 'OTHER_INCOME'
+   };
+
    Transaction::create([
        'cash_register_session_id' => $activeSession->id,
        'type' => 'INCOME',
-       'category' => 'SERVICE_PAYMENT',
+       'category' => $category,
        'amount' => $serviceRequest->total_amount,
        'concept' => "Cobro: {$service->name} - {$patient->name}",
        'patient_id' => $serviceRequest->patient_id,

@@ -5,9 +5,11 @@ import HeadingSmall from '@/components/heading-small';
 import { OpenCashModal } from '@/components/cash-register/open-cash-modal';
 import TransactionModal from '@/components/cash-register/transaction-modal';
 import CloseCashModal from '@/components/cash-register/CloseCashModal';
+import TreasuryActionDropdown from '@/components/cash-register/treasury-action-dropdown';
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
+import { INCOME_ACTIONS, EXPENSE_ACTIONS, type TreasuryAction } from '@/config/treasury-actions';
 
 import AppLayout from '@/layouts/app-layout';
 
@@ -37,6 +39,7 @@ export default function CashRegisterDashboard({
     const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
     const [isCloseModalVisible, setIsCloseModalVisible] = useState(false);
+    const [selectedAction, setSelectedAction] = useState<TreasuryAction | null>(null);
 
     // Use Paraguay Guaraní formatter
     const { format: formatCurrency } = useCurrencyFormatter();
@@ -48,6 +51,42 @@ export default function CashRegisterDashboard({
     const handleOpenModal = () => {
         console.log('Button clicked, opening modal...');
         setIsOpenModalVisible(true);
+    };
+
+    const handleIncomeAction = (action: TreasuryAction) => {
+        console.log('Income action selected:', action);
+        setSelectedAction(action);
+        
+        switch (action.category) {
+            case 'SERVICE_PAYMENT':
+                // Navigate to service payment page
+                window.location.href = '/cash-register/pending-services';
+                break;
+            case 'OTHER_INCOME':
+                // Open generic income modal
+                setIsIncomeModalVisible(true);
+                break;
+            default:
+                // For now, open generic modal for other income types
+                setIsIncomeModalVisible(true);
+                break;
+        }
+    };
+
+    const handleExpenseAction = (action: TreasuryAction) => {
+        console.log('Expense action selected:', action);
+        setSelectedAction(action);
+        
+        switch (action.category) {
+            case 'OTHER_EXPENSE':
+                // Open generic expense modal
+                setIsExpenseModalVisible(true);
+                break;
+            default:
+                // For now, open generic modal for other expense types
+                setIsExpenseModalVisible(true);
+                break;
+        }
     };
 
     return (
@@ -219,24 +258,18 @@ export default function CashRegisterDashboard({
                                 </button>
                             ) : (
                                 <>
-                                    <button 
-                                        onClick={() => setIsIncomeModalVisible(true)}
-                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-primary-foreground hover:bg-green-700 h-10 px-4 py-2"
-                                    >
-                                        <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
-                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                                        </svg>
-                                        Registrar Ingreso
-                                    </button>
-                                    <button 
-                                        onClick={() => setIsExpenseModalVisible(true)}
-                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-orange-600 text-primary-foreground hover:bg-orange-700 h-10 px-4 py-2"
-                                    >
-                                        <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
-                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                                        </svg>
-                                        Registrar Egreso
-                                    </button>
+                                    <TreasuryActionDropdown
+                                        title="Registrar Ingreso"
+                                        actions={INCOME_ACTIONS}
+                                        onActionClick={handleIncomeAction}
+                                        variant="income"
+                                    />
+                                    <TreasuryActionDropdown
+                                        title="Registrar Egreso"
+                                        actions={EXPENSE_ACTIONS}
+                                        onActionClick={handleExpenseAction}
+                                        variant="expense"
+                                    />
                                     <button 
                                         onClick={() => {
                                             console.log('Cerrar Caja button clicked!');
@@ -338,16 +371,24 @@ export default function CashRegisterDashboard({
             {/* Modal for income transactions */}
             <TransactionModal 
                 isOpen={isIncomeModalVisible}
-                onClose={() => setIsIncomeModalVisible(false)}
+                onClose={() => {
+                    setIsIncomeModalVisible(false);
+                    setSelectedAction(null);
+                }}
                 type="INCOME"
+                category={selectedAction?.category}
                 services={[]} // We'll need to pass services from props later
             />
 
             {/* Modal for expense transactions */}
             <TransactionModal 
                 isOpen={isExpenseModalVisible}
-                onClose={() => setIsExpenseModalVisible(false)}
+                onClose={() => {
+                    setIsExpenseModalVisible(false);
+                    setSelectedAction(null);
+                }}
                 type="EXPENSE"
+                category={selectedAction?.category}
             />
 
             {/* Modal for close cash register */}

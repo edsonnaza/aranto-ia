@@ -10,11 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { formatCurrency } from '@/services/currency';
+import { type MovementCategory } from '@/config/treasury-actions';
 
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   type: 'INCOME' | 'EXPENSE';
+  category?: MovementCategory;
   services?: Array<{ id: number; name: string; price: number; category: string }>;
 }
 
@@ -22,6 +24,7 @@ export default function TransactionModal({
   isOpen, 
   onClose, 
   type,
+  category,
   services = []
 }: TransactionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
