@@ -71,6 +71,15 @@ docker compose exec app npm run dev
 3. **Background vs Foreground:** Para desarrollo usa foreground, para CI/CD usa background con `&`
 4. **Logs:** Verificar logs si hay problemas: `docker compose logs app`
 
+### 👀 React Compiler (advertencia "Compilation Skipped")
+
+Si en desarrollo ves la advertencia "Compilation Skipped: Use of incompatible library" proveniente del React Compiler, puedes ocultarla sin afectar producción:
+
+- Editamos `app/vite.config.ts` para solo habilitar `babel-plugin-react-compiler` en producción (es donde aporta optimizaciones). Esto evita mensajes molestos en dev.
+- Si prefieres habilitarlo en desarrollo usa la variable `ENABLE_REACT_COMPILER=true` en tu entorno.
+
+Ejemplo: si ves el mensaje en dev, corre `./vite-manager.sh restart` para recoger la nueva configuración.
+
 ## 🎯 **Workflow Recomendado**
 
 ```bash

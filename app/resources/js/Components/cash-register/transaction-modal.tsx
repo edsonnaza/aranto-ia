@@ -24,7 +24,6 @@ export default function TransactionModal({
   isOpen, 
   onClose, 
   type,
-  category,
   services = []
 }: TransactionModalProps) {
   const [isLoading, setIsLoading] = useState(false);

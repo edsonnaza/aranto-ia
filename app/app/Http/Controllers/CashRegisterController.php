@@ -365,16 +365,18 @@ class CashRegisterController extends Controller
             'details.professional'
         ]);
 
-        // Filter by payment status
-        if ($request->status && $request->status !== 'all') {
-            if ($request->status === 'pending') {
+        // Filter by payment status (frontend uses `payment_status` query param)
+        if ($request->payment_status && $request->payment_status !== 'all') {
+            if ($request->payment_status === 'pending') {
                 $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING);
-            } elseif ($request->status === 'paid') {
+            } elseif ($request->payment_status === 'partial') {
+                $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PARTIAL);
+            } elseif ($request->payment_status === 'paid') {
                 $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PAID);
             }
         } else {
-            // Default: only pending unless 'all' is explicitly selected
-            if (!$request->status || $request->status !== 'all') {
+            // Default: only pending when no filter provided; if explicit 'all' selected, don't filter
+            if (!$request->has('payment_status')) {
                 $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING);
             }
         }
@@ -401,6 +403,14 @@ class CashRegisterController extends Controller
         if ($request->professional_id && $request->professional_id !== 'all') {
             $query->whereHas('details', function ($q) use ($request) {
                 $q->where('professional_id', $request->professional_id);
+            });
+        }
+
+        // Filter by insurance type (expecting insurance_type as insurance_types.id)
+        if ($request->insurance_type && $request->insurance_type !== 'all') {
+            $qValue = $request->insurance_type;
+            $query->whereHas('details', function ($q) use ($qValue) {
+                $q->where('insurance_type_id', $qValue);
             });
         }
 
@@ -433,7 +443,6 @@ class CashRegisterController extends Controller
                         'professional_name' => $detail->professional ? $detail->professional->full_name : 'No asignado',
                         'insurance_type' => $detail->insuranceType->name,
                         'quantity' => $detail->quantity,
-                        'unit_price' => $detail->unit_price,
                         'total_price' => $detail->quantity * $detail->unit_price,
                     ];
                 })->toArray(),
@@ -447,10 +456,15 @@ class CashRegisterController extends Controller
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name']);
 
+        $insuranceTypes = \App\Models\InsuranceType::where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('CashRegister/PendingServices', [
             'serviceRequests' => $serviceRequests,
             'professionals' => $professionals,
-            'filters' => $request->only(['status', 'date_from', 'date_to', 'search', 'professional_id']),
+            'insuranceTypes' => $insuranceTypes,
+            'filters' => $request->only(['payment_status', 'status', 'date_from', 'date_to', 'search', 'professional_id', 'insurance_type']),
             'summary' => [
                 'pending_count' => \App\Models\ServiceRequest::where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING)->count(),
                 'pending_total' => \App\Models\ServiceRequest::where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING)->sum('total_amount'),

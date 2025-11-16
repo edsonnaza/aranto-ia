@@ -71,12 +71,15 @@ interface Professional {
 interface PendingServicesProps {
   serviceRequests: PaginatedData<ServiceRequest>;
   professionals: Professional[];
+  insuranceTypes: { id: number; name: string }[];
   filters: {
     status?: string;
     date_from?: string;
     date_to?: string;
     search?: string;
     professional_id?: string;
+    insurance_type?: string;
+    payment_status?: string;
   };
   summary: {
     pending_count: number;
@@ -86,6 +89,7 @@ interface PendingServicesProps {
 
 export default function PendingServices({
   serviceRequests,
+  insuranceTypes,
   filters,
   summary,
 }: PendingServicesProps) {
@@ -197,6 +201,20 @@ export default function PendingServices({
         </div>
       ),
     },
+      {
+        accessorKey: "insurance_type",
+        header: "Seguro",
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            {row.original.services.map((service, index) => (
+              <div key={service.id} className="text-xs text-muted-foreground">
+                {service.insurance_type || 'Sin seguro'}
+                {index < row.original.services.length - 1 && <hr className="my-1" />}
+              </div>
+            ))}
+          </div>
+        ),
+      },
     {
       accessorKey: "total_amount",
       header: "Monto",
@@ -323,9 +341,14 @@ export default function PendingServices({
             <DataTable
               columns={columns}
               data={serviceRequests}
+                initialInsuranceType={filters.insurance_type || ""}
+              initialPaymentStatus={filters.payment_status || ""}
               searchPlaceholder="Buscar por número, paciente o documento..."
               emptyMessage="No se encontraron servicios con los filtros aplicados"
               dateRangeFilterable={true}
+              insuranceFilterable={true}
+              paymentStatusFilterable={true}
+              insuranceTypeOptions={insuranceTypes}
               onDateRangeChange={({ from, to }) => {
                 const params = new URLSearchParams(window.location.search);
                 if (from) params.set('date_from', toBackend(from));

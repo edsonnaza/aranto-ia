@@ -19,8 +19,9 @@ export default defineConfig({
             refresh: true,
         }),
         react({
+            // Only enable react-compiler in production to avoid noisy warnings during dev
             babel: {
-                plugins: ['babel-plugin-react-compiler'],
+                plugins: process.env.NODE_ENV === 'production' ? ['babel-plugin-react-compiler'] : [],
             },
         }),
         tailwindcss(),
