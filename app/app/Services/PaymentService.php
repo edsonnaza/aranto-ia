@@ -239,6 +239,7 @@ class PaymentService
             'DEBIT_CARD' => 'Tarjeta de Débito',
             'TRANSFER' => 'Transferencia',
             'CHECK' => 'Cheque',
+            'DIGITAL' => 'Pago Digital',
         ];
     }
 

@@ -93,7 +93,7 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
           onValueChange={onInsuranceTypeChange}
           disabled={loading}
         >
-          <SelectTrigger className="h-8 w-[140px]">
+          <SelectTrigger className="h-8 w-160px">
             <SelectValue placeholder="Filtrar por seguro" />
           </SelectTrigger>
           <SelectContent side="top">
@@ -112,7 +112,7 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
           onValueChange={onPaymentStatusChange}
           disabled={loading}
         >
-          <SelectTrigger className="h-8 w-[140px]">
+          <SelectTrigger className="h-8 w-160px">
             <SelectValue placeholder="Estado de pago" />
           </SelectTrigger>
           <SelectContent side="top">

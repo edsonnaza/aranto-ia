@@ -209,7 +209,7 @@ export default function MedicalServicesIndex({
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
                     <span className="text-white text-sm font-medium">#</span>
                   </div>
@@ -227,7 +227,7 @@ export default function MedicalServicesIndex({
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
                     <span className="text-white text-sm font-medium">✓</span>
                   </div>
@@ -245,7 +245,7 @@ export default function MedicalServicesIndex({
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
                     <span className="text-white text-sm font-medium">⏰</span>
                   </div>
@@ -263,7 +263,7 @@ export default function MedicalServicesIndex({
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
                     <span className="text-white text-sm font-medium">📋</span>
                   </div>

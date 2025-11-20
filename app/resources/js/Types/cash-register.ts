@@ -29,7 +29,7 @@ export interface Transaction {
     reference?: string;
     service_id?: number;
     user_id: number;
-    payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'CHECK' | 'OTHER';
+    payment_method: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'TRANSFER' | 'CHECK' | 'DIGITAL' | 'OTHER';
     created_at: string;
     updated_at: string;
     user?: User;

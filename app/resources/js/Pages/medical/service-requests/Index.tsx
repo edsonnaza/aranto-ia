@@ -109,6 +109,22 @@ export default function ServiceRequestsIndex({
     )
   }
 
+  const getPaymentStatusBadge = (paymentStatus: string) => {
+    const statusConfig = {
+      pending: { label: 'Pendiente', classes: 'bg-red-50 text-red-700' },
+      partial: { label: 'Parcial', classes: 'bg-yellow-50 text-yellow-700' },
+      paid: { label: 'Pagado', classes: 'bg-green-50 text-green-700' },
+    }
+
+    const config = statusConfig[paymentStatus as keyof typeof statusConfig] || { label: paymentStatus, classes: 'bg-gray-50 text-gray-700' }
+
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.classes}`}>
+        {config.label}
+      </span>
+    )
+  }
+
   const getReceptionTypeLabel = (type: string) => {
     const typeConfig = {
       scheduled: 'Programada',
@@ -289,7 +305,10 @@ export default function ServiceRequestsIndex({
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(request.status)}
+                        <div className="space-y-1">
+                          {getStatusBadge(request.status)}
+                          <div>{getPaymentStatusBadge((request as any).payment_status)}</div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>

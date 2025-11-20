@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { useProcessServicePayment } from '@/hooks/cash-register/useProcessServicePayment';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,9 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { Badge } from '@/components/ui/badge';
 import { CreditCard, Banknote, Building2, Smartphone } from 'lucide-react';
 import { useCurrencyFormatter } from '@/stores/currency';
+import TotalDisplay from '@/components/ui/TotalDisplay';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { toast } from 'sonner';
 
 interface ServiceRequest {
   id: string;
@@ -21,6 +24,15 @@ interface ServiceRequest {
   reception_type: string;
   status: string;
   created_at: string;
+  services?: Array<{
+    id: number;
+    service_name: string;
+    professional_name?: string | null;
+    insurance_type?: string | null;
+    quantity?: number;
+    unit_price?: number;
+    total_price?: number;
+  }>;
 }
 
 interface PaymentModalProps {
@@ -31,11 +43,11 @@ interface PaymentModalProps {
 }
 
 const paymentMethods = [
-  { value: 'cash', label: 'Efectivo', icon: Banknote },
-  { value: 'debit', label: 'Tarjeta de Débito', icon: CreditCard },
-  { value: 'credit', label: 'Tarjeta de Crédito', icon: CreditCard },
-  { value: 'transfer', label: 'Transferencia', icon: Building2 },
-  { value: 'digital', label: 'Pago Digital', icon: Smartphone },
+  { value: 'CASH', label: 'Efectivo', icon: Banknote },
+  { value: 'DEBIT_CARD', label: 'Tarjeta de Débito', icon: CreditCard },
+  { value: 'CREDIT_CARD', label: 'Tarjeta de Crédito', icon: CreditCard },
+  { value: 'TRANSFER', label: 'Transferencia', icon: Building2 },
+  { value: 'DIGITAL', label: 'Pago Digital', icon: Smartphone },
 ];
 
 export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcessed }: PaymentModalProps) {
@@ -43,36 +55,27 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [amount, setAmount] = useState<number>(serviceRequest?.total_cost || 0);
   const [notes, setNotes] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { processServicePayment, loading: isProcessing } = useProcessServicePayment();
 
   const handlePayment = async () => {
     if (!serviceRequest || !paymentMethod) return;
-
-    setIsProcessing(true);
-    
-    try {
-      router.post('/cash-register/services/process-payment', {
-        service_request_id: serviceRequest.id,
-        payment_method: paymentMethod,
-        amount: amount,
-        notes: notes
-      }, {
-        onSuccess: () => {
-          onPaymentProcessed();
-          onClose();
-          resetForm();
-        },
-        onError: (error) => {
-          console.error('Error processing payment:', error);
-        },
-        onFinish: () => {
-          setIsProcessing(false);
-        }
-      });
-    } catch (error) {
-      console.error('Error processing payment:', error);
-      setIsProcessing(false);
-    }
+    processServicePayment({
+      service_request_id: serviceRequest.id,
+      payment_method: paymentMethod,
+      amount: amount,
+      notes: notes,
+    }, {
+      onSuccess: () => {
+        onPaymentProcessed();
+        onClose();
+        resetForm();
+        toast.success('Cobro procesado exitosamente.');
+      },
+      onError: () => {
+        console.error('Error processing payment');
+        toast.error('Error procesando el pago. Si ya se registró algo, se revertirá.');
+      }
+    })
   };
 
   const resetForm = () => {
@@ -85,6 +88,8 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     resetForm();
     onClose();
   };
+
+  const subtotal = serviceRequest?.services ? serviceRequest.services.reduce((acc, s) => acc + (s.total_price || 0), 0) : (serviceRequest?.total_cost || 0);
 
   const getReceptionTypeBadge = (type: string) => {
     const variants = {
@@ -112,52 +117,92 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-md w-full lg:max-w-6xl">
         <Card>
           <CardHeader>
             <CardTitle>Procesar Pago de Servicio</CardTitle>
           </CardHeader>
           
           <CardContent className="space-y-6">
-            {/* Service Details */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-3">
+            {/* Service Details / Top: details left, total right */}
+            <div className="grid grid-cols-5 gap-4">
+              <div className="col-span-3 space-y-3">
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm text-muted-foreground">Número de Servicio</span>
-                  <span className="font-medium">{serviceRequest.service_number}</span>
+                  <span className="font-medium text-lg">{serviceRequest.service_number}</span>
                 </div>
-                
+
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm text-muted-foreground">Paciente</span>
                   <span className="font-medium">{serviceRequest.patient_name}</span>
                 </div>
-                
+
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm text-muted-foreground">Profesional</span>
                   <span className="font-medium">{serviceRequest.professional_name}</span>
                 </div>
-              </div>
-              
-              <div className="space-y-3">
+
                 <div className="flex flex-col space-y-1">
                   <span className="text-sm text-muted-foreground">Servicio</span>
                   <span className="font-medium">{serviceRequest.service_name}</span>
                 </div>
-                
-                <div className="flex flex-col space-y-1">
+
+                <div>
                   <span className="text-sm text-muted-foreground">Tipo de Recepción</span>
-                  {getReceptionTypeBadge(serviceRequest.reception_type)}
+                  <div className="mt-2">{getReceptionTypeBadge(serviceRequest.reception_type)}</div>
                 </div>
-                
-                <div className="flex flex-col space-y-1">
-                  <span className="text-sm text-muted-foreground">Monto Total</span>
-                  <span className="text-2xl font-bold text-green-600">
-                    {formatCurrency(serviceRequest.total_cost)}
-                  </span>
+              </div>
+
+              <div className="col-span-2 space-y-3">
+                <TotalDisplay total={subtotal} size="lg" />
+                <div className="rounded border p-3 bg-muted/40">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <div>Items</div>
+                    <div>{serviceRequest.services?.length ?? 0}</div>
+                  </div>
+
+                  <div className="flex justify-between mt-2">
+                    <div className="text-sm">Monto a cobrar</div>
+                    <div className="text-sm font-medium">{formatCurrency(amount)}</div>
+                  </div>
                 </div>
               </div>
             </div>
 
+            {/* Items and summary */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-3">
+                <div className="rounded-md border overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Servicio</TableHead>
+                        <TableHead>Profesional</TableHead>
+                        <TableHead className="hidden md:table-cell">Seguro</TableHead>
+                        <TableHead className="text-right">Cantidad</TableHead>
+                        <TableHead className="text-right">Precio</TableHead>
+                        <TableHead className="text-right">Subtotal</TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {serviceRequest.services?.map(item => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.service_name}</TableCell>
+                          <TableCell>{item.professional_name || 'No asignado'}</TableCell>
+                          <TableCell className="hidden md:table-cell">{item.insurance_type || 'Sin seguro'}</TableCell>
+                          <TableCell className="text-right">{item.quantity ?? 1}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.unit_price ?? (item.total_price ? Math.round((item.total_price/(item.quantity||1))*100)/100 : 0))}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.total_price || (item.unit_price || 0) * (item.quantity || 1))}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+
+            </div>
             {/* Payment Form */}
             <div className="space-y-4">
               <div className="space-y-2">

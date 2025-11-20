@@ -15,6 +15,7 @@ import {
   CardTitle 
 } from '@/components/ui/card';
 import { PaymentModal } from '@/components/cash-register/payment-modal';
+import ServiceRequestDetailsModal from '@/components/cash-register/service-request-details-modal';
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import {  CreditCard, Eye } from 'lucide-react';
@@ -97,6 +98,7 @@ export default function PendingServices({
   const { toBackend } = useDateFormat();
   const { format: formatCurrency } = useCurrencyFormatter();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null);
 
   const getPaymentStatusBadge = (paymentStatus: string) => {
@@ -136,8 +138,8 @@ export default function PendingServices({
   };
 
   const handleViewDetails = (serviceRequest: ServiceRequest) => {
-    // TODO: Open details modal (reuse ServiceRequestDetailsModal)
-    console.log('View details:', serviceRequest);
+    setSelectedService(serviceRequest);
+    setIsDetailsModalOpen(true);
   };
 
   const handlePaymentProcessed = () => {
@@ -147,6 +149,11 @@ export default function PendingServices({
 
   const handleClosePaymentModal = () => {
     setIsPaymentModalOpen(false);
+    setSelectedService(null);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setIsDetailsModalOpen(false);
     setSelectedService(null);
   };
 
@@ -164,6 +171,16 @@ export default function PendingServices({
       reception_type: request.reception_type,
       status: request.status,
       created_at: request.created_at
+      ,
+      services: request.services.map(s => ({
+        id: s.id,
+        service_name: s.service_name,
+        professional_name: s.professional_name,
+        insurance_type: s.insurance_type,
+        quantity: s.quantity,
+        unit_price: s.unit_price,
+        total_price: s.total_price,
+      }))
     };
   };
 
@@ -372,6 +389,14 @@ export default function PendingServices({
         onClose={handleClosePaymentModal}
         serviceRequest={getServiceForPayment(selectedService)}
         onPaymentProcessed={handlePaymentProcessed}
+      />
+
+      {/* Details Modal */}
+      <ServiceRequestDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={handleCloseDetailsModal}
+        serviceRequest={selectedService}
+        onRefunded={() => window.location.reload()}
       />
     </AppLayout>
   );

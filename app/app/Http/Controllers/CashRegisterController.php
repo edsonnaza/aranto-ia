@@ -6,11 +6,17 @@ use App\Services\CashRegisterService;
 use App\Services\PaymentService;
 use App\Services\AuditService;
 use App\Models\CashRegisterSession;
+use App\Models\User;
+use App\Models\Professional;
 use App\Models\Transaction;
 use App\Models\Service;
+use App\Models\ServiceRequest;
+use App\Models\InsuranceType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,142 +53,32 @@ class CashRegisterController extends Controller
             \Log::info('🔧 DEBUG: Processing active session', [
                 'session_id' => $activeSession->id,
                 'initial_amount' => $activeSession->initial_amount,
-                'status' => $activeSession->status
             ]);
-            
-            $todayTransactions = $activeSession->transactions()
-                ->whereDate('created_at', today())
-                ->with('user', 'service')
-                ->latest()
-                ->get();
-            
-            \Log::info('🔧 DEBUG: Transactions retrieved', ['count' => $todayTransactions->count()]);
-            
-            $balance = [
-                'opening' => $activeSession->initial_amount,
-                'income' => $todayTransactions->where('type', 'INCOME')->sum('amount') + 
-                           $todayTransactions->where('type', 'PAYMENT')->sum('amount'),
-                'expense' => $todayTransactions->where('type', 'EXPENSE')->sum('amount'),
-                'current' => $activeSession->initial_amount + 
-                           $todayTransactions->where('type', 'INCOME')->sum('amount') +
-                           $todayTransactions->where('type', 'PAYMENT')->sum('amount') -
-                           $todayTransactions->where('type', 'EXPENSE')->sum('amount'),
-            ];
-            
-            \Log::info('🔧 DEBUG: Balance calculated', $balance);
+
+            // Get a condensed summary for the UI
+            try {
+                $sessionSummary = $this->cashRegisterService->getSessionSummary($activeSession);
+
+                $todayTransactions = $sessionSummary['transactions']['recent'] ?? collect();
+
+                $balance = [
+                    'opening' => $sessionSummary['summary']['initial_amount'] ?? 0.0,
+                    'income' => $sessionSummary['summary']['total_income'] ?? 0.0,
+                    'expense' => $sessionSummary['summary']['total_expenses'] ?? 0.0,
+                    'current' => $sessionSummary['summary']['calculated_balance'] ?? 0.0,
+                ];
+            } catch (\Exception $e) {
+                Log::error('Error while building session summary', ['error' => $e->getMessage()]);
+            }
+
         }
 
-        return Inertia::render('cash-register/dashboard', [
+        // Render dashboard with computed values
+        return Inertia::render('CashRegister/Dashboard', [
             'activeSession' => $activeSession,
-            'todayTransactions' => $todayTransactions->map(function ($transaction) {
-                return [
-                    'id' => $transaction->id,
-                    'type' => $transaction->type,
-                    'amount' => (float) $transaction->amount,
-                    'description' => $transaction->concept ?? '',
-                    'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
-                    'user' => $transaction->user ? [
-                        'name' => $transaction->user->name,
-                    ] : null,
-                    'service' => $transaction->service ? [
-                        'name' => $transaction->service->name,
-                    ] : null,
-                ];
-            }),
+            'todayTransactions' => $todayTransactions,
             'balance' => $balance,
         ]);
-    }
-
-    /**
-     * Open a new cash register session
-     */
-    public function open(Request $request)
-    {
-        $request->validate([
-            'initial_amount' => 'required|numeric|min:0',
-        ]);
-
-        try {
-            $session = $this->cashRegisterService->openSession(
-                Auth::user(),
-                $request->initial_amount
-            );
-
-            return redirect()->route('cash-register.index')->with('success', 'Caja abierta exitosamente.');
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
-    }
-
-    /**
-     * Close the active cash register session
-     */
-    public function close(Request $request)
-    {
-        Log::info('🔧 DEBUG: Close cash method called');
-        Log::info('🔧 DEBUG: Request data:', $request->all());
-        Log::info('🔧 DEBUG: User ID:', ['user_id' => auth()->id()]);
-
-        $session = CashRegisterSession::where('user_id', auth()->id())
-            ->whereNull('closing_date')  // Cambio de closed_at a closing_date
-            ->first();
-
-        Log::info('🔧 DEBUG: Found session:', ['session_id' => $session?->id, 'exists' => !!$session]);
-
-        if (!$session) {
-            Log::warning('🔧 DEBUG: No active session found');
-            return response()->json(['error' => 'No hay una sesión de caja abierta'], 422);
-        }
-
-        $validated = $request->validate([
-            'physical_amount' => 'required|numeric|min:0',
-            'calculated_balance' => 'required|numeric',
-            'difference' => 'required|numeric',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        Log::info('🔧 DEBUG: Validation passed:', $validated);
-
-        try {
-            $updated = $session->update([
-                'closing_date' => now(),  // Cambio de closed_at a closing_date
-                'final_physical_amount' => $validated['physical_amount'],  // Cambio de closing_amount a final_physical_amount
-                'calculated_balance' => $validated['calculated_balance'],
-                'difference' => $validated['difference'],
-                'difference_justification' => $validated['notes'],  // Cambio de closing_notes a difference_justification
-                'status' => 'closed',  // Agregar cambio de status
-            ]);
-
-            Log::info('🔧 DEBUG: Update result:', ['updated' => $updated]);
-            Log::info('🔧 DEBUG: Session after update:', $session->fresh()->toArray());
-
-            // Log audit
-            app(AuditService::class)->logActivity(
-                $session,
-                'cash_register_closed',
-                null,
-                [
-                    'session_id' => $session->id,
-                    'closing_amount' => $validated['physical_amount'],
-                    'calculated_balance' => $validated['calculated_balance'],
-                    'difference' => $validated['difference'],
-                ],
-                'Caja cerrada exitosamente'
-            );
-
-            Log::info('🔧 DEBUG: Audit logged successfully');
-
-            // Redirect back to dashboard with success message
-            return redirect()->route('cash-register.index')->with('success', 'Caja cerrada exitosamente');
-
-        } catch (\Exception $e) {
-            Log::error('🔧 DEBUG: Exception caught:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return redirect()->back()->with('error', 'Error al cerrar la caja: ' . $e->getMessage());
-        }
     }
 
     /**
@@ -238,10 +134,7 @@ class CashRegisterController extends Controller
         try {
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay sesión de caja activa.'
-                ], 400);
+                return redirect()->back()->with('error', 'No hay sesión de caja activa.');
             }
 
             $transaction = Transaction::create([
@@ -275,10 +168,7 @@ class CashRegisterController extends Controller
         try {
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay sesión de caja activa.'
-                ], 400);
+                return redirect()->back()->with('error', 'No hay sesión de caja activa.');
             }
 
             $transaction = Transaction::create([
@@ -358,7 +248,7 @@ class CashRegisterController extends Controller
      */
     public function pendingServices(Request $request): Response
     {
-        $query = \App\Models\ServiceRequest::with([
+        $query = ServiceRequest::with([
             'patient',
             'details.medicalService',
             'details.insuranceType',
@@ -368,16 +258,16 @@ class CashRegisterController extends Controller
         // Filter by payment status (frontend uses `payment_status` query param)
         if ($request->payment_status && $request->payment_status !== 'all') {
             if ($request->payment_status === 'pending') {
-                $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
             } elseif ($request->payment_status === 'partial') {
-                $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PARTIAL);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PARTIAL);
             } elseif ($request->payment_status === 'paid') {
-                $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PAID);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PAID);
             }
         } else {
             // Default: only pending when no filter provided; if explicit 'all' selected, don't filter
             if (!$request->has('payment_status')) {
-                $query->where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
             }
         }
 
@@ -430,6 +320,8 @@ class CashRegisterController extends Controller
                 'patient_id' => $request->patient->id,
                 'request_date' => $request->request_date->format('Y-m-d'),
                 'request_time' => $request->request_time,
+                // Include the associated payment transaction id when available so the UI can reference it
+                'payment_transaction_id' => $request->payment_transaction_id ?? null,
                 'status' => $request->status,
                 'payment_status' => $request->payment_status,
                 'reception_type' => $request->reception_type,
@@ -443,6 +335,7 @@ class CashRegisterController extends Controller
                         'professional_name' => $detail->professional ? $detail->professional->full_name : 'No asignado',
                         'insurance_type' => $detail->insuranceType->name,
                         'quantity' => $detail->quantity,
+                        'unit_price' => $detail->unit_price,
                         'total_price' => $detail->quantity * $detail->unit_price,
                     ];
                 })->toArray(),
@@ -451,12 +344,12 @@ class CashRegisterController extends Controller
         });
 
         // Get professionals for filter dropdown
-        $professionals = \App\Models\Professional::where('status', 'active')
+        $professionals = Professional::where('status', 'active')
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name']);
 
-        $insuranceTypes = \App\Models\InsuranceType::where('status', 'active')
+        $insuranceTypes = InsuranceType::where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -466,8 +359,8 @@ class CashRegisterController extends Controller
             'insuranceTypes' => $insuranceTypes,
             'filters' => $request->only(['payment_status', 'status', 'date_from', 'date_to', 'search', 'professional_id', 'insurance_type']),
             'summary' => [
-                'pending_count' => \App\Models\ServiceRequest::where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING)->count(),
-                'pending_total' => \App\Models\ServiceRequest::where('payment_status', \App\Models\ServiceRequest::PAYMENT_PENDING)->sum('total_amount'),
+                'pending_count' => ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->count(),
+                'pending_total' => ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->sum('total_amount'),
             ]
         ]);
     }
@@ -485,23 +378,25 @@ class CashRegisterController extends Controller
         ]);
 
         try {
-            $serviceRequest = \App\Models\ServiceRequest::findOrFail($request->service_request_id);
+            $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
             
             // Verify service is pending payment
-            if ($serviceRequest->payment_status !== \App\Models\ServiceRequest::PAYMENT_PENDING) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Este servicio ya ha sido procesado.'
-                ], 422);
+            if ($serviceRequest->payment_status !== ServiceRequest::PAYMENT_PENDING) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'Este servicio ya ha sido procesado.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'Este servicio ya ha sido procesado.');
             }
 
             // Get active cash register session
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay una sesión de caja activa. Abra la caja primero.'
-                ], 422);
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'No hay una sesión de caja activa. Abra la caja primero.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'No hay una sesión de caja activa. Abra la caja primero.');
             }
 
             // Determine category based on service origin
@@ -511,37 +406,63 @@ class CashRegisterController extends Controller
                 'EMERGENCY' => 'EMERGENCY_DISCHARGE_PAYMENT',
                 default => 'SERVICE_PAYMENT'
             };
+            // Transactional processing: make sure to rollback on failure
+            DB::beginTransaction();
+            try {
+                // Create income transaction (add payment_method only if the column exists)
+                $transactionData = [
+                    'cash_register_session_id' => $activeSession->id,
+                    'type' => 'INCOME',
+                    'category' => $category,
+                    'amount' => $request->amount,
+                    'concept' => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
+                    'patient_name' => $serviceRequest->patient->full_name,
+                    'notes' => $request->notes,
+                    'user_id' => Auth::id(),
+                    'service_request_id' => $serviceRequest->id,
+                ];
 
-            // Create income transaction
-            $transaction = Transaction::create([
-                'cash_register_session_id' => $activeSession->id,
-                'type' => 'INCOME',
-                'category' => $category,
-                'amount' => $request->amount,
-                'concept' => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
-                'payment_method' => $request->payment_method,
-                'patient_name' => $serviceRequest->patient->full_name,
-                'notes' => $request->notes,
-                'user_id' => Auth::id(),
-                'service_request_id' => $serviceRequest->id,
-            ]);
+                if (Schema::hasColumn('transactions', 'payment_method')) {
+                    $transactionData['payment_method'] = $request->payment_method;
+                }
 
-            // Update service request status
-            $serviceRequest->update([
-                'payment_status' => \App\Models\ServiceRequest::PAYMENT_PAID,
-                'paid_amount' => $request->amount,
-                'payment_date' => now(),
-                'payment_transaction_id' => $transaction->id,
-            ]);
+                $transaction = Transaction::create($transactionData);
 
-            // Update session totals
-            $activeSession->increment('total_income', $request->amount);
+                // Update service request status
+                $serviceRequest->update([
+                    'payment_status' => ServiceRequest::PAYMENT_PAID,
+                    'paid_amount' => $request->amount,
+                    'payment_date' => now(),
+                    'payment_transaction_id' => $transaction->id,
+                ]);
+                // Update session totals
+                $activeSession->increment('total_income', $request->amount);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Cobro procesado exitosamente.',
-                'transaction' => $transaction,
-            ]);
+                DB::commit();
+
+                // If this is an X-Inertia request (Inertia client), return JSON so front-end can update inline
+                if ($request->header('X-Inertia')) {
+                    return response()->json([
+                        'success' => true,
+                        'transaction' => $transaction,
+                        'service_request' => [
+                            'id' => $serviceRequest->id,
+                            'payment_status' => $serviceRequest->payment_status,
+                        ],
+                    ]);
+                }
+
+                // Fallback: redirect (useful for non-Inertia requests and tests)
+                return redirect()->route('cash-register.pending-services')->with('success', 'Cobro procesado exitosamente.');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error processing service payment', [
+                    'error' => $e->getMessage(),
+                    'service_request_id' => $request->service_request_id,
+                ]);
+
+                return redirect()->back()->with('error', 'Error al procesar el cobro. Intente nuevamente.');
+            }
 
         } catch (\Exception $e) {
             Log::error('Error processing service payment', [
@@ -549,10 +470,166 @@ class CashRegisterController extends Controller
                 'service_request_id' => $request->service_request_id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al procesar el cobro. Intente nuevamente.',
-            ], 500);
+            return redirect()->back()->with('error', 'Error al procesar el cobro. Intente nuevamente.');
+        }
+    }
+
+    /**
+     * Refund / cancel a paid service from the cash register (creates a refund transaction
+     * and marks the related service request as cancelled with a note that it was cancelled
+     * from the cash register). This endpoint is intended to be called only from the
+     * cash register UI and will return JSON for XHR requests.
+     */
+    public function refundServicePayment(Request $request)
+    {
+        $request->validate([
+            'service_request_id' => 'required|exists:service_requests,id',
+            // transaction_id is optional: if not provided we will try to find the original transaction by service_request_id
+            'transaction_id' => 'nullable|exists:transactions,id',
+            'amount' => 'required|numeric|min:0.01',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
+            // Resolve original transaction: prefer explicit transaction_id, otherwise try to find the latest INCOME
+            if ($request->transaction_id) {
+                $originalTransaction = Transaction::findOrFail($request->transaction_id);
+            } else {
+                // First try: transaction linked directly by service_request_id
+                $originalTransaction = Transaction::where('service_request_id', $serviceRequest->id)
+                    ->where('type', 'INCOME')
+                    ->latest()
+                    ->first();
+
+                // If not found, try to locate by concept containing the request number
+                if (!$originalTransaction) {
+                    Log::warning('Original transaction not found by service_request_id, attempting search by concept', ['service_request_id' => $serviceRequest->id, 'request_number' => $serviceRequest->request_number]);
+
+                    $originalTransaction = Transaction::where('type', 'INCOME')
+                        ->where('concept', 'like', '%' . $serviceRequest->request_number . '%')
+                        ->latest()
+                        ->first();
+                }
+
+                // If still not found, try to match by patient name + amount (best-effort)
+                if (!$originalTransaction) {
+                    Log::warning('Original transaction not found by concept, attempting search by patient name and amount', ['patient' => $serviceRequest->patient->full_name, 'amount' => $serviceRequest->total_amount]);
+
+                    $originalTransaction = Transaction::where('type', 'INCOME')
+                        ->where('patient_name', $serviceRequest->patient->full_name)
+                        ->where('amount', $serviceRequest->total_amount)
+                        ->latest()
+                        ->first();
+                }
+
+                // Final fallback: if still not found, return a clear error with guidance
+                if (!$originalTransaction) {
+                    Log::error('Unable to locate original transaction for refund', ['service_request_id' => $serviceRequest->id]);
+
+                    $msg = 'No se encontró la transacción original para esta solicitud. Provee el id de la transacción o realiza una devolución manual desde la caja.';
+                    if ($request->header('X-Inertia')) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+
+                    return redirect()->back()->with('error', $msg);
+                }
+            }
+
+            // Only allow refund when request is already paid (we handle other flows elsewhere)
+            if ($serviceRequest->payment_status !== ServiceRequest::PAYMENT_PAID) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'La solicitud no está en estado pagado.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'La solicitud no está en estado pagado.');
+            }
+
+            // Basic sanity: refund amount should not exceed original payment amount
+            if ($request->amount > $originalTransaction->amount) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'El monto de la devolución no puede ser mayor al cobrado.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'El monto de la devolución no puede ser mayor al cobrado.');
+            }
+
+            $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
+            if (!$activeSession) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'No hay una sesión de caja activa.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'No hay una sesión de caja activa.');
+            }
+
+            DB::beginTransaction();
+            try {
+                // Create refund transaction
+                $refundData = [
+                    'cash_register_session_id' => $activeSession->id,
+                    'type' => 'EXPENSE',
+                    'category' => 'SERVICE_REFUND',
+                    'amount' => $request->amount,
+                    'concept' => "Devolución: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
+                    'patient_name' => $serviceRequest->patient->full_name,
+                    'notes' => $request->reason ?? 'Devolución iniciada desde caja',
+                    'user_id' => Auth::id(),
+                    'original_transaction_id' => $originalTransaction->id,
+                    'service_request_id' => $serviceRequest->id,
+                ];
+
+                $refund = Transaction::create($refundData);
+
+                // Mark original transaction as cancelled / reversed
+                $originalTransaction->update([
+                    'status' => 'cancelled',
+                    'cancellation_reason' => 'Devuelto desde caja, transacción de devolución: ' . $refund->id,
+                    'cancelled_by' => Auth::id(),
+                    'cancelled_at' => now(),
+                ]);
+
+                // Adjust session totals
+                $activeSession->decrement('total_income', $refund->amount);
+                $activeSession->increment('total_expenses', $refund->amount);
+
+                // Cancel the service request and add a clear reason that it was cancelled from the cash register
+                $cancelReason = ($request->reason ? $request->reason . ' - ' : '') . "Cancelado desde caja (devolución) - transacción: {$refund->id}";
+                $serviceRequest->cancel(Auth::id(), $cancelReason);
+
+                DB::commit();
+
+                if ($request->header('X-Inertia')) {
+                    return response()->json([
+                        'success' => true,
+                        'refund_transaction' => $refund,
+                        'service_request' => [
+                            'id' => $serviceRequest->id,
+                            'status' => $serviceRequest->status,
+                            'cancellation_reason' => $serviceRequest->cancellation_reason,
+                        ],
+                    ]);
+                }
+
+                return redirect()->route('cash-register.index')->with('success', 'Devolución procesada y solicitud cancelada.');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error processing refund for service request', ['error' => $e->getMessage(), 'service_request_id' => $serviceRequest->id]);
+
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'Error al procesar la devolución.'], 500);
+                }
+
+                return redirect()->back()->with('error', 'Error al procesar la devolución.');
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error processing refund for service request', ['error' => $e->getMessage()]);
+            if ($request->header('X-Inertia')) {
+                return response()->json(['success' => false, 'message' => 'Error al procesar la devolución.'], 500);
+            }
+
+            return redirect()->back()->with('error', 'Error al procesar la devolución.');
         }
     }
 }

@@ -49,4 +49,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('cash-register/process-service-payment', [CashRegisterController::class, 'processServicePayment'])
         ->name('cash-register.process-service-payment')
         ->middleware('permission:cash_register.process_payments');
+
+    // Refund / cancel paid service from cash register
+    Route::post('cash-register/refund-service-payment', [CashRegisterController::class, 'refundServicePayment'])
+        ->name('cash-register.refund-service-payment')
+        ->middleware('permission:cash_register.process_payments');
 });

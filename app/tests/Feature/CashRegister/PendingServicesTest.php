@@ -9,6 +9,8 @@ use Database\Seeders\CashRegisterPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
+use App\Models\CashRegisterSession;
+use App\Models\Transaction;
 
 class PendingServicesTest extends TestCase
 {
@@ -198,5 +200,63 @@ class PendingServicesTest extends TestCase
                 ->has('serviceRequests.data', 1)
                 ->where('serviceRequests.data.0.payment_status', ServiceRequest::PAYMENT_PENDING)
             );
+    }
+
+    public function test_process_service_payment_redirects_and_commits()
+    {
+        $this->seed(CashRegisterPermissionsSeeder::class);
+
+        $user = User::factory()->create();
+        $user->givePermissionTo('cash_register.process_payments');
+
+        // Create active session for user
+        $session = CashRegisterSession::create([
+            'user_id' => $user->id,
+            'opening_date' => now(),
+            'initial_amount' => 0,
+            'calculated_balance' => 0,
+            'total_income' => 0,
+            'total_expenses' => 0,
+            'status' => 'open',
+        ]);
+
+        $patient = Patient::create([
+            'document_type' => 'DNI',
+            'document_number' => '00000',
+            'first_name' => 'Pago',
+            'last_name' => 'Test',
+            'birth_date' => now()->subYears(20),
+            'status' => 'active'
+        ]);
+
+        $sr = ServiceRequest::create([
+            'patient_id' => $patient->id,
+            'request_number' => 'TXN-001',
+            'request_date' => now()->toDateString(),
+            'status' => ServiceRequest::STATUS_PENDING_PAYMENT,
+            'reception_type' => ServiceRequest::RECEPTION_WALK_IN,
+            'priority' => ServiceRequest::PRIORITY_NORMAL,
+            'total_amount' => 150,
+            'paid_amount' => 0,
+            'payment_status' => ServiceRequest::PAYMENT_PENDING,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('cash-register.process-service-payment'), [
+            'service_request_id' => $sr->id,
+            'payment_method' => 'CASH',
+            'amount' => 150,
+            'notes' => 'Pago test'
+        ]);
+
+        $response->assertRedirect(route('cash-register.pending-services'));
+
+        $sr->refresh();
+        $this->assertEquals(ServiceRequest::PAYMENT_PAID, $sr->payment_status);
+
+        $this->assertDatabaseHas('transactions', [
+            'service_request_id' => $sr->id,
+            'amount' => 150,
+            'type' => 'INCOME'
+        ]);
     }
 }
