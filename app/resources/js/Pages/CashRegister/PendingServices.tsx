@@ -389,7 +389,8 @@ export default function PendingServices({
         onClose={handleClosePaymentModal}
         serviceRequest={getServiceForPayment(selectedService)}
         onPaymentProcessed={handlePaymentProcessed}
-      />
+      />      git add .
+      git commit -m "feat(caja): automatización de devoluciones, backfill transaccional, filtro cancelado y documentación completa"
 
       {/* Details Modal */}
       <ServiceRequestDetailsModal
