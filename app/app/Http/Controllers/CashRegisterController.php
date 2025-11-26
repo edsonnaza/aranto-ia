@@ -22,6 +22,35 @@ use Inertia\Response;
 
 class CashRegisterController extends Controller
 {
+    /**
+     * Abrir una nueva sesión de caja
+     */
+    public function open(Request $request)
+    {
+        $request->validate([
+            'initial_amount' => 'required|numeric|min:0',
+        ]);
+
+        $user = Auth::user();
+        // Cerrar cualquier sesión abierta previa
+        CashRegisterSession::where('user_id', $user->id)
+            ->where('status', 'open')
+            ->update(['status' => 'closed', 'closing_date' => now()]);
+
+        // Crear nueva sesión
+        $session = CashRegisterSession::create([
+            'user_id' => $user->id,
+            'opening_date' => now(),
+            'initial_amount' => $request->initial_amount,
+            'status' => 'open',
+            'total_income' => 0,
+            'total_expenses' => 0,
+            'calculated_balance' => $request->initial_amount,
+        ]);
+
+        return redirect()->route('cash-register.index')->with('success', 'Caja abierta correctamente.');
+    }
+
     public function __construct(
         private CashRegisterService $cashRegisterService,
         private PaymentService $paymentService
@@ -255,7 +284,7 @@ class CashRegisterController extends Controller
             'details.professional'
         ]);
 
-        // Filter by payment status (frontend uses `payment_status` query param)
+        // Filtro extendido: permitir ver cancelados
         if ($request->payment_status && $request->payment_status !== 'all') {
             if ($request->payment_status === 'pending') {
                 $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
@@ -263,9 +292,11 @@ class CashRegisterController extends Controller
                 $query->where('payment_status', ServiceRequest::PAYMENT_PARTIAL);
             } elseif ($request->payment_status === 'paid') {
                 $query->where('payment_status', ServiceRequest::PAYMENT_PAID);
+            } elseif ($request->payment_status === 'cancelled') {
+                $query->where('status', ServiceRequest::STATUS_CANCELLED);
             }
         } else {
-            // Default: only pending when no filter provided; if explicit 'all' selected, don't filter
+            // Default: solo pendientes si no hay filtro; si 'all', no filtrar
             if (!$request->has('payment_status')) {
                 $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
             }
@@ -340,6 +371,19 @@ class CashRegisterController extends Controller
                     ];
                 })->toArray(),
                 'created_at' => $request->created_at->format('Y-m-d H:i'),
+                // Agregar array de transacciones asociadas
+                'transactions' => Transaction::where('service_request_id', $request->id)->get()->map(function ($tx) {
+                    return [
+                        'id' => $tx->id,
+                        'amount' => $tx->amount,
+                        'type' => $tx->type,
+                        'category' => $tx->category,
+                        'concept' => $tx->concept,
+                        'status' => $tx->status,
+                        'payment_method' => $tx->payment_method,
+                        'created_at' => $tx->created_at?->format('Y-m-d H:i'),
+                    ];
+                })->toArray(),
             ];
         });
 
@@ -492,42 +536,31 @@ class CashRegisterController extends Controller
 
         try {
             $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
-            // Resolve original transaction: prefer explicit transaction_id, otherwise try to find the latest INCOME
+            // Resolve original transaction: prefer explicit transaction_id, otherwise require exact
             if ($request->transaction_id) {
                 $originalTransaction = Transaction::findOrFail($request->transaction_id);
             } else {
-                // First try: transaction linked directly by service_request_id
+                // Require exact mapping by `service_request_id` for reliability.
+                if (!Schema::hasColumn('transactions', 'service_request_id')) {
+                    Log::error('transactions.service_request_id column missing; cannot perform exact lookup', ['service_request_id' => $serviceRequest->id]);
+
+                    $msg = 'La columna `service_request_id` no existe en transacciones. Ejecuta las migraciones/backfill para habilitar devoluciones seguras.';
+                    if ($request->header('X-Inertia')) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+
+                    return redirect()->back()->with('error', $msg);
+                }
+
                 $originalTransaction = Transaction::where('service_request_id', $serviceRequest->id)
                     ->where('type', 'INCOME')
                     ->latest()
                     ->first();
 
-                // If not found, try to locate by concept containing the request number
                 if (!$originalTransaction) {
-                    Log::warning('Original transaction not found by service_request_id, attempting search by concept', ['service_request_id' => $serviceRequest->id, 'request_number' => $serviceRequest->request_number]);
+                    Log::error('Original transaction not found by exact service_request_id', ['service_request_id' => $serviceRequest->id, 'request_number' => $serviceRequest->request_number]);
 
-                    $originalTransaction = Transaction::where('type', 'INCOME')
-                        ->where('concept', 'like', '%' . $serviceRequest->request_number . '%')
-                        ->latest()
-                        ->first();
-                }
-
-                // If still not found, try to match by patient name + amount (best-effort)
-                if (!$originalTransaction) {
-                    Log::warning('Original transaction not found by concept, attempting search by patient name and amount', ['patient' => $serviceRequest->patient->full_name, 'amount' => $serviceRequest->total_amount]);
-
-                    $originalTransaction = Transaction::where('type', 'INCOME')
-                        ->where('patient_name', $serviceRequest->patient->full_name)
-                        ->where('amount', $serviceRequest->total_amount)
-                        ->latest()
-                        ->first();
-                }
-
-                // Final fallback: if still not found, return a clear error with guidance
-                if (!$originalTransaction) {
-                    Log::error('Unable to locate original transaction for refund', ['service_request_id' => $serviceRequest->id]);
-
-                    $msg = 'No se encontró la transacción original para esta solicitud. Provee el id de la transacción o realiza una devolución manual desde la caja.';
+                    $msg = 'No se encontró la transacción original enlazada a esta solicitud. Proporciona `transaction_id` o ejecuta el backfill para asociar transacciones antiguas.';
                     if ($request->header('X-Inertia')) {
                         return response()->json(['success' => false, 'message' => $msg], 422);
                     }
@@ -580,6 +613,12 @@ class CashRegisterController extends Controller
                 ];
 
                 $refund = Transaction::create($refundData);
+
+                // Ensure `service_request_id` is persisted even if it's not fillable
+                if (empty($refund->service_request_id)) {
+                    $refund->service_request_id = $serviceRequest->id;
+                    $refund->save();
+                }
 
                 // Mark original transaction as cancelled / reversed
                 $originalTransaction->update([

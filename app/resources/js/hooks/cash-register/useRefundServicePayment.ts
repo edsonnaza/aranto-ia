@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 
 interface RefundData {
   service_request_id: number | string
-  transaction_id: number | string
+  transaction_id?: number | string
   amount: number
   reason?: string
 }

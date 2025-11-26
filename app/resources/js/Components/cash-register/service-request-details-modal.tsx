@@ -22,6 +22,12 @@ interface ServiceItem {
   total_price?: number
 }
 
+interface TransactionItem {
+  id: number
+  service_request_id?: number
+  type: string
+}
+
 interface ServiceRequest {
   id: number
   request_number: string
@@ -34,7 +40,9 @@ interface ServiceRequest {
   payment_transaction_id?: number | null
   total_amount?: number
   services?: ServiceItem[]
+  transactions?: TransactionItem[]
 }
+
 
 interface Props {
   isOpen: boolean
@@ -46,38 +54,65 @@ interface Props {
 export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceRequest, onRefunded }: Props) {
   const { format: formatCurrency } = useCurrencyFormatter()
   const [reason, setReason] = useState('')
+  const [amount, setAmount] = useState<number>(() => serviceRequest?.total_amount ?? 0)
+  const [transactionIdInput, setTransactionIdInput] = useState<string>('')
+
+  // Buscar transactionId automáticamente
+  let autoTransactionId = serviceRequest?.payment_transaction_id ?? null
+  if (!autoTransactionId && Array.isArray(serviceRequest?.transactions)) {
+    const tx = serviceRequest.transactions.find(
+      t => t.service_request_id === serviceRequest.id && t.type === 'INCOME'
+    )
+    if (tx) autoTransactionId = tx.id
+  }
   const { refundServicePayment, loading } = useRefundServicePayment()
 
-  const [amount, setAmount] = useState<number>(() => serviceRequest?.total_amount ?? 0)
+
 
   if (!serviceRequest) return null
 
   const performRefund = async () => {
-    if (!serviceRequest.payment_transaction_id) {
-      // Backend has fallback, but guard early to provide immediate feedback
-      toast.error('No se encuentra la transacción original. Imposible devolver.')
+    if (!serviceRequest) return
+    // Validación de monto
+    if (amount <= 0 || amount > (serviceRequest.total_amount || 0)) {
+      toast.error('El monto es inválido.')
       return
     }
-
-    try {
-      await refundServicePayment({
-        service_request_id: serviceRequest.id,
-        transaction_id: serviceRequest.payment_transaction_id,
-        amount: amount,
-        reason: reason || 'Devolución desde caja (por usuario)'
-      }, {
-        onSuccess: (payload) => {
-          toast.success('Devolución procesada correctamente.')
-          onClose()
-          onRefunded?.(payload)
-        },
-        onError: (err) => {
-          toast.error(String(err || 'Error al procesar la devolución'))
-        }
-      })
-    } catch {
-      toast.error('Error al procesar la devolución')
+    // Buscar transacción asociada automáticamente
+    let transactionId = serviceRequest.payment_transaction_id
+    // Si no existe, buscar en serviceRequest.transactions (si existe)
+    if (!transactionId && Array.isArray(serviceRequest.transactions)) {
+      const tx = serviceRequest.transactions.find(
+        t => t.service_request_id === serviceRequest.id && t.type === 'INCOME'
+      )
+      if (tx) transactionId = tx.id
     }
+    // Si aún no existe, usar el input manual
+    if (!transactionId && transactionIdInput) {
+      transactionId = Number(transactionIdInput)
+    }
+    // Si no se encuentra, mostrar error
+    if (!transactionId) {
+      toast.error('No hay id de transacción asociado. Ejecuta el backfill o ingresa el id manualmente.')
+      return
+    }
+    // Construir payload
+    const payload = {
+      service_request_id: serviceRequest.id,
+      amount,
+      reason,
+      transaction_id: transactionId
+    }
+    await refundServicePayment(payload, {
+      onSuccess: (data) => {
+        toast.success('Devolución procesada correctamente.')
+        onClose()
+        onRefunded?.(data)
+      },
+      onError: (err) => {
+        toast.error(String(err || 'Error al procesar la devolución'))
+      }
+    })
   }
 
   const subtotal = serviceRequest.services ? serviceRequest.services.reduce((acc, s) => acc + (s.total_price || 0), 0) : (serviceRequest.total_amount || 0)
@@ -152,6 +187,17 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo de la devolución..." rows={3} />
               </div>
             </div>
+
+            {!autoTransactionId && (
+              <div className="mt-2 rounded-md bg-yellow-50 p-3 border">
+                <div className="text-sm font-medium">Transacción no asociada</div>
+                <div className="text-xs text-muted-foreground">No se encontró automáticamente el id de transacción. Ingresa el id manualmente o ejecuta el backfill en la base de datos.</div>
+                <div className="mt-2">
+                  <Label>Transaction ID (manual)</Label>
+                  <input type="number" className="mt-1 block w-full rounded-md border px-2 py-1" value={transactionIdInput} onChange={(e) => setTransactionIdInput(e.target.value)} placeholder="Ej: 123" />
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="outline" onClick={onClose} disabled={loading}>Cerrar</Button>

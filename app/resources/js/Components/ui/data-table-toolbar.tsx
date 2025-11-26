@@ -120,6 +120,7 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
             <SelectItem value="pending">Pendiente</SelectItem>
             <SelectItem value="partial">Parcial</SelectItem>
             <SelectItem value="paid">Pagado</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
         </Select>
       </div>

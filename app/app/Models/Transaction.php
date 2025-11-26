@@ -56,6 +56,7 @@ class Transaction extends Model
         'payment_method',
         'metadata',
         'service_id',
+        'service_request_id',
     ];
 
     protected $casts = [

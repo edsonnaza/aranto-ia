@@ -393,6 +393,7 @@ export default function PendingServices({
 
       {/* Details Modal */}
       <ServiceRequestDetailsModal
+        key={selectedService?.id ?? 'service-details'}
         isOpen={isDetailsModalOpen}
         onClose={handleCloseDetailsModal}
         serviceRequest={selectedService}
