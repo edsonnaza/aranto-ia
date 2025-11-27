@@ -484,16 +484,9 @@ class CashRegisterController extends Controller
 
                 DB::commit();
 
-                // If this is an X-Inertia request (Inertia client), return JSON so front-end can update inline
+                // If this is an X-Inertia request (Inertia client), return redirect with success message
                 if ($request->header('X-Inertia')) {
-                    return response()->json([
-                        'success' => true,
-                        'transaction' => $transaction,
-                        'service_request' => [
-                            'id' => $serviceRequest->id,
-                            'payment_status' => $serviceRequest->payment_status,
-                        ],
-                    ]);
+                    return back()->with('success', 'Cobro procesado exitosamente.');
                 }
 
                 // Fallback: redirect (useful for non-Inertia requests and tests)

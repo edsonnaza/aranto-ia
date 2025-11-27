@@ -143,8 +143,8 @@ export default function PendingServices({
   };
 
   const handlePaymentProcessed = () => {
-    // Refresh the page data
-    window.location.reload();
+    // Refresca solo los datos necesarios usando Inertia
+    router.reload({ only: ['serviceRequests', 'summary'] });
   };
 
   const handleClosePaymentModal = () => {
@@ -158,29 +158,49 @@ export default function PendingServices({
   };
 
   // Adapter function to transform ServiceRequest to the format expected by PaymentModal
-  const getServiceForPayment = (request: ServiceRequest | null) => {
+  // Adaptador para el tipo que espera PaymentModal
+  type ModalServiceRequest = {
+    id: string;
+    service_number: string;
+    patient_name: string;
+    professional_name: string;
+    service_name: string;
+    total_cost: number;
+    reception_type: string;
+    status: string;
+    created_at: string;
+    services: Array<{
+      id: string;
+      service_name: string;
+      professional_name: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }>;
+  };
+
+  const getServiceForPayment = (request: ServiceRequest | null): ModalServiceRequest | null => {
     if (!request) return null;
-    
+    // Tomar el primer servicio para los campos principales
+    const firstService = request.services[0] || {};
     return {
-      id: request.id.toString(),
+      id: String(request.id),
       service_number: request.request_number,
       patient_name: request.patient_name,
-      professional_name: request.services[0]?.professional_name || 'No asignado',
-      service_name: request.services.map(s => s.service_name).join(', '),
+      professional_name: firstService.professional_name || '',
+      service_name: firstService.service_name || '',
       total_cost: request.total_amount,
       reception_type: request.reception_type,
       status: request.status,
-      created_at: request.created_at
-      ,
+      created_at: request.created_at,
       services: request.services.map(s => ({
-        id: s.id,
+        id: String(s.id),
         service_name: s.service_name,
         professional_name: s.professional_name,
-        insurance_type: s.insurance_type,
         quantity: s.quantity,
         unit_price: s.unit_price,
         total_price: s.total_price,
-      }))
+      })),
     };
   };
 
@@ -389,6 +409,7 @@ export default function PendingServices({
         onClose={handleClosePaymentModal}
         serviceRequest={getServiceForPayment(selectedService)}
         onPaymentProcessed={handlePaymentProcessed}
+        companyName="Hospital Central"
       />     
       {/* Details Modal */}
       <ServiceRequestDetailsModal
