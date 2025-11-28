@@ -38,6 +38,7 @@ interface PaymentModalProps {
   serviceRequest: ServiceRequest | null;
   onPaymentProcessed: () => void;
   companyName: string;
+  paymentStatusOptions?: Array<{ id: number; name: string }>;
 }
 
 const paymentMethods = [

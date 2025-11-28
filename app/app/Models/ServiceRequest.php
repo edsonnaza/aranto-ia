@@ -221,6 +221,7 @@ class ServiceRequest extends Model
     {
         $this->update([
             'status' => self::STATUS_CANCELLED,
+            'payment_status' => 'cancelled',
             'cancelled_at' => now(),
             'cancelled_by' => $cancelledBy,
             'cancellation_reason' => $reason,

@@ -22,6 +22,7 @@ import {  CreditCard, Eye } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
@@ -102,24 +103,26 @@ export default function PendingServices({
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null);
 
   const getPaymentStatusBadge = (paymentStatus: string) => {
-    const statusConfig = {
-      pending: { label: 'Pendiente', variant: 'destructive' as const },
-      partial: { label: 'Parcial', variant: 'secondary' as const },
-      paid: { label: 'Pagado', variant: 'default' as const },
+    type StatusKey = 'pending' | 'partial' | 'paid' | 'cancelled';
+    const statusConfig: Record<StatusKey, { label: string; variant: 'pending' | 'secondary' | 'paid' | 'cancelled' }> = {
+      pending: { label: 'Pendiente', variant: 'pending' },
+      partial: { label: 'Parcial', variant: 'secondary' },
+      paid: { label: 'Pagado', variant: 'paid' },
+      cancelled: { label: 'Cancelado', variant: 'cancelled' },
     };
-    
-    const config = statusConfig[paymentStatus as keyof typeof statusConfig] || { 
-      label: paymentStatus, 
-      variant: 'secondary' as const 
-    };
-    
+    const key: StatusKey = (['pending','partial','paid','cancelled'].includes(paymentStatus) ? paymentStatus : 'partial') as StatusKey;
+    const config = statusConfig[key];
     return <Badge variant={config.variant}>{config.label}</Badge>;
+    // Si tu Badge no soporta 'info', 'success', 'muted', adapta a tus variantes de Tailwind:
+    // destructive: rojo, secondary: celeste, default: verde, outline: gris
+    // Si Badge solo soporta los originales, usa:
+    // paid: 'default', cancelled: 'outline', pending: 'destructive', partial: 'secondary'
   };
 
   const getReceptionTypeBadge = (type: string) => {
     const typeConfig = {
       RECEPTION_SCHEDULED: { label: 'Agendado', variant: 'default' as const },
-      RECEPTION_WALK_IN: { label: 'Walk-in', variant: 'secondary' as const },
+      RECEPTION_WALK_IN: { label: 'Orden de llegada', variant: 'secondary' as const },
       EMERGENCY: { label: 'Emergencia', variant: 'destructive' as const },
       INPATIENT_DISCHARGE: { label: 'Alta Hospitalaria', variant: 'secondary' as const },
     };
@@ -286,16 +289,16 @@ export default function PendingServices({
       header: "Acciones",
       cell: ({ row }) => (
         <div className="flex space-x-2">
-          {row.original.payment_status === 'pending' && (
-            <Button
-              size="sm"
-              onClick={() => handleProcessPayment(row.original)}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <CreditCard className="h-3 w-3 mr-1" />
-              COBRAR
-            </Button>
-          )}
+            {(row.original.payment_status === 'pending') && (
+              <Button
+                size="sm"
+                onClick={() => handleProcessPayment(row.original)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CreditCard className="h-3 w-3 mr-1" />
+                COBRAR
+              </Button>
+            )}
           <Button
             size="sm"
             variant="outline"
@@ -378,7 +381,7 @@ export default function PendingServices({
             <DataTable
               columns={columns}
               data={serviceRequests}
-                initialInsuranceType={filters.insurance_type || ""}
+              initialInsuranceType={filters.insurance_type || ""}
               initialPaymentStatus={filters.payment_status || ""}
               searchPlaceholder="Buscar por número, paciente o documento..."
               emptyMessage="No se encontraron servicios con los filtros aplicados"
