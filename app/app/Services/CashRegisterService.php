@@ -122,24 +122,32 @@ class CashRegisterService
     public function getSessionSummary(CashRegisterSession $session): array
     {
         $transactions = $session->transactions()->where('status', 'active')->get();
-        
+
         $incomeTransactions = $transactions->where('type', 'INCOME');
-        $expenseTransactions = $transactions->where('type', 'EXPENSE');
+        // Filtrar egresos para excluir refunds
+        $expenseTransactions = $transactions->where('type', 'EXPENSE')->filter(function($tx) {
+            return $tx->category !== 'SERVICE_REFUND';
+        });
+        $refundTransactions = $transactions->where('type', 'EXPENSE')->filter(function($tx) {
+            return $tx->category === 'SERVICE_REFUND';
+        });
 
         return [
             'session' => $session,
             'summary' => [
                 'initial_amount' => $session->initial_amount,
                 'total_income' => $incomeTransactions->sum('amount'),
-                'total_expenses' => $expenseTransactions->sum('amount'),
+                'total_expenses' => $expenseTransactions->sum('amount'), // solo egresos reales
                 'calculated_balance' => $session->calculateBalance(),
                 'transactions_count' => $transactions->count(),
                 'income_transactions_count' => $incomeTransactions->count(),
                 'expense_transactions_count' => $expenseTransactions->count(),
+                'refund_transactions_count' => $refundTransactions->count(),
             ],
             'transactions' => [
                 'income' => $incomeTransactions->values(),
                 'expenses' => $expenseTransactions->values(),
+                'refunds' => $refundTransactions->values(),
                 'recent' => $transactions->sortByDesc('created_at')->take(10)->values(),
             ]
         ];

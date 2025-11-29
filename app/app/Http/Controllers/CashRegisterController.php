@@ -23,6 +23,34 @@ use Inertia\Response;
 class CashRegisterController extends Controller
 {
     /**
+     * Cierra la sesión de caja activa del usuario
+     */
+    public function close(Request $request)
+    {
+        $user = Auth::user();
+        $activeSession = $this->cashRegisterService->getActiveSession($user);
+        if (!$activeSession) {
+            if ($request->header('X-Inertia')) {
+                return Inertia::location(route('cash-register.index'));
+            }
+            return redirect()->back()->with('error', 'No hay una sesión de caja activa.');
+        }
+
+        // Registrar cierre
+        $activeSession->status = 'closed';
+        $activeSession->closing_date = now();
+        if ($request->has('final_physical_amount')) {
+            $activeSession->final_physical_amount = $request->input('final_physical_amount');
+        }
+        $activeSession->difference = $activeSession->final_physical_amount - $activeSession->calculateBalance();
+        $activeSession->save();
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location(route('cash-register.index'));
+        }
+        return redirect()->route('cash-register.index')->with('success', 'Caja cerrada correctamente.');
+    }
+    /**
      * Abrir una nueva sesión de caja
      */
     public function open(Request $request)
@@ -529,6 +557,13 @@ class CashRegisterController extends Controller
 
         try {
             $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
+            // Validar que no se pueda devolver si ya está cancelado
+            if ($serviceRequest->payment_status === 'cancelled') {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'La solicitud ya fue cancelada y no puede devolverse nuevamente.'], 422);
+                }
+                return redirect()->back()->with('error', 'La solicitud ya fue cancelada y no puede devolverse nuevamente.');
+            }
             // Resolve original transaction: prefer explicit transaction_id, otherwise require exact
             if ($request->transaction_id) {
                 $originalTransaction = Transaction::findOrFail($request->transaction_id);
@@ -620,10 +655,9 @@ class CashRegisterController extends Controller
                     'cancelled_by' => Auth::id(),
                     'cancelled_at' => now(),
                 ]);
-
                 // Adjust session totals
+                // Solo compensar el ingreso, no sumar como gasto
                 $activeSession->decrement('total_income', $refund->amount);
-                $activeSession->increment('total_expenses', $refund->amount);
 
                 // Cancel the service request and add a clear reason that it was cancelled from the cash register
                 $cancelReason = ($request->reason ? $request->reason . ' - ' : '') . "Cancelado desde caja (devolución) - transacción: {$refund->id}";

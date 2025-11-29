@@ -129,10 +129,12 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     setPaymentMethod('');
     setAmount(serviceRequest?.total_cost || 0);
     setNotes('');
+    setPaymentCompleted(false);
   };
 
   const handleClose = () => {
     resetForm();
+    setPaymentCompleted(false);
     onClose();
   };
 
@@ -163,7 +165,10 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
         open={isOpen} 
         onOpenChange={(open) => {
           // Solo permitir cerrar si no hay recibo pendiente
-          if (!showReceipt && !open) handleClose();
+          if (!showReceipt && !open) {
+            handleClose();
+            setPaymentCompleted(false);
+          }
         }}
       >
         <DialogContent className="lg:max-w-2xl">
