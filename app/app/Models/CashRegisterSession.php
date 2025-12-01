@@ -121,7 +121,16 @@ class CashRegisterSession extends Model
 
     public function calculateBalance(): float
     {
-        return $this->initial_amount + $this->total_income - $this->total_expenses;
+        // Calcular desde las transacciones activas para asegurar precisión
+        $transactions = $this->transactions()->where('status', 'active')->get();
+        
+        $totalIncome = $transactions->where('type', 'INCOME')->sum('amount');
+        // Excluir refunds de los egresos (refunds son categoría SERVICE_REFUND)
+        $totalExpenses = $transactions->where('type', 'EXPENSE')
+            ->filter(fn($tx) => $tx->category !== 'SERVICE_REFUND')
+            ->sum('amount');
+        
+        return $this->initial_amount + $totalIncome - $totalExpenses;
     }
 
     public function getDifferenceAmount(): float

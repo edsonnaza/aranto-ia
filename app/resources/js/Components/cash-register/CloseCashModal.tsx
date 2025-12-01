@@ -80,21 +80,9 @@ export default function CloseCashModal({
         name: 'physical_amount',
     });
 
-    // Calcular totales
-    const totalIncome = transactions
-        .filter(t => t.type === 'INCOME')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-    
-    const totalExpense = transactions
-        .filter(t => t.type === 'EXPENSE')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-    // Los PAYMENT se consideran como INCOME para efectos de caja
-    const totalPayments = transactions
-        .filter(t => t.type === 'PAYMENT')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-    const calculatedBalance = Number(balance?.opening || 0) + totalIncome + totalPayments - totalExpense;
+    // El balance ya viene calculado correctamente del backend
+    // Las devoluciones compensan ingresos, no son egresos
+    const calculatedBalance = Number(balance?.current || 0);
 
     // Calcular diferencia directamente (sin estado para evitar renders innecesarios)
     const difference = physicalAmount && !isNaN(Number(physicalAmount)) 
@@ -199,20 +187,13 @@ export default function CloseCashModal({
                                 </div>
                                 
                                 <div>
-                                    <Label className="text-muted-foreground">Total Ingresos</Label>
-                                    <p className="text-lg font-semibold text-green-600">+{formatCurrency(totalIncome)}</p>
+                                    <Label className="text-muted-foreground">Ingresos</Label>
+                                    <p className="text-lg font-semibold text-green-600">+{formatCurrency(Number(balance?.income || 0))}</p>
                                 </div>
                                 
-                                {totalPayments > 0 && (
-                                    <div>
-                                        <Label className="text-muted-foreground">Total Pagos</Label>
-                                        <p className="text-lg font-semibold text-blue-600">+{formatCurrency(totalPayments)}</p>
-                                    </div>
-                                )}
-                                
                                 <div>
-                                    <Label className="text-muted-foreground">Total Egresos</Label>
-                                    <p className="text-lg font-semibold text-red-600">-{formatCurrency(totalExpense)}</p>
+                                    <Label className="text-muted-foreground">Egresos</Label>
+                                    <p className="text-lg font-semibold text-red-600">-{formatCurrency(Number(balance?.expense || 0))}</p>
                                 </div>
                             </div>
 

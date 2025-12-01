@@ -131,14 +131,24 @@ class CashRegisterService
         $refundTransactions = $transactions->where('type', 'EXPENSE')->filter(function($tx) {
             return $tx->category === 'SERVICE_REFUND';
         });
+        
+        // Calcular totales reales desde transacciones
+        $totalIncome = $incomeTransactions->sum('amount');
+        $totalExpenses = $expenseTransactions->sum('amount');
+        $totalRefunds = $refundTransactions->sum('amount');
+        
+        // Balance: monto inicial + ingresos - egresos reales
+        // Los refunds ya compensaron el ingreso, no los contamos como egreso
+        $calculatedBalance = $session->initial_amount + $totalIncome - $totalExpenses;
 
         return [
             'session' => $session,
             'summary' => [
                 'initial_amount' => $session->initial_amount,
-                'total_income' => $incomeTransactions->sum('amount'),
-                'total_expenses' => $expenseTransactions->sum('amount'), // solo egresos reales
-                'calculated_balance' => $session->calculateBalance(),
+                'total_income' => $totalIncome,
+                'total_expenses' => $totalExpenses, // solo egresos reales
+                'total_refunds' => $totalRefunds, // informativo
+                'calculated_balance' => $calculatedBalance,
                 'transactions_count' => $transactions->count(),
                 'income_transactions_count' => $incomeTransactions->count(),
                 'expense_transactions_count' => $expenseTransactions->count(),

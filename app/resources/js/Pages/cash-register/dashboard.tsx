@@ -330,9 +330,15 @@ export default function CashRegisterDashboard({
                                                     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                                                         transaction.type === 'INCOME' 
                                                             ? 'bg-green-100 text-green-800' 
+                                                            : transaction.category === 'SERVICE_REFUND'
+                                                            ? 'bg-yellow-100 text-yellow-800'
                                                             : 'bg-red-100 text-red-800'
                                                     }`}>
-                                                        {transaction.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
+                                                        {transaction.type === 'INCOME' 
+                                                            ? 'Ingreso' 
+                                                            : transaction.category === 'SERVICE_REFUND' 
+                                                            ? 'Devolución' 
+                                                            : 'Egreso'}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
