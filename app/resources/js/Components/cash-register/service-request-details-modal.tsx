@@ -73,19 +73,12 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
 
   const performRefund = async () => {
     if (!serviceRequest) return
-    // Debug: log the serviceRequest and transactions so we can inspect values when trying to find transaction IDs
-    // eslint-disable-next-line no-console
-    console.log('DEBUG: serviceRequest (details modal):', serviceRequest)
-    // eslint-disable-next-line no-console
-    console.log('DEBUG: transactions array:', serviceRequest.transactions)
-    // Validación de monto
     if (amount <= 0 || amount > (serviceRequest.total_amount || 0)) {
       toast.error('El monto es inválido.')
       return
     }
     // Buscar transacción asociada automáticamente
     let transactionId = serviceRequest.payment_transaction_id
-    console.log('Auto transaction ID:', autoTransactionId)
     // Si no existe, buscar en serviceRequest.transactions (si existe)
     if (!transactionId && Array.isArray(serviceRequest.transactions)) {
       const tx = serviceRequest.transactions.find(
