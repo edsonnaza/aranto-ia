@@ -75,6 +75,11 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
   const [posNumber, setPosNumber] = useState('');
    
 
+  // Importar el hook para refrescar
+  // import { useServiceRequests } from '@/hooks/medical/useServiceRequests'
+  // const { refreshCurrentPage } = useServiceRequests()
+  // Si ya tienes el hook en el padre, pásalo por props
+
   const handlePayment = async () => {
     if (!serviceRequest || !paymentMethod) return;
 
@@ -105,6 +110,12 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
           setShowReceipt(true);
           onPaymentProcessed();
           toast.success('Pago procesado correctamente');
+          // Refrescar los datos para que el modal de detalles tenga el payment_transaction_id actualizado
+          if (typeof window !== 'undefined' && window.location) {
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+          }
           // Disparar impresión automática tras pago
           setTimeout(() => {
             if (receiptRef.current) {

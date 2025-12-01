@@ -73,6 +73,11 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
 
   const performRefund = async () => {
     if (!serviceRequest) return
+    // Debug: log the serviceRequest and transactions so we can inspect values when trying to find transaction IDs
+    // eslint-disable-next-line no-console
+    console.log('DEBUG: serviceRequest (details modal):', serviceRequest)
+    // eslint-disable-next-line no-console
+    console.log('DEBUG: transactions array:', serviceRequest.transactions)
     // Validación de monto
     if (amount <= 0 || amount > (serviceRequest.total_amount || 0)) {
       toast.error('El monto es inválido.')
@@ -80,6 +85,7 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
     }
     // Buscar transacción asociada automáticamente
     let transactionId = serviceRequest.payment_transaction_id
+    console.log('Auto transaction ID:', autoTransactionId)
     // Si no existe, buscar en serviceRequest.transactions (si existe)
     if (!transactionId && Array.isArray(serviceRequest.transactions)) {
       const tx = serviceRequest.transactions.find(
@@ -125,7 +131,9 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
       <DialogContent className="sm:max-w-md w-full lg:max-w-4xl">
         <Card>
           <CardHeader>
-            <CardTitle>Detalle de Servicio #{serviceRequest.request_number}</CardTitle>
+            <CardTitle>
+              Detalle de Servicio #{serviceRequest.request_number} <span className="text-xs text-muted-foreground">(ID: {serviceRequest.id})</span>
+            </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4">
@@ -191,7 +199,7 @@ export default function ServiceRequestDetailsModal({ isOpen, onClose, serviceReq
             {!autoTransactionId && (
               <div className="mt-2 rounded-md bg-yellow-50 p-3 border">
                 <div className="text-sm font-medium">Transacción no asociada</div>
-                <div className="text-xs text-muted-foreground">No se encontró automáticamente el id de transacción. Ingresa el id manualmente o ejecuta el backfill en la base de datos.</div>
+                <div className="text-xs text-muted-foreground">No se encontró automáticamente el id de transacción. Ingresa el id manualmente.</div>
                 <div className="mt-2">
                   <Label>Transaction ID (manual)</Label>
                   <input type="number" className="mt-1 block w-full rounded-md border px-2 py-1" value={transactionIdInput} onChange={(e) => setTransactionIdInput(e.target.value)} placeholder="Ej: 123" />

@@ -402,6 +402,7 @@ class CashRegisterController extends Controller
                 // Agregar array de transacciones asociadas
                 'transactions' => Transaction::where('service_request_id', $request->id)->get()->map(function ($tx) {
                     return [
+                        'service_request_id' => $tx->service_request_id,
                         'id' => $tx->id,
                         'amount' => $tx->amount,
                         'type' => $tx->type,
@@ -564,35 +565,20 @@ class CashRegisterController extends Controller
                 }
                 return redirect()->back()->with('error', 'La solicitud ya fue cancelada y no puede devolverse nuevamente.');
             }
-            // Resolve original transaction: prefer explicit transaction_id, otherwise require exact
+            // Resolver transacción original: preferir transaction_id explícito, si no buscar por service_request_id
             if ($request->transaction_id) {
                 $originalTransaction = Transaction::findOrFail($request->transaction_id);
             } else {
-                // Require exact mapping by `service_request_id` for reliability.
-                if (!Schema::hasColumn('transactions', 'service_request_id')) {
-                    Log::error('transactions.service_request_id column missing; cannot perform exact lookup', ['service_request_id' => $serviceRequest->id]);
-
-                    $msg = 'La columna `service_request_id` no existe en transacciones. Ejecuta las migraciones/backfill para habilitar devoluciones seguras.';
-                    if ($request->header('X-Inertia')) {
-                        return response()->json(['success' => false, 'message' => $msg], 422);
-                    }
-
-                    return redirect()->back()->with('error', $msg);
-                }
-
                 $originalTransaction = Transaction::where('service_request_id', $serviceRequest->id)
                     ->where('type', 'INCOME')
                     ->latest()
                     ->first();
-
                 if (!$originalTransaction) {
-                    Log::error('Original transaction not found by exact service_request_id', ['service_request_id' => $serviceRequest->id, 'request_number' => $serviceRequest->request_number]);
-
-                    $msg = 'No se encontró la transacción original enlazada a esta solicitud. Proporciona `transaction_id` o ejecuta el backfill para asociar transacciones antiguas.';
+                    Log::error('Original transaction not found by service_request_id', ['service_request_id' => $serviceRequest->id, 'request_number' => $serviceRequest->request_number]);
+                    $msg = 'No se encontró la transacción original enlazada a esta solicitud. Proporciona `transaction_id` manualmente.';
                     if ($request->header('X-Inertia')) {
                         return response()->json(['success' => false, 'message' => $msg], 422);
                     }
-
                     return redirect()->back()->with('error', $msg);
                 }
             }
