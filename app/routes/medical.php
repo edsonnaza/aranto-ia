@@ -8,6 +8,7 @@ use App\Http\Controllers\PatientController;
 use App\Http\Controllers\ProfessionalController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ReceptionController;
+use App\Http\Controllers\CommissionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -145,5 +146,34 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         Route::get('/service-price', [ReceptionController::class, 'getServicePrice'])
             ->name('service-price');
     });
+
+    // Commission Liquidations Management
+    Route::resource('commissions', CommissionController::class)->names([
+        'index' => 'commissions.index',
+        'create' => 'commissions.create',
+        'store' => 'commissions.store',
+        'show' => 'commissions.show',
+        'edit' => 'commissions.edit',
+        'update' => 'commissions.update',
+        'destroy' => 'commissions.destroy'
+    ]);
+
+    // Commission Actions
+    Route::patch('commissions/{commission}/approve', [CommissionController::class, 'approve'])
+        ->name('commissions.approve');
+    Route::patch('commissions/{commission}/pay', [CommissionController::class, 'pay'])
+        ->name('commissions.pay');
+    Route::patch('commissions/{commission}/cancel', [CommissionController::class, 'cancel'])
+        ->name('commissions.cancel');
+
+    // Commission Reports
+    Route::get('commissions-report', [CommissionController::class, 'report'])
+        ->name('commissions.report');
+    Route::get('commissions-pending', [CommissionController::class, 'pending'])
+        ->name('commissions.pending');
+
+    // Commission API
+    Route::get('commission-data', [CommissionController::class, 'getCommissionData'])
+        ->name('commissions.data');
 
 });

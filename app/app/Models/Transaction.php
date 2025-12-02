@@ -33,6 +33,9 @@ use App\Traits\HasCurrencyHelpers;
  * @property-read User $user
  * @property-read User|null $cancelledBy
  * @property-read Service|null $service
+ * @property-read ServiceRequest|null $serviceRequest
+ * @property-read Patient|null $patient
+ * @property-read Professional|null $professional
  */
 class Transaction extends Model
 {
@@ -84,6 +87,21 @@ class Transaction extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    public function serviceRequest(): BelongsTo
+    {
+        return $this->belongsTo(ServiceRequest::class);
+    }
+
+    public function patient(): BelongsTo
+    {
+        return $this->belongsTo(Patient::class);
+    }
+
+    public function professional(): BelongsTo
+    {
+        return $this->belongsTo(Professional::class);
     }
 
     public function originalTransaction(): BelongsTo
