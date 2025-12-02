@@ -22,6 +22,9 @@ interface ServiceRequest {
   reception_type: string;
   status: string;
   created_at: string;
+  paid_amount?: number; // Monto ya pagado
+  remaining_amount?: number; // Monto pendiente
+  payment_status?: 'pending' | 'partial' | 'paid'; // Estado de pago
   services?: Array<{
     id: string;
     service_name: string;
@@ -29,6 +32,8 @@ interface ServiceRequest {
     quantity: number;
     unit_price: number;
     total_price: number;
+    paid_amount?: number; // Monto pagado de este servicio específico
+    payment_status?: 'pending' | 'partial' | 'paid'; // Estado de este servicio
   }>;
 }
 
@@ -66,13 +71,27 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     }
     const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
     const receiptRef = React.useRef<HTMLDivElement>(null);
-  // Usar router directamente de Inertia
-  const [paymentMethod, setPaymentMethod] = useState<string>('');
-  const [amount, setAmount] = useState<number>(serviceRequest?.total_cost || 0);
-  const [notes, setNotes] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
-  const [posNumber, setPosNumber] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('');
+    const [amount, setAmount] = useState(0);
+    const [notes, setNotes] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [paymentCompleted, setPaymentCompleted] = useState(false);
+    const [posNumber, setPosNumber] = useState('');
+  // Calcular montos para pagos parciales
+  const totalAmount = serviceRequest?.total_cost || 0;
+  const paidAmount = serviceRequest?.paid_amount || 0;
+  const remainingAmount = serviceRequest?.remaining_amount ?? (totalAmount - paidAmount);
+  const isPartialPayment = paidAmount > 0;
+  const paymentStatus = serviceRequest?.payment_status || 'pending';
+
+  // Inicializar el monto a cobrar con el restante por defecto
+  React.useEffect(() => {
+    if (serviceRequest && !isPartialPayment) {
+      setAmount(totalAmount);
+    } else if (serviceRequest && isPartialPayment) {
+      setAmount(remainingAmount);
+    }
+  }, [serviceRequest, totalAmount, remainingAmount, isPartialPayment]);
    
 
   // Importar el hook para refrescar
@@ -198,20 +217,44 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                 <span className="text-sm text-muted-foreground">Paciente:</span>
                 <span className="font-medium">{serviceRequest.patient_name}</span>
               </div>
-           
+             
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Tipo de Recepción:</span>
                 {getReceptionTypeBadge(serviceRequest.reception_type)}
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Monto Total:</span>
-                <span className="text-xl font-semibold border- text-green-600 bg-amber-100 rounded-md px-4">
-                  {formatCurrency(serviceRequest.total_cost)}
-                </span>
+              
+              {/* Información de pagos parciales */}
+              <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Monto Total:</span>
+                  <span className="font-medium">{formatCurrency(totalAmount)}</span>
+                </div>
+                
+                {isPartialPayment && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Ya Pagado:</span>
+                      <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Pendiente:</span>
+                      <span className="font-medium text-orange-600">{formatCurrency(remainingAmount)}</span>
+                    </div>
+                  </>
+                )}
+                
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium">Estado de Pago:</span>
+                  <Badge variant={
+                    paymentStatus === 'paid' ? 'default' :
+                    paymentStatus === 'partial' ? 'secondary' : 'destructive'
+                  }>
+                    {paymentStatus === 'paid' ? 'Pagado' :
+                     paymentStatus === 'partial' ? 'Pago Parcial' : 'Pendiente'}
+                  </Badge>
+                </div>
               </div>
-            </div>
-
-            {/* Servicios solicitados */}
+            </div>            {/* Servicios solicitados */}
             {serviceRequest.services && serviceRequest.services.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Servicios Solicitados</h4>
@@ -224,6 +267,7 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                         <th className="px-2 py-1 text-right">Cantidad</th>
                         <th className="px-2 py-1 text-right">Precio Unit.</th>
                         <th className="px-2 py-1 text-right">Total</th>
+                        <th className="px-2 py-1 text-center">Estado</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -234,6 +278,15 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                           <td className="px-2 py-1 text-right">{item.quantity}</td>
                           <td className="px-2 py-1 text-right">{formatCurrency(item.unit_price)}</td>
                           <td className="px-2 py-1 text-right font-semibold">{formatCurrency(item.total_price)}</td>
+                          <td className="px-2 py-1 text-center">
+                            <Badge variant={
+                              item.payment_status === 'paid' ? 'default' :
+                              item.payment_status === 'partial' ? 'secondary' : 'outline'
+                            } className="text-xs">
+                              {item.payment_status === 'paid' ? 'Pagado' :
+                               item.payment_status === 'partial' ? 'Parcial' : 'Pendiente'}
+                            </Badge>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -277,12 +330,30 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="amount">Monto a Cobrar</Label>
+                <Label htmlFor="amount">
+                  Monto a Cobrar 
+                  {isPartialPayment && (
+                    <span className="text-sm text-muted-foreground ml-2">
+                      (máximo pendiente: {formatCurrency(remainingAmount)})
+                    </span>
+                  )}
+                </Label>
                 <CurrencyInput
                   value={amount}
                   onChange={setAmount}
                   placeholder="0.00"
+                  max={remainingAmount}
                 />
+                {amount > remainingAmount && (
+                  <p className="text-sm text-red-600">
+                    El monto no puede ser mayor al pendiente ({formatCurrency(remainingAmount)})
+                  </p>
+                )}
+                {amount > 0 && amount < remainingAmount && (
+                  <p className="text-sm text-blue-600">
+                    Pago parcial - quedará pendiente {formatCurrency(remainingAmount - amount)}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Notas (opcional)</Label>
@@ -301,10 +372,11 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
               </Button>
               <Button 
                 onClick={handlePayment}
-                disabled={!paymentMethod || isProcessing || paymentCompleted}
+                disabled={!paymentMethod || isProcessing || paymentCompleted || amount <= 0 || amount > remainingAmount}
                 className="min-w-[120px]"
               >
-                {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' : 'Procesar Pago'}
+                {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' : 
+                 amount === remainingAmount ? 'Completar Pago' : 'Pago Parcial'}
               </Button>
             </div>
           </div>

@@ -211,40 +211,6 @@ class CashRegisterController extends Controller
     }
 
     /**
-     * Register an expense transaction
-     */
-    public function registerExpense(Request $request)
-    {
-        $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'description' => 'required|string|max:255',
-            'service_id' => 'nullable|integer|exists:services,id',
-            'patient_name' => 'nullable|string|max:255',
-        ]);
-
-        try {
-            $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
-            if (!$activeSession) {
-                return redirect()->back()->with('error', 'No hay sesión de caja activa.');
-            }
-
-            $transaction = Transaction::create([
-                'cash_register_session_id' => $activeSession->id,
-                'type' => 'EXPENSE',
-                'category' => 'OTHER', // Default category for expense
-                'amount' => $request->amount,
-                'concept' => $request->description, // Map description to concept
-                'patient_id' => $request->service_id, // Temporary mapping
-                'user_id' => Auth::id(),
-            ]);
-
-            return redirect()->route('cash-register.index')->with('success', 'Egreso registrado exitosamente.');
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
-    }
-
-    /**
      * Show transaction history
      */
     public function history(Request $request): Response
@@ -386,6 +352,8 @@ class CashRegisterController extends Controller
                 'reception_type' => $request->reception_type,
                 'priority' => $request->priority,
                 'total_amount' => $request->total_amount,
+                'paid_amount' => $request->paid_amount,
+                'remaining_amount' => $request->total_amount - $request->paid_amount,
                 'services' => $request->details->map(function ($detail) {
                     return [
                         'id' => $detail->id,
@@ -453,13 +421,25 @@ class CashRegisterController extends Controller
         try {
             $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
             
-            // Verify service is pending payment
-            if ($serviceRequest->payment_status !== ServiceRequest::PAYMENT_PENDING) {
+            // Verify service can be paid (pending or partial payment)
+            if (!in_array($serviceRequest->payment_status, [ServiceRequest::PAYMENT_PENDING, ServiceRequest::PAYMENT_PARTIAL])) {
                 if ($request->header('X-Inertia')) {
-                    return response()->json(['success' => false, 'message' => 'Este servicio ya ha sido procesado.'], 422);
+                    return response()->json(['success' => false, 'message' => 'Este servicio ya ha sido procesado completamente.'], 422);
                 }
 
-                return redirect()->back()->with('error', 'Este servicio ya ha sido procesado.');
+                return redirect()->back()->with('error', 'Este servicio ya ha sido procesado completamente.');
+            }
+
+            // Calculate remaining amount
+            $remainingAmount = $serviceRequest->total_amount - $serviceRequest->paid_amount;
+            
+            // Validate payment amount doesn't exceed remaining
+            if ($request->amount > $remainingAmount) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'El monto del pago no puede exceder el pendiente.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'El monto del pago no puede exceder el pendiente.');
             }
 
             // Get active cash register session
@@ -501,12 +481,15 @@ class CashRegisterController extends Controller
 
                 $transaction = Transaction::create($transactionData);
 
-                // Update service request status
+                // Update service request payment status
+                $newPaidAmount = $serviceRequest->paid_amount + $request->amount;
+                $isFullyPaid = $newPaidAmount >= $serviceRequest->total_amount;
+                
                 $serviceRequest->update([
-                    'payment_status' => ServiceRequest::PAYMENT_PAID,
-                    'paid_amount' => $request->amount,
-                    'payment_date' => now(),
-                    'payment_transaction_id' => $transaction->id,
+                    'paid_amount' => $newPaidAmount,
+                    'payment_status' => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
+                    'payment_date' => $isFullyPaid ? now() : $serviceRequest->payment_date,
+                    'payment_transaction_id' => $isFullyPaid ? $transaction->id : $serviceRequest->payment_transaction_id,
                 ]);
                 // Update session totals
                 $activeSession->increment('total_income', $request->amount);
@@ -537,6 +520,78 @@ class CashRegisterController extends Controller
             ]);
 
             return redirect()->back()->with('error', 'Error al procesar el cobro. Intente nuevamente.');
+        }
+    }
+
+    /**
+     * Register an expense transaction
+     */
+    public function registerExpense(Request $request)
+    {
+        $request->validate([
+            'category' => 'required|string',
+            'amount' => 'required|numeric|min:0.01',
+            'description' => 'required|string|max:255',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            // Get active cash register session
+            $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
+            if (!$activeSession) {
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => false, 'message' => 'No hay una sesión de caja activa. Abra la caja primero.'], 422);
+                }
+
+                return redirect()->back()->with('error', 'No hay una sesión de caja activa. Abra la caja primero.');
+            }
+
+            DB::beginTransaction();
+            try {
+                // Create expense transaction
+                $transactionData = [
+                    'cash_register_session_id' => $activeSession->id,
+                    'type' => 'EXPENSE',
+                    'category' => $request->category,
+                    'amount' => $request->amount,
+                    'concept' => $request->description,
+                    'notes' => $request->notes,
+                    'user_id' => Auth::id(),
+                ];
+
+                if (Schema::hasColumn('transactions', 'payment_method')) {
+                    $transactionData['payment_method'] = 'cash'; // Egresos generalmente en efectivo
+                }
+
+                Transaction::create($transactionData);
+
+                // Update session totals
+                $activeSession->increment('total_expense', $request->amount);
+
+                DB::commit();
+
+                if ($request->header('X-Inertia')) {
+                    return response()->json(['success' => true, 'message' => 'Egreso registrado correctamente.']);
+                }
+
+                return redirect()->route('cash-register.index')->with('success', 'Egreso registrado correctamente.');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error registering expense', [
+                    'error' => $e->getMessage(),
+                    'request' => $request->all(),
+                ]);
+
+                return redirect()->back()->with('error', 'Error al registrar el egreso. Intente nuevamente.');
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error registering expense', [
+                'error' => $e->getMessage(),
+                'request' => $request->all(),
+            ]);
+
+            return redirect()->back()->with('error', 'Error al registrar el egreso. Intente nuevamente.');
         }
     }
 

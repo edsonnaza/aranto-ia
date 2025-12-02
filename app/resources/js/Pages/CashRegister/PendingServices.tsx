@@ -51,6 +51,8 @@ interface ServiceRequest {
   reception_type: string;
   priority: string;
   total_amount: number;
+  paid_amount?: number;
+  remaining_amount?: number;
   services: Array<{
     id: number;
     service_name: string;
@@ -172,6 +174,9 @@ export default function PendingServices({
     reception_type: string;
     status: string;
     created_at: string;
+    paid_amount?: number;
+    remaining_amount?: number;
+    payment_status?: 'pending' | 'partial' | 'paid';
     services: Array<{
       id: string;
       service_name: string;
@@ -179,6 +184,8 @@ export default function PendingServices({
       quantity: number;
       unit_price: number;
       total_price: number;
+      paid_amount?: number;
+      payment_status?: 'pending' | 'partial' | 'paid';
     }>;
   };
 
@@ -196,6 +203,9 @@ export default function PendingServices({
       reception_type: request.reception_type,
       status: request.status,
       created_at: request.created_at,
+      paid_amount: request.paid_amount,
+      remaining_amount: request.remaining_amount,
+      payment_status: (['pending', 'partial', 'paid'].includes(request.payment_status) ? request.payment_status as 'pending' | 'partial' | 'paid' : undefined),
       services: request.services.map(s => ({
         id: String(s.id),
         service_name: s.service_name,
@@ -203,6 +213,8 @@ export default function PendingServices({
         quantity: s.quantity,
         unit_price: s.unit_price,
         total_price: s.total_price,
+        paid_amount: undefined, // Por ahora no tenemos pago por servicio individual
+        payment_status: undefined, // Por ahora no tenemos estado por servicio individual
       })),
     };
   };
@@ -258,11 +270,33 @@ export default function PendingServices({
     {
       accessorKey: "total_amount",
       header: "Monto",
-      cell: ({ row }) => (
-        <div className="text-right font-medium">
-          {formatCurrency(row.getValue("total_amount"))}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const total = row.getValue("total_amount") as number;
+        const paid = row.original.paid_amount || 0;
+        const remaining = row.original.remaining_amount ?? (total - paid);
+        
+        return (
+          <div className="text-right">
+            {paid > 0 ? (
+              <div className="space-y-1">
+                <div className="font-medium text-green-600">
+                  Pagado: {formatCurrency(paid)}
+                </div>
+                <div className="text-sm font-medium text-orange-600">
+                  Pendiente: {formatCurrency(remaining)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Total: {formatCurrency(total)}
+                </div>
+              </div>
+            ) : (
+              <div className="font-medium">
+                {formatCurrency(total)}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "request_date",
@@ -289,14 +323,14 @@ export default function PendingServices({
       header: "Acciones",
       cell: ({ row }) => (
         <div className="flex space-x-2">
-            {(row.original.payment_status === 'pending') && (
+            {(row.original.payment_status === 'pending' || row.original.payment_status === 'partial') && (
               <Button
                 size="sm"
                 onClick={() => handleProcessPayment(row.original)}
                 className="bg-green-600 hover:bg-green-700"
               >
                 <CreditCard className="h-3 w-3 mr-1" />
-                COBRAR
+                {row.original.payment_status === 'partial' ? 'COMPLETAR PAGO' : 'COBRAR'}
               </Button>
             )}
           <Button
