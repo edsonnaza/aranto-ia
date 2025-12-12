@@ -13,11 +13,22 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { DataTable } from '@/components/ui/data-table'
 import { cn } from '@/lib/utils'
 import ProfessionalSelector from './ProfessionalSelector'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { Professional, CommissionData } from '@/types'
+
+interface ServiceRow {
+  service_request_id: number
+  patient_name: string
+  service_name: string
+  service_amount: number
+  commission_percentage: number
+  commission_amount: number
+  service_date: string
+}
 
 const commissionFormSchema = z.object({
   professional_id: z.number().min(1, 'Debe seleccionar un profesional'),
@@ -33,6 +44,10 @@ const commissionFormSchema = z.object({
 })
 
 type CommissionFormData = z.infer<typeof commissionFormSchema>
+
+type CommissionLiquidationFormData = CommissionFormData & {
+  service_request_ids: number[]
+}
 
 interface CommissionLiquidationFormProps {
   professionals: Professional[]
@@ -66,8 +81,27 @@ export default function CommissionLiquidationForm({
     p => p.id === form.watch('professional_id')
   )
 
-  const periodStart = form.watch('period_start')
-  const periodEnd = form.watch('period_end')
+
+  // Calculate totals based on selected services
+  const selectedTotals = useMemo(() => {
+    if (!commissionData) {
+      return {
+        count: 0,
+        grossAmount: 0,
+        commissionAmount: 0
+      }
+    }
+
+    const selectedServicesList = commissionData.services.filter(s => 
+      selectedServices.includes(s.service_request_id)
+    )
+
+    return {
+      count: selectedServicesList.length,
+      grossAmount: selectedServicesList.reduce((sum, s) => sum + s.service_amount, 0),
+      commissionAmount: selectedServicesList.reduce((sum, s) => sum + s.commission_amount, 0)
+    }
+  }, [commissionData, selectedServices])
 
   // Calculate commission data when professional or period changes
   useEffect(() => {
@@ -95,13 +129,15 @@ export default function CommissionLiquidationForm({
       }
     }
 
-    const timeoutId = setTimeout(calculateCommission, 500)
-    return () => clearTimeout(timeoutId)
-  }, [periodStart, periodEnd, form, getCommissionData])
+    // Call calculateCommission when dependencies change
+    calculateCommission()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.watch('professional_id'), form.watch('period_start'), form.watch('period_end')])
 
   const onSubmit = (data: CommissionFormData) => {
     if (selectedServices.length === 0) return
-    createLiquidation({ ...data, service_request_ids: selectedServices }, {
+    const payload: CommissionLiquidationFormData = { ...data, service_request_ids: selectedServices }
+    createLiquidation(payload, {
       onSuccess: () => {
         if (onSuccess) onSuccess()
       },
@@ -114,6 +150,129 @@ export default function CommissionLiquidationForm({
       currency: 'PYG',
     }).format(amount)
   }
+
+  // Define columns for DataTable
+  const columns = useMemo<ColumnDef<ServiceRow>[]>(() => [
+    {
+      id: 'select',
+      header: () => {
+        const allServiceIds = commissionData?.services.map(s => s.service_request_id) || []
+        const allSelected = allServiceIds.length > 0 && allServiceIds.every(id => selectedServices.includes(id))
+        
+        return (
+          <Checkbox
+            checked={allSelected}
+            onCheckedChange={(value) => {
+              if (value) {
+                setSelectedServices(allServiceIds)
+              } else {
+                setSelectedServices([])
+              }
+            }}
+            aria-label="Seleccionar todos"
+          />
+        )
+      },
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedServices.includes(row.original.service_request_id)}
+          onCheckedChange={(value) => {
+            if (value) {
+              setSelectedServices(prev => [...prev, row.original.service_request_id])
+            } else {
+              setSelectedServices(prev => prev.filter(id => id !== row.original.service_request_id))
+            }
+          }}
+          aria-label="Seleccionar fila"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: 'patient_name',
+      header: 'Paciente',
+      cell: ({ row }) => (
+        <div className="font-medium">{row.getValue('patient_name') || 'N/A'}</div>
+      ),
+    },
+    {
+      accessorKey: 'service_name',
+      header: 'Servicio',
+      cell: ({ row }) => (
+        <div>{row.getValue('service_name') || `Servicio #${row.original.service_request_id}`}</div>
+      ),
+    },
+    {
+      accessorKey: 'service_amount',
+      header: () => (
+        <div className="text-right">Precio</div>
+      ),
+      cell: ({ row }) => (
+        <div className="text-right">{formatCurrency(row.getValue('service_amount'))}</div>
+      ),
+    },
+    {
+      accessorKey: 'commission_percentage',
+      header: () => (
+        <div className="text-right">Comisión %</div>
+      ),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Badge variant="secondary">
+            {row.getValue('commission_percentage')}%
+          </Badge>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'commission_amount',
+      header: () => (
+        <div className="text-right">A Cobrar</div>
+      ),
+      cell: ({ row }) => (
+        <div className="text-right font-semibold text-green-700">
+          {formatCurrency(row.getValue('commission_amount'))}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'service_date',
+      header: 'Fecha',
+      cell: ({ row }) => (
+        <div className="text-sm text-muted-foreground">
+          {format(new Date(row.getValue('service_date') + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })}
+        </div>
+      ),
+    },
+  ], [commissionData, selectedServices])
+
+  // Prepare data for DataTable
+  const tableData = useMemo(() => {
+    if (!commissionData) return { data: [], current_page: 1, per_page: 100, total: 0, last_page: 1, from: 0, to: 0, links: [] }
+
+    // Map each service to ServiceRow shape
+    const data: ServiceRow[] = commissionData.services.map((s) => ({
+      service_request_id: s.service_request_id,
+      patient_name: s.patient_name ?? `Paciente #${s.patient_id ?? ''}`,
+      service_name: s.service_name ?? (s.service_id ? `Servicio #${s.service_id}` : 'Servicio'),
+      service_amount: s.service_amount,
+      commission_percentage: s.commission_percentage,
+      commission_amount: s.commission_amount,
+      service_date: s.service_date,
+    }))
+
+    return {
+      data,
+      current_page: 1,
+      per_page: 100,
+      total: data.length,
+      last_page: 1,
+      from: 1,
+      to: data.length,
+      links: []
+    }
+  }, [commissionData])
 
   return (
     <div className="space-y-6">
@@ -184,16 +343,7 @@ export default function CommissionLiquidationForm({
                               field.onChange(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
                               setStartDateOpen(false)
                             }}
-                            disabled={(date) => {
-                              const endDate = form.getValues('period_end')
-                              if (endDate) {
-                                const end = new Date(endDate + 'T00:00:00')
-                                const current = new Date(date)
-                                current.setHours(0, 0, 0, 0)
-                                return current > end
-                              }
-                              return false
-                            }}
+                            // isDateDisabled removed: Calendar does not support this prop
                             initialFocus
                           />
                         </PopoverContent>
@@ -236,16 +386,7 @@ export default function CommissionLiquidationForm({
                               field.onChange(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
                               setEndDateOpen(false)
                             }}
-                            disabled={(date) => {
-                              const startDate = form.getValues('period_start')
-                              if (startDate) {
-                                const start = new Date(startDate + 'T00:00:00')
-                                const current = new Date(date)
-                                current.setHours(0, 0, 0, 0)
-                                return current < start
-                              }
-                              return false
-                            }}
+                            // isDateDisabled removed: Calendar does not support this prop
                             initialFocus
                           />
                         </PopoverContent>
@@ -268,15 +409,25 @@ export default function CommissionLiquidationForm({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-blue-600">
-                          {commissionData.summary.total_services}
+                          {selectedTotals.count}
                         </div>
-                        <div className="text-sm text-blue-600">Servicios</div>
+                        <div className="text-sm text-blue-600">
+                          Servicios Seleccionados
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          de {commissionData.summary.total_services} totales
+                        </div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-green-600">
-                          {formatCurrency(commissionData.summary.gross_amount)}
+                          {formatCurrency(selectedTotals.grossAmount)}
                         </div>
                         <div className="text-sm text-green-600">Monto Bruto</div>
+                        {selectedTotals.grossAmount !== commissionData.summary.gross_amount && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            de {formatCurrency(commissionData.summary.gross_amount)}
+                          </div>
+                        )}
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-orange-600">
@@ -286,87 +437,32 @@ export default function CommissionLiquidationForm({
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-purple-600">
-                          {formatCurrency(commissionData.summary.commission_amount)}
+                          {formatCurrency(selectedTotals.commissionAmount)}
                         </div>
                         <div className="text-sm text-purple-600">Comisión Total</div>
+                        {selectedTotals.commissionAmount !== commissionData.summary.commission_amount && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            de {formatCurrency(commissionData.summary.commission_amount)}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {commissionData.services.length > 0 && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-blue-900">
-                            Servicios Incluidos ({commissionData.services.length})
-                          </h4>
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={selectedServices.length === commissionData.services.length}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedServices(commissionData.services.map(s => s.service_request_id))
-                                } else {
-                                  setSelectedServices([])
-                                }
-                              }}
-                            />
-                            <span className="text-sm text-blue-700">Seleccionar todos</span>
-                          </div>
-                        </div>
-                        <div className="border rounded-md bg-white">
-                          <div className="max-h-96 overflow-y-auto">
-                            <Table>
-                              <TableHeader className="sticky top-0 bg-white z-10">
-                                <TableRow>
-                                  <TableHead className="w-[50px]"></TableHead>
-                                  <TableHead>Paciente</TableHead>
-                                  <TableHead>Servicio</TableHead>
-                                  <TableHead className="text-right">Precio</TableHead>
-                                  <TableHead className="text-center">Comisión %</TableHead>
-                                  <TableHead className="text-right">A Cobrar</TableHead>
-                                  <TableHead>Fecha</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {commissionData.services.map((service, index) => (
-                                  <TableRow key={index}>
-                                    <TableCell>
-                                      <Checkbox
-                                        checked={selectedServices.includes(service.service_request_id)}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            setSelectedServices(prev => [...prev, service.service_request_id])
-                                          } else {
-                                            setSelectedServices(prev => prev.filter(id => id !== service.service_request_id))
-                                          }
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                      {service.patient_name || 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {service.service_name || `Servicio #${service.service_request_id}`}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatCurrency(service.service_amount)}
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                        {service.commission_percentage}%
-                                      </span>
-                                    </TableCell>
-                                    <TableCell className="text-right font-semibold text-green-700">
-                                      {formatCurrency(service.commission_amount)}
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">
-                                      {format(new Date(service.service_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
+                      <div className="mt-6">
+                        <h4 className="font-medium text-blue-960 mb-2">
+                          Servicios Incluidos ({selectedTotals.count} de {commissionData.services.length} seleccionados)
+                        </h4>
+                        <DataTable
+                          columns={columns}
+                          data={tableData}
+                          searchable={true}
+                          searchPlaceholder="Buscar por paciente o servicio..."
+                          filterable={false}
+                          selectable={false}
+                          emptyMessage="No hay servicios en el período seleccionado"
+                          className="border rounded-md bg-white"
+                        />
                       </div>
                     )}
                   </CardContent>
