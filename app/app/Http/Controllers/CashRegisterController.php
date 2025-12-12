@@ -462,6 +462,9 @@ class CashRegisterController extends Controller
             // Transactional processing: make sure to rollback on failure
             DB::beginTransaction();
             try {
+                // Get professional_id from service request details
+                $professionalId = $serviceRequest->details()->first()?->professional_id;
+                
                 // Create income transaction (add payment_method only if the column exists)
                 $transactionData = [
                     'cash_register_session_id' => $activeSession->id,
@@ -470,6 +473,8 @@ class CashRegisterController extends Controller
                     'amount' => $request->amount,
                     'concept' => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
                     'patient_name' => $serviceRequest->patient->full_name,
+                    'patient_id' => $serviceRequest->patient_id,
+                    'professional_id' => $professionalId,
                     'notes' => $request->notes,
                     'user_id' => Auth::id(),
                     'service_request_id' => $serviceRequest->id,

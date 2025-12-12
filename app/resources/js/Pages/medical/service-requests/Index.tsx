@@ -3,6 +3,10 @@ import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
 import type { ServiceRequestsIndexData, ServiceRequest } from '@/hooks/medical'
 
+interface ServiceRequestWithPayment extends ServiceRequest {
+  payment_status?: string
+}
+
 // Simple SVG Icons
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -307,7 +311,7 @@ export default function ServiceRequestsIndex({
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="space-y-1">
                           {getStatusBadge(request.status)}
-                          <div>{getPaymentStatusBadge((request as any).payment_status)}</div>
+                          <div>{getPaymentStatusBadge((request as ServiceRequestWithPayment).payment_status || 'pending')}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

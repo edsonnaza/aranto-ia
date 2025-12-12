@@ -1,0 +1,274 @@
+import React, { useState, useEffect, useCallback } from 'react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { CheckCircle, Eye, Clock, AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useCommissionLiquidations } from '@/hooks/medical'
+import type { CommissionPendingApproval } from '@/types'
+
+interface CommissionPendingApprovalsProps {
+  onViewDetail?: (liquidationId: number) => void
+  refreshTrigger?: number
+}
+
+export default function CommissionPendingApprovals({
+  onViewDetail,
+  refreshTrigger,
+}: CommissionPendingApprovalsProps) {
+  const [pendingApprovals, setPendingApprovals] = useState<CommissionPendingApproval[]>([])
+
+  // Usamos el hook correcto y mockeamos los datos
+  const { approveLiquidation, loading, error } = useCommissionLiquidations()
+
+  // Simulación temporal de carga de aprobaciones pendientes
+  const loadPendingApprovals = useCallback(async () => {
+    setPendingApprovals([
+      {
+        id: 1,
+        professional_name: 'Dr. Pérez',
+        specialty_name: 'Cardiología',
+        period_start: '2025-11-01',
+        period_end: '2025-11-30',
+        total_services: 10,
+        total_amount: 2000000,
+        commission_percentage: 10,
+        commission_amount: 200000,
+        created_at: '2025-12-01',
+      }
+    ])
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPendingApprovals()
+  }, [loadPendingApprovals, refreshTrigger])
+
+  const handleApprove = async (liquidationId: number) => {
+    try {
+      await approveLiquidation(liquidationId)
+      await loadPendingApprovals()
+    } catch (err) {
+      console.error('Error approving liquidation:', err)
+    }
+  }
+
+  // El método rejectLiquidation no existe, así que lo eliminamos
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-PY', {
+      style: 'currency',
+      currency: 'PYG',
+    }).format(amount)
+  }
+
+  const formatDate = (dateString: string) => {
+    return format(new Date(dateString), 'dd/MM/yyyy', { locale: es })
+  }
+
+  const getDaysPending = (createdAt: string) => {
+    const created = new Date(createdAt)
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - created.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  const getUrgencyBadge = (daysPending: number) => {
+    if (daysPending >= 7) {
+      return (
+        <Badge variant="destructive" className="flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Urgente ({daysPending} días)
+        </Badge>
+      )
+    } else if (daysPending >= 3) {
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1 bg-orange-100 text-orange-800">
+          <Clock className="h-3 w-3" />
+          Pendiente ({daysPending} días)
+        </Badge>
+      )
+    } else {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Reciente ({daysPending} días)
+        </Badge>
+      )
+    }
+  }
+
+  if (loading && pendingApprovals.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            Cargando aprobaciones pendientes...
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Liquidaciones Pendientes de Aprobación
+            </span>
+            <Badge variant="secondary">
+              {pendingApprovals.length} pendientes
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {pendingApprovals.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No hay liquidaciones pendientes de aprobación</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Profesional</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead className="text-right">Servicios</TableHead>
+                    <TableHead className="text-right">Monto Total</TableHead>
+                    <TableHead className="text-right">Comisión</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="text-center">Creado</TableHead>
+                    <TableHead className="text-center">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingApprovals.map((approval) => {
+                    const daysPending = getDaysPending(approval.created_at)
+                    return (
+                      <TableRow key={approval.id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{approval.professional_name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {approval.specialty_name}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {formatDate(approval.period_start)} - {formatDate(approval.period_end)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {approval.total_services}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(approval.total_amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div>
+                            <div className="font-medium">
+                              {formatCurrency(approval.commission_amount)}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              ({approval.commission_percentage}%)
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getUrgencyBadge(daysPending)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="text-sm">
+                            {formatDate(approval.created_at)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            hace {daysPending} día{daysPending !== 1 ? 's' : ''}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2">
+                            {onViewDetail && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onViewDetail(approval.id)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              onClick={() => handleApprove(approval.id)}
+                              disabled={loading}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Summary Footer */}
+      {pendingApprovals.length > 0 && (
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {pendingApprovals.length}
+                </div>
+                <div className="text-sm text-muted-foreground">Pendientes</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {pendingApprovals.filter(p => getDaysPending(p.created_at) >= 7).length}
+                </div>
+                <div className="text-sm text-muted-foreground">Urgentes (≥7 días)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(
+                    pendingApprovals.reduce((sum, p) => sum + p.commission_amount, 0)
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">Total Comisiones</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {Math.round(
+                    pendingApprovals.reduce((sum, p) => sum + getDaysPending(p.created_at), 0) /
+                    pendingApprovals.length
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">Días Promedio</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}

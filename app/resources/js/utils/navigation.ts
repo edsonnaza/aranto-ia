@@ -9,12 +9,14 @@ import {
   BarChart3, 
   Settings,
   Users,
+  Percent,
 } from 'lucide-react'
 
 // Definición de permisos por módulo
 export const MODULE_PERMISSIONS = {
   DASHBOARD: undefined, // Siempre accesible
   TREASURY: 'access-treasury',
+  COMMISSIONS: 'access-commissions',
   MEDICAL: 'access-medical-system',
   REPORTS: 'access-reports',
   SETTINGS: 'access-settings',
@@ -34,6 +36,12 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
     href: { url: '/cash-register', method: 'get' },
     icon: DollarSign,
     permission: MODULE_PERMISSIONS.TREASURY,
+  },
+  {
+    title: 'Comisiones',
+    href: { url: '/medical/commissions', method: 'get' },
+    icon: Percent,
+    permission: MODULE_PERMISSIONS.COMMISSIONS,
   },
   {
     title: 'Sistema Médico',
@@ -90,6 +98,7 @@ export function canAccessModule(userPermissions: string[], module: keyof typeof 
 export const ROLE_PERMISSIONS = {
   'super-admin': [
     'access-treasury',
+    'access-commissions',
     'access-medical-system', 
     'access-reports',
     'access-settings',
@@ -97,6 +106,7 @@ export const ROLE_PERMISSIONS = {
   ],
   'admin': [
     'access-treasury',
+    'access-commissions',
     'access-medical-system',
     'access-reports',
   ],
@@ -110,6 +120,10 @@ export const ROLE_PERMISSIONS = {
     'access-medical-system',
   ],
   'viewer': [
+    'access-reports',
+  ],
+  'accountant': [
+    'access-commissions',
     'access-reports',
   ],
 } as const

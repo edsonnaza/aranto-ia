@@ -18,16 +18,21 @@ interface ServiceItem {
   notes: string
 }
 
+interface SelectOption {
+  value: string | number
+  label: string
+}
+
 interface ServiceCartItemProps {
   service: ServiceItem
   index: number
-  flatServices: any[]
-  professionals: any[]
-  insuranceTypes: any[]
+  flatServices: SelectOption[]
+  professionals: SelectOption[]
+  insuranceTypes: SelectOption[]
   onUpdate: (id: string, field: keyof ServiceItem, value: string | number) => void
   onRemove: (id: string) => void
-  onServiceSelect: (service: any, serviceItemId: string) => void
-  onSearchServices: (query: string) => Promise<any[]>
+  onServiceSelect: (service: SelectOption, serviceItemId: string) => void
+  onSearchServices: (query: string) => Promise<SelectOption[]>
   calculateTotal: (service: ServiceItem) => number
 }
 
@@ -51,7 +56,7 @@ export default function ServiceCartItem({
 }: ServiceCartItemProps) {
   const [selectedServiceName, setSelectedServiceName] = useState('')
 
-  const handleServiceSelection = (selectedService: any) => {
+  const handleServiceSelection = (selectedService: SelectOption) => {
     setSelectedServiceName(selectedService.label)
     onServiceSelect(selectedService, service.id)
   }

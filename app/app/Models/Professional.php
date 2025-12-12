@@ -89,6 +89,17 @@ class Professional extends Model
     /**
      * Get primary specialty for this professional (as relationship).
      */
+    public function specialty()
+    {
+        return $this->belongsToMany(Specialty::class, 'professional_specialties')
+                    ->withPivot(['certification_date', 'certification_number', 'is_primary'])
+                    ->wherePivot('is_primary', true)
+                    ->limit(1);
+    }
+
+    /**
+     * Get primary specialty for this professional (as relationship).
+     */
     public function primarySpecialty()
     {
         return $this->belongsToMany(Specialty::class, 'professional_specialties')

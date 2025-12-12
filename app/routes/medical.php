@@ -173,7 +173,7 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('commissions.pending');
 
     // Commission API
-    Route::get('commission-data', [CommissionController::class, 'getCommissionData'])
+    Route::post('commission-data', [CommissionController::class, 'getCommissionData'])
         ->name('commissions.data');
 
 });

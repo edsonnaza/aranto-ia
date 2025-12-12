@@ -44,9 +44,13 @@ class CommissionController extends Controller
 
         $liquidations = $query->paginate(20);
 
-        return Inertia::render('commissions/Index', [
+        return Inertia::render('commission/Index', [
             'liquidations' => $liquidations,
             'filters' => $request->only(['professional_id', 'status', 'period_start', 'period_end']),
+            'professionals' => \App\Models\Professional::select('id', 'first_name', 'last_name', 'commission_percentage')
+                ->where('commission_percentage', '>', 0)
+                ->orderBy('last_name')
+                ->get(),
         ]);
     }
 
@@ -55,7 +59,7 @@ class CommissionController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('commissions/Create', [
+        return Inertia::render('commission/Create', [
             'professionals' => \App\Models\Professional::select('id', 'first_name', 'last_name', 'commission_percentage')
                 ->where('commission_percentage', '>', 0)
                 ->orderBy('last_name')
@@ -68,10 +72,13 @@ class CommissionController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+
         $request->validate([
             'professional_id' => 'required|exists:professionals,id',
             'period_start' => 'required|date',
             'period_end' => 'required|date|after_or_equal:period_start',
+            'service_request_ids' => 'required|array|min:1',
+            'service_request_ids.*' => 'integer',
         ]);
 
         // Validate liquidation data
@@ -90,7 +97,8 @@ class CommissionController extends Controller
                 $request->professional_id,
                 $request->period_start,
                 $request->period_end,
-                auth()->id()
+                auth()->id(),
+                $request->service_request_ids
             );
 
             return redirect()->route('commissions.show', $liquidation)
@@ -116,7 +124,7 @@ class CommissionController extends Controller
             'details.paymentMovement'
         ]);
 
-        return Inertia::render('commissions/Show', [
+        return Inertia::render('commission/Show', [
             'liquidation' => $liquidation,
         ]);
     }
@@ -131,7 +139,7 @@ class CommissionController extends Controller
             abort(403, 'Solo se pueden editar liquidaciones en estado borrador.');
         }
 
-        return Inertia::render('commissions/Edit', [
+        return Inertia::render('commission/Edit', [
             'liquidation' => $liquidation->load(['professional', 'details']),
         ]);
     }
@@ -259,7 +267,7 @@ class CommissionController extends Controller
             $request->end_date
         );
 
-        return Inertia::render('commissions/Report', [
+        return Inertia::render('commission/Report', [
             'report' => $report,
             'filters' => $request->only(['professional_id', 'start_date', 'end_date']),
         ]);
@@ -272,7 +280,7 @@ class CommissionController extends Controller
     {
         $pendingLiquidations = $this->commissionService->getPendingLiquidations();
 
-        return Inertia::render('commissions/Pending', [
+        return Inertia::render('commission/Pending', [
             'pendingLiquidations' => $pendingLiquidations,
         ]);
     }

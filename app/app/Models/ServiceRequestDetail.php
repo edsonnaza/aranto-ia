@@ -95,6 +95,14 @@ class ServiceRequestDetail extends Model
     }
 
     /**
+     * Alias for medicalService() for convenience.
+     */
+    public function service(): BelongsTo
+    {
+        return $this->medicalService();
+    }
+
+    /**
      * Get the professional assigned to this service.
      */
     public function professional(): BelongsTo

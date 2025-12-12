@@ -147,3 +147,21 @@ aranto-ia/
 ## 📝 Licencia
 
 Este proyecto es privado y propietario.
+
+## 🐳 Conexión Laravel <-> MySQL (Docker)
+
+Si usas Docker Compose, la configuración recomendada para conectar Laravel con MySQL es:
+
+```env
+DB_HOST=mysql
+DB_PORT=3307
+DB_DATABASE=aranto_medical
+DB_USERNAME=aranto_user
+DB_PASSWORD=password
+```
+
+- El contenedor MySQL expone el puerto interno 3306 en el puerto externo 3307.
+- El contenedor `app` depende de que el contenedor `mysql` esté saludable.
+- Las credenciales por defecto están definidas en `docker-compose.yml` y pueden ser sobreescritas por variables de entorno.
+
+> Si tienes problemas de conexión, revisa que el contenedor MySQL esté corriendo y que el puerto y usuario coincidan con los valores anteriores.

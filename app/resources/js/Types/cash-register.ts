@@ -24,6 +24,7 @@ export interface Transaction {
     id: number;
     cash_register_session_id: number;
     type: 'INCOME' | 'EXPENSE' | 'PAYMENT';
+    category?: string;
     amount: number;
     description: string;
     reference?: string;

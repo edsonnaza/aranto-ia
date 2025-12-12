@@ -51,7 +51,7 @@ class CommissionService
             ->where('category', 'SERVICE_PAYMENT')
             ->where('status', 'active')
             ->whereBetween('created_at', [$startDate, $endDate])
-            ->with(['serviceRequest', 'patient'])
+            ->with(['serviceRequest.patient', 'serviceRequest.details.service'])
             ->get();
 
         $totalGross = 0;
@@ -65,11 +65,20 @@ class CommissionService
             $totalGross += $serviceAmount;
             $totalCommission += $commissionAmount;
 
+            // Get patient name
+            $patientName = $movement->serviceRequest?->patient?->full_name ?? 'Paciente no encontrado';
+            
+            // Get service name from service_request_details
+            $serviceDetail = $movement->serviceRequest?->details?->first();
+            $serviceName = $serviceDetail?->service?->name ?? 'Servicio no especificado';
+
             $services[] = [
                 'movement_id' => $movement->id,
                 'service_request_id' => $movement->service_request_id,
                 'patient_id' => $movement->patient_id,
-                'service_id' => $movement->service_id ?? null,
+                'patient_name' => $patientName,
+                'service_id' => $serviceDetail?->service_id ?? null,
+                'service_name' => $serviceName,
                 'service_date' => $movement->created_at->format('Y-m-d'),
                 'payment_date' => $movement->created_at->format('Y-m-d'),
                 'service_amount' => $serviceAmount,
@@ -104,14 +113,26 @@ class CommissionService
      * @return CommissionLiquidation
      * @throws \Exception
      */
-    public function generateLiquidation(int $professionalId, string $startDate, string $endDate, int $generatedBy): CommissionLiquidation
+    public function generateLiquidation(int $professionalId, string $startDate, string $endDate, int $generatedBy, ?array $serviceRequestIds = null): CommissionLiquidation
     {
         DB::beginTransaction();
         try {
             $commissionData = $this->getProfessionalCommissionData($professionalId, $startDate, $endDate);
 
+            // Filtrar servicios si se especifican IDs
+            if ($serviceRequestIds !== null) {
+                $commissionData['services'] = array_filter(
+                    $commissionData['services'],
+                    fn($s) => in_array($s['service_request_id'], $serviceRequestIds)
+                );
+                // Recalcular resumen
+                $commissionData['summary']['total_services'] = count($commissionData['services']);
+                $commissionData['summary']['gross_amount'] = array_sum(array_column($commissionData['services'], 'service_amount'));
+                $commissionData['summary']['commission_amount'] = array_sum(array_column($commissionData['services'], 'commission_amount'));
+            }
+
             if (empty($commissionData['services'])) {
-                throw new \Exception('No hay servicios pagados en el período especificado para generar liquidación.');
+                throw new \Exception('No hay servicios seleccionados para generar liquidación.');
             }
 
             // Create liquidation
@@ -133,7 +154,7 @@ class CommissionService
                     'liquidation_id' => $liquidation->id,
                     'service_request_id' => $service['service_request_id'],
                     'patient_id' => $service['patient_id'],
-                    'service_id' => $service['service_id'],
+                    'service_id' => $service['service_id'] ?? null,
                     'service_date' => $service['service_date'],
                     'payment_date' => $service['payment_date'],
                     'service_amount' => $service['service_amount'],

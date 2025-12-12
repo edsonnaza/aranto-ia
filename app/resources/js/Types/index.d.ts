@@ -43,3 +43,9 @@ export interface User {
     roles?: string[];
     [key: string]: unknown; // This allows for additional properties...
 }
+
+// Re-export other type modules so consumers can import from '@/types'
+export * from './medical'
+export * from './commission'
+export * from './cash-register'
+export * from './service-category'

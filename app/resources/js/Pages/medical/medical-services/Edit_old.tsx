@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { router, Head } from '@inertiajs/react';
-import { Trash2, Plus, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Trash2, Plus, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';

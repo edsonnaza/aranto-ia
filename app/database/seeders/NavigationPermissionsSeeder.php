@@ -16,6 +16,7 @@ class NavigationPermissionsSeeder extends Seeder
         // Create navigation permissions (module-level access)
         $navigationPermissions = [
             'access-treasury' => 'Acceso al módulo de Tesorería',
+            'access-commissions' => 'Acceso al módulo de Comisiones',
             'access-medical-system' => 'Acceso al Sistema Médico',
             'access-reports' => 'Acceso al módulo de Reportes',
             'access-settings' => 'Acceso al módulo de Configuración',
@@ -36,6 +37,7 @@ class NavigationPermissionsSeeder extends Seeder
                 'description' => 'Acceso completo a todos los módulos',
                 'permissions' => [
                     'access-treasury',
+                    'access-commissions',
                     'access-medical-system',
                     'access-reports',
                     'access-settings',
@@ -47,6 +49,7 @@ class NavigationPermissionsSeeder extends Seeder
                 'description' => 'Administrador general',
                 'permissions' => [
                     'access-treasury',
+                    'access-commissions',
                     'access-medical-system',
                     'access-reports',
                 ],
@@ -76,6 +79,14 @@ class NavigationPermissionsSeeder extends Seeder
                 'display_name' => 'Visualizador',
                 'description' => 'Solo acceso a reportes',
                 'permissions' => [
+                    'access-reports',
+                ],
+            ],
+            'accountant' => [
+                'display_name' => 'Contador',
+                'description' => 'Gestión de comisiones y reportes financieros',
+                'permissions' => [
+                    'access-commissions',
                     'access-reports',
                 ],
             ],
