@@ -46,12 +46,15 @@ class CommissionService
         $professional = Professional::findOrFail($professionalId);
 
         // Get paid movements for the professional in the date range
+        // Excluir transacciones que ya tienen commission_liquidation_id
         $movements = Transaction::where('professional_id', $professionalId)
             ->where('type', 'INCOME')
             ->where('category', 'SERVICE_PAYMENT')
             ->where('status', 'active')
             ->whereBetween('created_at', [$startDate, $endDate])
-            ->with(['serviceRequest.patient', 'serviceRequest.details.service'])
+            ->whereNotNull('service_request_id')
+            ->whereNull('commission_liquidation_id') // Solo transacciones no liquidadas
+            ->with(['serviceRequest.patient', 'serviceRequest.details.medicalService'])
             ->get();
 
         $totalGross = 0;
@@ -70,14 +73,14 @@ class CommissionService
             
             // Get service name from service_request_details
             $serviceDetail = $movement->serviceRequest?->details?->first();
-            $serviceName = $serviceDetail?->service?->name ?? 'Servicio no especificado';
+            $serviceName = $serviceDetail?->medicalService?->name ?? 'Servicio no especificado';
 
             $services[] = [
                 'movement_id' => $movement->id,
                 'service_request_id' => $movement->service_request_id,
-                'patient_id' => $movement->patient_id,
+                'patient_id' => $movement->serviceRequest?->patient_id,
                 'patient_name' => $patientName,
-                'service_id' => $serviceDetail?->service_id ?? null,
+                'service_id' => $serviceDetail?->medical_service_id ?? null,
                 'service_name' => $serviceName,
                 'service_date' => $movement->created_at->format('Y-m-d'),
                 'payment_date' => $movement->created_at->format('Y-m-d'),
@@ -162,6 +165,10 @@ class CommissionService
                     'commission_amount' => $service['commission_amount'],
                     'payment_movement_id' => $service['movement_id'],
                 ]);
+
+                // Marcar la transacción original como liquidada
+                Transaction::where('id', $service['movement_id'])
+                    ->update(['commission_liquidation_id' => $liquidation->id]);
             }
 
             DB::commit();
@@ -236,6 +243,51 @@ class CommissionService
     }
 
     /**
+     * Revert payment for a paid commission liquidation.
+     * Only cashier manager can do this operation.
+     *
+     * @param CommissionLiquidation $liquidation
+     * @param int $revertedBy
+     * @param string $reason
+     * @return CommissionLiquidation
+     * @throws \Exception
+     */
+    public function revertPayment(CommissionLiquidation $liquidation, int $revertedBy, string $reason): CommissionLiquidation
+    {
+        if (!$liquidation->isPaid()) {
+            throw new \Exception('Solo se pueden revertir liquidaciones pagadas.');
+        }
+
+        DB::beginTransaction();
+        try {
+            // Obtener el movimiento de pago original
+            $originalMovement = Transaction::findOrFail($liquidation->payment_movement_id);
+
+            // Validar que el movimiento no esté cancelado
+            if ($originalMovement->status === 'cancelled') {
+                throw new \Exception('El pago ya fue revertido anteriormente.');
+            }
+
+            // Cancelar el movimiento de pago usando PaymentService
+            $paymentService = app(PaymentService::class);
+            $paymentService->cancelTransaction($originalMovement, $revertedBy, $reason);
+
+            // Volver estado a APPROVED
+            $liquidation->update([
+                'status' => CommissionLiquidation::STATUS_APPROVED,
+                'payment_movement_id' => null,
+            ]);
+
+            DB::commit();
+            return $liquidation->fresh();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
      * Cancel a commission liquidation.
      *
      * @param CommissionLiquidation $liquidation
@@ -245,11 +297,30 @@ class CommissionService
     public function cancelLiquidation(CommissionLiquidation $liquidation): CommissionLiquidation
     {
         if ($liquidation->isPaid()) {
-            throw new \Exception('No se pueden cancelar liquidaciones que ya han sido pagadas.');
+            throw new \Exception('No se pueden cancelar liquidaciones que ya han sido pagadas. Debe revertir el pago primero desde caja.');
         }
 
-        $liquidation->cancel();
-        return $liquidation->fresh();
+        if ($liquidation->isCancelled()) {
+            throw new \Exception('Esta liquidación ya está cancelada.');
+        }
+
+        DB::beginTransaction();
+        try {
+            // Limpiar commission_liquidation_id de las transacciones originales
+            Transaction::where('commission_liquidation_id', $liquidation->id)
+                ->update(['commission_liquidation_id' => null]);
+
+            // Marcar liquidación como cancelada
+            $liquidation->cancel();
+            $liquidation->refresh();
+            
+            DB::commit();
+            return $liquidation;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 
     /**
@@ -313,44 +384,19 @@ class CommissionService
      * @param string $endDate
      * @return array
      */
-    public function validateLiquidationData(int $professionalId, string $startDate, string $endDate): array
+    /**
+     * Get service request IDs that are already in a liquidation (not cancelled)
+     *
+     * @param array $serviceRequestIds
+     * @return array
+     */
+    public function getAlreadyLiquidatedServices(array $serviceRequestIds): array
     {
-        $errors = [];
-
-        $professional = Professional::find($professionalId);
-        if (!$professional) {
-            $errors[] = 'Profesional no encontrado.';
-        }
-
-        if (!$professional->commission_percentage || $professional->commission_percentage <= 0) {
-            $errors[] = 'El profesional no tiene configurado un porcentaje de comisión válido.';
-        }
-
-        if (!strtotime($startDate) || !strtotime($endDate)) {
-            $errors[] = 'Fechas de período inválidas.';
-        }
-
-        if (strtotime($startDate) > strtotime($endDate)) {
-            $errors[] = 'La fecha de inicio no puede ser posterior a la fecha de fin.';
-        }
-
-        // Check for overlapping liquidations
-        $existingLiquidation = CommissionLiquidation::forProfessional($professionalId)
-            ->where(function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('period_start', [$startDate, $endDate])
-                      ->orWhereBetween('period_end', [$startDate, $endDate])
-                      ->orWhere(function ($q) use ($startDate, $endDate) {
-                          $q->where('period_start', '<=', $startDate)
-                            ->where('period_end', '>=', $endDate);
-                      });
+        return \App\Models\CommissionLiquidationDetail::whereIn('service_request_id', $serviceRequestIds)
+            ->whereHas('liquidation', function($query) {
+                $query->whereNotIn('status', [CommissionLiquidation::STATUS_CANCELLED]);
             })
-            ->whereNotIn('status', [CommissionLiquidation::STATUS_CANCELLED])
-            ->first();
-
-        if ($existingLiquidation) {
-            $errors[] = 'Ya existe una liquidación para este período que no ha sido cancelada.';
-        }
-
-        return $errors;
+            ->pluck('service_request_id')
+            ->toArray();
     }
 }

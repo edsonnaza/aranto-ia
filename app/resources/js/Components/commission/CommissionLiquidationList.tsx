@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Eye, Edit, Trash2, CheckCircle, Clock, AlertCircle, MoreHorizontal } from 'lucide-react'
+import { Eye, Edit, Trash2, CheckCircle, Clock, AlertCircle, MoreHorizontal, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { CommissionLiquidation } from '@/types'
 
 
 interface CommissionLiquidationListProps {
+  initialLiquidations?: CommissionLiquidation[]
   onViewDetails?: (liquidation: CommissionLiquidation) => void
   onEdit?: (liquidation: CommissionLiquidation) => void
   onDelete?: (liquidation: CommissionLiquidation) => void
@@ -23,29 +25,26 @@ interface CommissionLiquidationListProps {
 export default CommissionLiquidationList;
 
 function CommissionLiquidationList({
+  initialLiquidations = [],
   onViewDetails,
   onEdit,
   onDelete,
-  refreshTrigger,
+  //refreshTrigger,
   onSelectionChange,
 }: CommissionLiquidationListProps) {
-  const [liquidations, setLiquidations] = useState<CommissionLiquidation[]>([])
+  const [liquidations, setLiquidations] = useState<CommissionLiquidation[]>(initialLiquidations)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [confirmCancelDialogOpen, setConfirmCancelDialogOpen] = useState(false)
+  const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
 
-  // Usar el hook para obtener liquidaciones reales
-  const { deleteLiquidation, loading, error, fetchLiquidations } = useCommissionLiquidations()
+  // Usar el hook solo para delete y cancel
+  const { deleteLiquidation, cancelLiquidation, loading, error } = useCommissionLiquidations()
 
+  // Actualizar liquidations cuando cambien las props
   useEffect(() => {
-    let isMounted = true
-    const fetchData = async () => {
-      const data = await fetchLiquidations()
-      if (isMounted && Array.isArray(data)) {
-        setLiquidations(data)
-      }
-    }
-    fetchData()
-    return () => { isMounted = false }
-  }, [fetchLiquidations, refreshTrigger])
+    setLiquidations(initialLiquidations)
+  }, [initialLiquidations])
 
   // Notificar selección al padre
   useEffect(() => {
@@ -54,21 +53,36 @@ function CommissionLiquidationList({
     }
   }, [selectedIds, liquidations, onSelectionChange])
 
-  const handleDelete = async (liquidation: CommissionLiquidation) => {
-    if (!confirm(`¿Está seguro de eliminar la liquidación de ${liquidation.professional_name}?`)) {
-      return
-    }
+  const handleDeleteClick = (liquidation: CommissionLiquidation) => {
+    setSelectedLiquidation(liquidation)
+    setConfirmDialogOpen(true)
+  }
 
-    try {
-      await deleteLiquidation(liquidation.id)
-      // Recargar liquidaciones usando fetchLiquidations
-      const data = await fetchLiquidations()
-      if (Array.isArray(data)) {
-        setLiquidations(data)
+  const handleConfirmDelete = () => {
+    if (!selectedLiquidation) return
+
+    deleteLiquidation(selectedLiquidation.id, {
+      onSuccess: () => {
+        setSelectedLiquidation(null)
+        // Las liquidaciones se actualizarán automáticamente con Inertia
       }
-    } catch (err) {
-      console.error('Error deleting liquidation:', err)
-    }
+    })
+  }
+
+  const handleCancelClick = (liquidation: CommissionLiquidation) => {
+    setSelectedLiquidation(liquidation)
+    setConfirmCancelDialogOpen(true)
+  }
+
+  const handleConfirmCancel = () => {
+    if (!selectedLiquidation) return
+
+    cancelLiquidation(selectedLiquidation.id, {
+      onSuccess: () => {
+        setSelectedLiquidation(null)
+        // Las liquidaciones se actualizarán automáticamente con Inertia
+      }
+    })
   }
 
   const formatCurrency = (amount: number) => {
@@ -249,15 +263,24 @@ function CommissionLiquidationList({
                                 Ver Detalles
                               </DropdownMenuItem>
                             )}
-                            {onEdit && liquidation.status === 'pending' && (
+                            {onEdit && liquidation.status === 'draft' && (
                               <DropdownMenuItem onClick={() => onEdit(liquidation)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
                               </DropdownMenuItem>
                             )}
-                            {onDelete && liquidation.status === 'pending' && (
+                            {liquidation.status === 'approved' && (
                               <DropdownMenuItem
-                                onClick={() => handleDelete(liquidation)}
+                                onClick={() => handleCancelClick(liquidation)}
+                                className="text-orange-600"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancelar Aprobación
+                              </DropdownMenuItem>
+                            )}
+                            {onDelete && liquidation.status === 'draft' && (
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteClick(liquidation)}
                                 className="text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -315,6 +338,38 @@ function CommissionLiquidationList({
           </CardContent>
         </Card>
       )}
+
+      {/* Confirmation Dialog for Delete */}
+      <ConfirmationDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        title="Eliminar Liquidación"
+        description={
+          selectedLiquidation
+            ? `¿Está seguro de eliminar la liquidación de ${selectedLiquidation.professional_name}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmDelete}
+        variant="destructive"
+      />
+
+      {/* Confirmation Dialog for Cancel Approval */}
+      <ConfirmationDialog
+        open={confirmCancelDialogOpen}
+        onOpenChange={setConfirmCancelDialogOpen}
+        title="Cancelar Aprobación"
+        description={
+          selectedLiquidation
+            ? `¿Está seguro de cancelar la aprobación de la liquidación de ${selectedLiquidation.professional_name} por ${formatCurrency(selectedLiquidation.commission_amount)}? La liquidación volverá a estado borrador.`
+            : ''
+        }
+        confirmText="Cancelar Aprobación"
+        cancelText="Mantener Aprobación"
+        onConfirm={handleConfirmCancel}
+        variant="destructive"
+      />
     </div>
   )
 }

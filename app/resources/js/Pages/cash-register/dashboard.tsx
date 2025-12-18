@@ -7,9 +7,12 @@ import TransactionModal from '@/components/cash-register/transaction-modal';
 import CloseCashModal from '@/components/cash-register/CloseCashModal';
 import TreasuryActionDropdown from '@/components/cash-register/treasury-action-dropdown';
 import { ExpenseModal } from '@/components/cash-register/expense-modal';
+import { CommissionPaymentModal } from '@/components/cash-register/commission-payment-modal';
+import { TransactionDetailModal } from '@/components/cash-register/transaction-detail-modal';
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
+import { type CommissionLiquidation } from '@/types/commission';
 import { INCOME_ACTIONS, EXPENSE_ACTIONS, type TreasuryAction } from '@/config/treasury-actions';
 
 import AppLayout from '@/layouts/app-layout';
@@ -29,18 +32,23 @@ interface CashRegisterDashboardProps {
     activeSession?: CashRegisterSession;
     todayTransactions: Transaction[];
     balance: CashRegisterBalance;
+    approvedCommissionLiquidations?: CommissionLiquidation[];
 }
 
 export default function CashRegisterDashboard({
     activeSession,
     todayTransactions = [],
     balance,
+    approvedCommissionLiquidations = [],
 }: CashRegisterDashboardProps) {
     const [isOpenModalVisible, setIsOpenModalVisible] = useState(false);
     const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
     const [isExpenseDirectModalVisible, setIsExpenseDirectModalVisible] = useState(false);
+    const [isCommissionPaymentModalVisible, setIsCommissionPaymentModalVisible] = useState(false);
     const [isCloseModalVisible, setIsCloseModalVisible] = useState(false);
+    const [isTransactionDetailModalVisible, setIsTransactionDetailModalVisible] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
     const [selectedAction, setSelectedAction] = useState<TreasuryAction | null>(null);
 
     // Use Paraguay Guaraní formatter
@@ -49,6 +57,11 @@ export default function CashRegisterDashboard({
     console.log('Dashboard rendered, activeSession:', activeSession);
     console.log('isOpenModalVisible:', isOpenModalVisible);
     console.log('isCloseModalVisible:', isCloseModalVisible);
+
+    const handleTransactionClick = (transaction: Transaction) => {
+        setSelectedTransaction(transaction);
+        setIsTransactionDetailModalVisible(true);
+    };
 
     const handleOpenModal = () => {
         console.log('Button clicked, opening modal...');
@@ -80,6 +93,10 @@ export default function CashRegisterDashboard({
         setSelectedAction(action);
         
         switch (action.category) {
+            case 'COMMISSION_LIQUIDATION':
+                // Open commission payment modal
+                setIsCommissionPaymentModalVisible(true);
+                break;
             case 'OTHER_EXPENSE':
                 // Open generic expense modal
                 setIsExpenseModalVisible(true);
@@ -326,18 +343,19 @@ export default function CashRegisterDashboard({
                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
                                             Descripción
                                         </th>
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
+                                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
                                             Monto
-                                        </th>
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
-                                            Usuario
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody className="[&_tr:last-child]:border-0">
                                     {todayTransactions.length > 0 ? (
                                         todayTransactions.map((transaction: Transaction, index: number) => (
-                                            <tr key={index} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                            <tr 
+                                                key={index} 
+                                                className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted cursor-pointer"
+                                                onClick={() => handleTransactionClick(transaction)}
+                                            >
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                     {new Date(transaction.created_at).toLocaleTimeString()}
                                                 </td>
@@ -357,21 +375,30 @@ export default function CashRegisterDashboard({
                                                     </span>
                                                 </td>
                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                                    {transaction.description}
+                                                    {transaction.description || (() => {
+                                                        const categories: Record<string, string> = {
+                                                            SERVICE_PAYMENT: 'Pago de servicio médico',
+                                                            SERVICE_REFUND: 'Devolución de pago',
+                                                            COMMISSION_LIQUIDATION: 'Pago de comisión profesional',
+                                                            CASH_ADJUSTMENT: 'Ajuste de caja',
+                                                            GENERAL_EXPENSE: 'Gasto general',
+                                                            OPENING_BALANCE: 'Apertura de caja',
+                                                        };
+                                                        return categories[transaction.category] || 'Transacción';
+                                                    })()}
                                                 </td>
-                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                                    <span className={transaction.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
+                                                <td className="p-4 align-middle text-right [&:has([role=checkbox])]:pr-0">
+                                                    <span className={`font-semibold ${
+                                                        transaction.type === 'INCOME' ? 'text-green-600' : 'text-red-600'
+                                                    }`}>
                                                         {transaction.type === 'INCOME' ? '+' : '-'}{formatCurrency(Number(transaction.amount))}
                                                     </span>
-                                                </td>
-                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                                    {transaction.user?.name || 'N/A'}
                                                 </td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={5} className="p-4 align-middle text-center text-muted-foreground">
+                                            <td colSpan={4} className="p-4 align-middle text-center text-muted-foreground">
                                                 No hay transacciones registradas hoy
                                             </td>
                                         </tr>
@@ -420,6 +447,20 @@ export default function CashRegisterDashboard({
                 transactions={todayTransactions}
             />
 
+            {/* Modal for commission payments */}
+            <CommissionPaymentModal
+                isOpen={isCommissionPaymentModalVisible}
+                onClose={() => {
+                    setIsCommissionPaymentModalVisible(false);
+                    setSelectedAction(null);
+                }}
+                onPaymentProcessed={() => {
+                    // Refresh page to update balances and liquidations list
+                    window.location.reload();
+                }}
+                approvedLiquidations={approvedCommissionLiquidations}
+            />
+
             {/* Modal for expenses */}
             <ExpenseModal
                 isOpen={isExpenseDirectModalVisible}
@@ -428,6 +469,16 @@ export default function CashRegisterDashboard({
                     // Refrescar los datos del dashboard
                     window.location.reload();
                 }}
+            />
+
+            {/* Modal for transaction details */}
+            <TransactionDetailModal
+                isOpen={isTransactionDetailModalVisible}
+                onClose={() => {
+                    setIsTransactionDetailModalVisible(false);
+                    setSelectedTransaction(null);
+                }}
+                transaction={selectedTransaction}
             />
         </AppLayout>
     );

@@ -31,26 +31,45 @@ class CommissionController extends Controller
 
         // Apply filters
         if ($request->filled('professional_id')) {
-            $query->forProfessional($request->professional_id);
+            $query->where('professional_id', $request->professional_id);
         }
 
         if ($request->filled('status')) {
-            $query->withStatus($request->status);
-        }
-
-        if ($request->filled('period_start') && $request->filled('period_end')) {
-            $query->inPeriod($request->period_start, $request->period_end);
+            $query->where('status', $request->status);
         }
 
         $liquidations = $query->paginate(20);
 
+        // Get pending approvals (draft status only)
+        $pendingApprovals = CommissionLiquidation::with(['professional.specialties'])
+            ->where('status', CommissionLiquidation::STATUS_DRAFT)
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function($liquidation) {
+                $specialty = $liquidation->professional->specialties->where('pivot.is_primary', true)->first();
+                return [
+                    'id' => $liquidation->id,
+                    'professional_id' => $liquidation->professional_id,
+                    'professional_name' => $liquidation->professional->full_name ?? 'N/A',
+                    'specialty_name' => $specialty?->name ?? 'Sin especialidad',
+                    'period_start' => $liquidation->period_start,
+                    'period_end' => $liquidation->period_end,
+                    'total_services' => $liquidation->total_services,
+                    'total_amount' => $liquidation->gross_amount,
+                    'commission_percentage' => $liquidation->commission_percentage,
+                    'commission_amount' => $liquidation->commission_amount,
+                    'created_at' => $liquidation->created_at->toDateString(),
+                    'status' => $liquidation->status,
+                ];
+            });
+
         return Inertia::render('commission/Index', [
-            'liquidations' => $liquidations,
-            'filters' => $request->only(['professional_id', 'status', 'period_start', 'period_end']),
             'professionals' => \App\Models\Professional::select('id', 'first_name', 'last_name', 'commission_percentage')
                 ->where('commission_percentage', '>', 0)
                 ->orderBy('last_name')
                 ->get(),
+            'liquidations' => $liquidations,
+            'pendingApprovals' => $pendingApprovals,
         ]);
     }
 
@@ -81,15 +100,13 @@ class CommissionController extends Controller
             'service_request_ids.*' => 'integer',
         ]);
 
-        // Validate liquidation data
-        $errors = $this->commissionService->validateLiquidationData(
-            $request->professional_id,
-            $request->period_start,
-            $request->period_end
+        // Validate that selected services are not already liquidated
+        $alreadyLiquidated = $this->commissionService->getAlreadyLiquidatedServices(
+            $request->service_request_ids
         );
 
-        if (!empty($errors)) {
-            return back()->withErrors(['general' => $errors]);
+        if (!empty($alreadyLiquidated)) {
+            return back()->withErrors(['general' => ['Algunos servicios ya han sido liquidados previamente.']]);
         }
 
         try {
@@ -101,7 +118,7 @@ class CommissionController extends Controller
                 $request->service_request_ids
             );
 
-            return redirect()->route('commissions.show', $liquidation)
+            return redirect()->route('medical.commissions.index')
                 ->with('success', 'Liquidación de comisiones generada exitosamente.');
 
         } catch (\Exception $e) {
@@ -166,7 +183,7 @@ class CommissionController extends Controller
                 'period_end' => $request->period_end,
             ]);
 
-            return redirect()->route('commissions.show', $liquidation)
+            return redirect()->route('medical.commissions.show', $liquidation)
                 ->with('success', 'Liquidación actualizada exitosamente.');
 
         } catch (\Exception $e) {
@@ -177,12 +194,12 @@ class CommissionController extends Controller
     /**
      * Approve the specified commission liquidation.
      */
-    public function approve(CommissionLiquidation $liquidation): RedirectResponse
+    public function approve(CommissionLiquidation $commission): RedirectResponse
     {
         try {
-            $this->commissionService->approveLiquidation($liquidation, auth()->id());
+            $this->commissionService->approveLiquidation($commission, auth()->id());
 
-            return redirect()->route('commissions.show', $liquidation)
+            return redirect()->route('medical.commissions.show', $commission)
                 ->with('success', 'Liquidación aprobada exitosamente.');
 
         } catch (\Exception $e) {
@@ -193,21 +210,24 @@ class CommissionController extends Controller
     /**
      * Process payment for the specified commission liquidation.
      */
-    public function pay(Request $request, CommissionLiquidation $liquidation): RedirectResponse
+    public function pay(Request $request, CommissionLiquidation $commission): RedirectResponse
     {
-        $request->validate([
-            'cash_register_session_id' => 'required|exists:cash_register_sessions,id',
-        ]);
-
         try {
+            // Get active cash register session
+            $cashRegisterService = app(\App\Services\CashRegisterService::class);
+            $activeSession = $cashRegisterService->getActiveSession(auth()->user());
+
+            if (!$activeSession) {
+                return back()->withErrors(['general' => ['No hay una caja abierta. Debe abrir caja primero.']]);
+            }
+
             $result = $this->commissionService->processPayment(
-                $liquidation,
-                $request->cash_register_session_id,
+                $commission,
+                $activeSession->id,
                 auth()->id()
             );
 
-            return redirect()->route('commissions.show', $liquidation)
-                ->with('success', 'Pago de liquidación procesado exitosamente.');
+            return back()->with('success', 'Pago de liquidación procesado exitosamente.');
 
         } catch (\Exception $e) {
             return back()->withErrors(['general' => [$e->getMessage()]]);
@@ -217,13 +237,43 @@ class CommissionController extends Controller
     /**
      * Cancel the specified commission liquidation.
      */
-    public function cancel(CommissionLiquidation $liquidation): RedirectResponse
+    public function cancel(CommissionLiquidation $commission): RedirectResponse
     {
         try {
-            $this->commissionService->cancelLiquidation($liquidation);
+            $this->commissionService->cancelLiquidation($commission);
 
-            return redirect()->route('commissions.show', $liquidation)
+            return redirect()->route('medical.commissions.index')
                 ->with('success', 'Liquidación cancelada exitosamente.');
+
+        } catch (\Exception $e) {
+            return back()->withErrors(['general' => [$e->getMessage()]]);
+        }
+    }
+
+    /**
+     * Revert payment for the specified commission liquidation.
+     * Only cashier manager can perform this action.
+     */
+    public function revertPayment(Request $request, CommissionLiquidation $commission): RedirectResponse
+    {
+        // Validar que el usuario tenga permiso de gestión de caja
+        if (!auth()->user()->can('manage_cash_register')) {
+            return back()->withErrors(['general' => ['No tiene permisos para revertir pagos de liquidaciones.']]);
+        }
+
+        $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+
+        try {
+            $this->commissionService->revertPayment(
+                $commission,
+                auth()->id(),
+                $request->reason
+            );
+
+            return redirect()->route('medical.commissions.index')
+                ->with('success', 'Pago revertido exitosamente. La liquidación volvió a estado aprobado.');
 
         } catch (\Exception $e) {
             return back()->withErrors(['general' => [$e->getMessage()]]);
@@ -242,7 +292,7 @@ class CommissionController extends Controller
         try {
             $liquidation->delete();
 
-            return redirect()->route('commissions.index')
+            return redirect()->route('medical.commissions.index')
                 ->with('success', 'Liquidación eliminada exitosamente.');
 
         } catch (\Exception $e) {
@@ -305,6 +355,27 @@ class CommissionController extends Controller
 
             return response()->json($data);
 
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Get transactions for a specific commission liquidation
+     */
+    public function getTransactions(CommissionLiquidation $commission): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $transactions = $commission->transactions()
+                ->with(['user', 'service'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'transactions' => $transactions,
+                'count' => $transactions->count(),
+                'total' => $transactions->sum('amount')
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 400);
         }

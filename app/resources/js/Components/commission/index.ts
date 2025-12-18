@@ -5,4 +5,5 @@ export { default as CommissionLiquidationDetail } from './CommissionLiquidationD
 export { default as CommissionReport } from './CommissionReport'
 export { default as CommissionPendingApprovals } from './CommissionPendingApprovals'
 export { default as CommissionSettings } from './CommissionSettings'
+export { CommissionPaidLiquidations } from './commission-paid-liquidations'
 export { default as ProfessionalSelector } from './ProfessionalSelector'

@@ -50,6 +50,7 @@ class Transaction extends Model
         'patient_id',
         'professional_id',
         'liquidation_id',
+        'commission_liquidation_id',
         'user_id',
         'status',
         'original_transaction_id',
@@ -102,6 +103,11 @@ class Transaction extends Model
     public function professional(): BelongsTo
     {
         return $this->belongsTo(Professional::class);
+    }
+
+    public function commissionLiquidation(): BelongsTo
+    {
+        return $this->belongsTo(CommissionLiquidation::class);
     }
 
     public function originalTransaction(): BelongsTo

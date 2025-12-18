@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CheckCircle, Eye, Clock, AlertTriangle } from 'lucide-react'
@@ -7,53 +7,58 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { CommissionPendingApproval } from '@/types'
 
 interface CommissionPendingApprovalsProps {
+  initialApprovals?: CommissionPendingApproval[]
   onViewDetail?: (liquidationId: number) => void
   refreshTrigger?: number
 }
 
 export default function CommissionPendingApprovals({
+  initialApprovals = [],
   onViewDetail,
   refreshTrigger,
 }: CommissionPendingApprovalsProps) {
-  const [pendingApprovals, setPendingApprovals] = useState<CommissionPendingApproval[]>([])
+  const [pendingApprovals, setPendingApprovals] = useState<CommissionPendingApproval[]>(initialApprovals)
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionPendingApproval | null>(null)
 
-  // Usamos el hook correcto y mockeamos los datos
+  // Usamos el hook para aprobar liquidaciones
   const { approveLiquidation, loading, error } = useCommissionLiquidations()
 
-  // Simulación temporal de carga de aprobaciones pendientes
-  const loadPendingApprovals = useCallback(async () => {
-    setPendingApprovals([
-      {
-        id: 1,
-        professional_name: 'Dr. Pérez',
-        specialty_name: 'Cardiología',
-        period_start: '2025-11-01',
-        period_end: '2025-11-30',
-        total_services: 10,
-        total_amount: 2000000,
-        commission_percentage: 10,
-        commission_amount: 200000,
-        created_at: '2025-12-01',
-      }
-    ])
-  }, [])
-
+  // Actualizar cuando cambien las props
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadPendingApprovals()
-  }, [loadPendingApprovals, refreshTrigger])
+    setPendingApprovals(initialApprovals)
+  }, [initialApprovals])
 
-  const handleApprove = async (liquidationId: number) => {
-    try {
-      await approveLiquidation(liquidationId)
-      await loadPendingApprovals()
-    } catch (err) {
-      console.error('Error approving liquidation:', err)
+  const handleApproveClick = (approval: CommissionPendingApproval) => {
+    console.log('handleApproveClick called with:', approval)
+    setSelectedLiquidation(approval)
+    setConfirmDialogOpen(true)
+  }
+
+  const handleConfirmApprove = () => {
+    if (!selectedLiquidation) {
+      console.error('No selectedLiquidation')
+      return
     }
+
+    console.log('Calling approveLiquidation with ID:', selectedLiquidation.id)
+    approveLiquidation(selectedLiquidation.id, {
+      onSuccess: () => {
+        console.log('Approval successful')
+        setSelectedLiquidation(null)
+        // Inertia actualizará automáticamente las props
+      },
+      onError: () => {
+        console.log('Approval failed')
+        // El error ya se maneja en el hook con toast
+        setSelectedLiquidation(null)
+      }
+    })
   }
 
   // El método rejectLiquidation no existe, así que lo eliminamos
@@ -151,7 +156,7 @@ export default function CommissionPendingApprovals({
                     <TableHead className="text-right">Monto Total</TableHead>
                     <TableHead className="text-right">Comisión</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-center">Creado</TableHead>
+                    <TableHead className="text-center">Fecha / Urgencia</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -190,14 +195,20 @@ export default function CommissionPendingApprovals({
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          {getUrgencyBadge(daysPending)}
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Borrador
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="text-sm">
-                            {formatDate(approval.created_at)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            hace {daysPending} día{daysPending !== 1 ? 's' : ''}
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="text-sm">
+                              {formatDate(approval.created_at)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              hace {daysPending} día{daysPending !== 1 ? 's' : ''}
+                            </div>
+                            {getUrgencyBadge(daysPending)}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -213,7 +224,7 @@ export default function CommissionPendingApprovals({
                             )}
                             <Button
                               size="sm"
-                              onClick={() => handleApprove(approval.id)}
+                              onClick={() => handleApproveClick(approval)}
                               disabled={loading}
                               className="bg-green-600 hover:bg-green-700"
                             >
@@ -269,6 +280,21 @@ export default function CommissionPendingApprovals({
           </CardContent>
         </Card>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        title="Aprobar Liquidación"
+        description={
+          selectedLiquidation
+            ? `¿Está seguro de aprobar la liquidación de ${selectedLiquidation.professional_name} por un monto de ${formatCurrency(selectedLiquidation.commission_amount)}?`
+            : ''
+        }
+        confirmText="Aprobar"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmApprove}
+      />
     </div>
   )
 }

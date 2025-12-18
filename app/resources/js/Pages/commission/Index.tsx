@@ -10,15 +10,24 @@ import {
   CommissionLiquidationDetail,
   CommissionReport,
   CommissionPendingApprovals,
-  CommissionSettings
+  CommissionSettings,
+  CommissionPaidLiquidations
 } from '@/components/commission'
-import type { Professional } from '@/types'
+import type { Professional, CommissionLiquidation } from '@/types'
 
 interface CommissionIndexProps {
   professionals: Professional[]
+  liquidations?: {
+    data: CommissionLiquidation[]
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+  }
+  pendingApprovals?: CommissionLiquidation[]
 }
 
-export default function CommissionIndex({ professionals }: CommissionIndexProps) {
+export default function CommissionIndex({ professionals, liquidations, pendingApprovals }: CommissionIndexProps) {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedLiquidationId, setSelectedLiquidationId] = useState<number | null>(null)
 
@@ -43,10 +52,11 @@ export default function CommissionIndex({ professionals }: CommissionIndexProps)
       <div className="py-6">
         <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
               <TabsTrigger value="create">Crear Liquidación</TabsTrigger>
               <TabsTrigger value="list">Liquidaciones</TabsTrigger>
+              <TabsTrigger value="paid">Pagadas</TabsTrigger>
               <TabsTrigger value="reports">Reportes</TabsTrigger>
               <TabsTrigger value="approvals">Aprobaciones</TabsTrigger>
               <TabsTrigger value="settings">Configuración</TabsTrigger>
@@ -69,6 +79,7 @@ export default function CommissionIndex({ professionals }: CommissionIndexProps)
 
             <TabsContent value="list">
               <CommissionLiquidationList
+                initialLiquidations={liquidations?.data || []}
                 onViewDetails={(liquidation) => handleViewDetails(liquidation.id)}
                 onEdit={() => {
                   // TODO: Implement edit functionality
@@ -82,6 +93,10 @@ export default function CommissionIndex({ professionals }: CommissionIndexProps)
                   // }
                 }}
               />
+            </TabsContent>
+
+            <TabsContent value="paid">
+              <CommissionPaidLiquidations initialLiquidations={liquidations?.data || []} />
             </TabsContent>
 
             <TabsContent value="details">
@@ -107,6 +122,7 @@ export default function CommissionIndex({ professionals }: CommissionIndexProps)
 
             <TabsContent value="approvals">
               <CommissionPendingApprovals
+                initialApprovals={pendingApprovals || []}
                 onViewDetail={(liquidationId) => handleViewDetails(liquidationId)}
               />
             </TabsContent>

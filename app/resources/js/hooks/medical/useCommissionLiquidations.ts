@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { router } from '@inertiajs/react'
 import type { VisitOptions } from '@inertiajs/core'
+import { toast } from 'sonner'
 import type {
   CommissionLiquidationFormData,
   CommissionPaymentFormData,
@@ -112,8 +113,11 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         onSuccess: () => {
           setError(null)
         },
-        onError: () => {
-          setError('Error al crear la liquidación de comisiones')
+        onError: (errors) => {
+          console.error('Error creando liquidación:', errors)
+          // Extraer mensaje de error del backend
+          const errorMessage = errors?.general?.[0] || errors?.message || 'Error al crear la liquidación de comisiones'
+          setError(errorMessage)
         },
         ...options
       })
@@ -141,9 +145,18 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         preserveState: true,
         onSuccess: () => {
           setError(null)
+          toast.success('Liquidación eliminada exitosamente')
         },
-        onError: () => {
-          setError('Error al eliminar la liquidación de comisiones')
+        onError: (errors) => {
+          console.error('Error eliminando liquidación:', errors)
+          let errorMessage = 'Error al eliminar la liquidación'
+          if (errors?.general) {
+            errorMessage = Array.isArray(errors.general) ? errors.general[0] : String(errors.general)
+          } else if (errors?.message) {
+            errorMessage = String(errors.message)
+          }
+          setError(errorMessage)
+          toast.error(errorMessage)
         },
         ...options
       })
@@ -157,9 +170,19 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         preserveState: true,
         onSuccess: () => {
           setError(null)
+          toast.success('Liquidación aprobada exitosamente')
         },
-        onError: () => {
-          setError('Error al aprobar la liquidación de comisiones')
+        onError: (errors) => {
+          console.error('Error aprobando liquidación:', errors)
+          // Extraer mensaje de error correctamente
+          let errorMessage = 'Error al aprobar la liquidación de comisiones'
+          if (errors?.general) {
+            errorMessage = Array.isArray(errors.general) ? errors.general[0] : String(errors.general)
+          } else if (errors?.message) {
+            errorMessage = String(errors.message)
+          }
+          setError(errorMessage)
+          toast.error(errorMessage)
         },
         ...options
       })
@@ -174,9 +197,18 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         preserveState: true,
         onSuccess: () => {
           setError(null)
+          toast.success('Pago procesado exitosamente')
         },
-        onError: () => {
-          setError('Error al procesar el pago de la liquidación')
+        onError: (errors) => {
+          console.error('Error procesando pago:', errors)
+          let errorMessage = 'Error al procesar el pago'
+          if (errors?.general) {
+            errorMessage = Array.isArray(errors.general) ? errors.general[0] : String(errors.general)
+          } else if (errors?.message) {
+            errorMessage = String(errors.message)
+          }
+          setError(errorMessage)
+          toast.error(errorMessage)
         },
         ...options
       })
@@ -189,9 +221,18 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         preserveState: true,
         onSuccess: () => {
           setError(null)
+          toast.success('Liquidación cancelada exitosamente')
         },
-        onError: () => {
-          setError('Error al cancelar la liquidación de comisiones')
+        onError: (errors) => {
+          console.error('Error cancelando liquidación:', errors)
+          let errorMessage = 'Error al cancelar la liquidación de comisiones'
+          if (errors?.general) {
+            errorMessage = Array.isArray(errors.general) ? errors.general[0] : String(errors.general)
+          } else if (errors?.message) {
+            errorMessage = String(errors.message)
+          }
+          setError(errorMessage)
+          toast.error(errorMessage)
         },
         ...options
       })

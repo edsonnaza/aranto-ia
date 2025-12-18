@@ -29,8 +29,11 @@ export interface Transaction {
     description: string;
     reference?: string;
     service_id?: number;
+    service_request_id?: number;
+    commission_liquidation_id?: number;
     user_id: number;
     payment_method: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'TRANSFER' | 'CHECK' | 'DIGITAL' | 'OTHER';
+    balance_after?: number;
     created_at: string;
     updated_at: string;
     user?: User;

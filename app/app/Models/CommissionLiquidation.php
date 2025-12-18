@@ -120,6 +120,14 @@ class CommissionLiquidation extends Model
     }
 
     /**
+     * Get the transactions related to this liquidation.
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(\App\Models\Transaction::class, 'commission_liquidation_id');
+    }
+
+    /**
      * Check if liquidation is draft.
      *
      * @return bool

@@ -163,6 +163,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('commissions.approve');
     Route::patch('commissions/{commission}/pay', [CommissionController::class, 'pay'])
         ->name('commissions.pay');
+    Route::patch('commissions/{commission}/revert-payment', [CommissionController::class, 'revertPayment'])
+        ->name('commissions.revert-payment');
     Route::patch('commissions/{commission}/cancel', [CommissionController::class, 'cancel'])
         ->name('commissions.cancel');
 
@@ -175,5 +177,7 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     // Commission API
     Route::post('commission-data', [CommissionController::class, 'getCommissionData'])
         ->name('commissions.data');
+    Route::get('commissions/{commission}/transactions', [CommissionController::class, 'getTransactions'])
+        ->name('commissions.transactions');
 
 });

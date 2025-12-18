@@ -130,11 +130,18 @@ class CashRegisterController extends Controller
 
         }
 
+        // Get approved commission liquidations (ready to pay)
+        $approvedCommissionLiquidations = \App\Models\CommissionLiquidation::with('professional')
+            ->where('status', \App\Models\CommissionLiquidation::STATUS_APPROVED)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
         // Render dashboard with computed values
         return Inertia::render('CashRegister/Dashboard', [
             'activeSession' => $activeSession,
             'todayTransactions' => $todayTransactions,
             'balance' => $balance,
+            'approvedCommissionLiquidations' => $approvedCommissionLiquidations,
         ]);
     }
 

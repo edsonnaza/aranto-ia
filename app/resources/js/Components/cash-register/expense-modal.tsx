@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { router } from '@inertiajs/react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -78,6 +78,9 @@ export function ExpenseModal({ isOpen, onClose, onExpenseProcessed }: ExpenseMod
       <DialogContent className="lg:max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar Egreso</DialogTitle>
+          <DialogDescription>
+            Complete los detalles del egreso que desea registrar
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
