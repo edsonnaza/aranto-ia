@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator'
 import { Search, Eye } from 'lucide-react'
 import type { CommissionLiquidation, Transaction } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CommissionItemsModal } from './commission-items-modal'
 
 interface PaidLiquidationsProps {
   initialLiquidations?: CommissionLiquidation[]
@@ -26,6 +27,8 @@ export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiq
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
+  const [showItemsModal, setShowItemsModal] = useState(false)
+  const [selectedItemsLiquidation, setSelectedItemsLiquidation] = useState<CommissionLiquidation | null>(null)
 
   // Filtrar liquidaciones pagadas
   const paidLiquidations = initialLiquidations.filter(l => l.status === 'paid')
@@ -181,13 +184,27 @@ export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiq
                               {liquidation.paid_at ? formatDate(liquidation.paid_at) : '-'}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedLiquidation(liquidation)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Ver items/servicios"
+                                  onClick={() => {
+                                    setSelectedItemsLiquidation(liquidation)
+                                    setShowItemsModal(true)
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Ver transacciones"
+                                  onClick={() => setSelectedLiquidation(liquidation)}
+                                >
+                                  <Eye className="h-4 w-4 text-blue-600" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -337,6 +354,24 @@ export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiq
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Commission Items Modal */}
+      {selectedItemsLiquidation && (
+        <CommissionItemsModal
+          isOpen={showItemsModal}
+          onClose={() => {
+            setShowItemsModal(false)
+            setSelectedItemsLiquidation(null)
+          }}
+          liquidationId={selectedItemsLiquidation.id}
+          liquidationTitle={`Liquidación #${selectedItemsLiquidation.id}`}
+          professionalName={
+            selectedItemsLiquidation.professional
+              ? `${selectedItemsLiquidation.professional.first_name} ${selectedItemsLiquidation.professional.last_name}`
+              : ''
+          }
+        />
+      )}
     </>
   )
 }

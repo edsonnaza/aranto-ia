@@ -380,4 +380,37 @@ class CommissionController extends Controller
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
+
+    /**
+     * Get details (items/services) for a specific commission liquidation
+     */
+    public function getDetails(CommissionLiquidation $commission): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $details = $commission->details()
+                ->with(['serviceRequest.patient', 'service'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($detail) {
+                    return [
+                        'service_request_id' => $detail->service_request_id,
+                        'patient_name' => $detail->serviceRequest?->patient?->full_name ?? 'N/A',
+                        'service_name' => $detail->service?->name ?? 'Servicio desconocido',
+                        'service_amount' => $detail->service_amount,
+                        'commission_percentage' => $detail->commission_percentage,
+                        'commission_amount' => $detail->commission_amount,
+                        'service_date' => $detail->service_date,
+                    ];
+                });
+
+            return response()->json([
+                'details' => $details,
+                'count' => $details->count(),
+                'total_services' => $details->sum('service_amount'),
+                'total_commission' => $details->sum('commission_amount'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
 }

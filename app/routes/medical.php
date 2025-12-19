@@ -179,5 +179,7 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('commissions.data');
     Route::get('commissions/{commission}/transactions', [CommissionController::class, 'getTransactions'])
         ->name('commissions.transactions');
+    Route::get('commissions/{commission}/details', [CommissionController::class, 'getDetails'])
+        ->name('commissions.details');
 
 });
