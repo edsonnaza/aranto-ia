@@ -1,8 +1,18 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
+import { useReactTable, getCoreRowModel, getFilteredRowModel, flexRender } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DataTable } from '@/components/ui/data-table'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Search } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export interface CommissionItem {
@@ -32,6 +42,8 @@ export function CommissionItemsTable({
   searchPlaceholder = 'Buscar por paciente o servicio...',
   emptyMessage = 'No hay servicios en esta liquidación',
 }: CommissionItemsTableProps) {
+  const [searchTerm, setSearchTerm] = useState('')
+
   const columns = useMemo<ColumnDef<CommissionItem>[]>(() => [
     {
       accessorKey: 'patient_name',
@@ -93,6 +105,17 @@ export function CommissionItemsTable({
     },
   ], [])
 
+  const table = useReactTable({
+    data: items,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      globalFilter: searchTerm,
+    },
+    onGlobalFilterChange: setSearchTerm,
+  })
+
   const totals = useMemo(() => {
     return {
       count: items.length,
@@ -100,6 +123,8 @@ export function CommissionItemsTable({
       totalCommission: items.reduce((sum, item) => sum + item.commission_amount, 0),
     }
   }, [items])
+
+  const filteredRows = table.getRowModel().rows
 
   return (
     <Card>
@@ -114,17 +139,63 @@ export function CommissionItemsTable({
       )}
       <CardContent className={showTitle ? '' : 'pt-6'}>
         <div className="space-y-4">
-          {/* DataTable */}
-          <DataTable
-            columns={columns}
-            data={items}
-            searchable={true}
-            searchPlaceholder={searchPlaceholder}
-            filterable={false}
-            selectable={false}
-            emptyMessage={emptyMessage}
-            className="border rounded-md bg-white"
-          />
+          {/* Search Input */}
+          <div className="flex gap-2">
+            <Search className="h-5 w-5 text-muted-foreground mt-2.5" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1"
+            />
+          </div>
+
+          {/* Table */}
+          <div className="border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {filteredRows.length > 0 ? (
+                  filteredRows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      {emptyMessage}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Summary */}
           {items.length > 0 && (
