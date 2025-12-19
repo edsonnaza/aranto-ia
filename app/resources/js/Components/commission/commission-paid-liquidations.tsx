@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { router } from '@inertiajs/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -13,15 +12,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { ChevronDown, Search, Eye, FileText, DollarSign, Calendar, User as UserIcon, CreditCard } from 'lucide-react'
+import { Search, Eye } from 'lucide-react'
 import type { CommissionLiquidation, Transaction } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -30,15 +22,13 @@ interface PaidLiquidationsProps {
 }
 
 export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiquidationsProps) {
-  const [liquidations, setLiquidations] = useState<CommissionLiquidation[]>(initialLiquidations)
-  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
 
   // Filtrar liquidaciones pagadas
-  const paidLiquidations = liquidations.filter(l => l.status === 'paid')
+  const paidLiquidations = initialLiquidations.filter(l => l.status === 'paid')
 
   // Buscar en liquidaciones
   const filteredLiquidations = paidLiquidations.filter(l => {

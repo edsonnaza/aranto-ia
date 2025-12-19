@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CommissionLiquidation;
 use App\Models\CommissionLiquidationDetail;
 use App\Models\Professional;
+use App\Models\User;
 use App\Models\ProfessionalCommission;
 use App\Models\ServiceRequest;
 use App\Models\Transaction;
@@ -12,6 +13,7 @@ use App\Models\CashRegisterSession;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+
 
 /**
  * CommissionService
@@ -270,7 +272,8 @@ class CommissionService
 
             // Cancelar el movimiento de pago usando PaymentService
             $paymentService = app(PaymentService::class);
-            $paymentService->cancelTransaction($originalMovement, $revertedBy, $reason);
+            $user = User::findOrFail($revertedBy);
+            $paymentService->cancelTransaction($originalMovement, $reason, $user);
 
             // Volver estado a APPROVED
             $liquidation->update([
@@ -377,14 +380,6 @@ class CommissionService
     }
 
     /**
-     * Validate liquidation data before generation.
-     *
-     * @param int $professionalId
-     * @param string $startDate
-     * @param string $endDate
-     * @return array
-     */
-    /**
      * Get service request IDs that are already in a liquidation (not cancelled)
      *
      * @param array $serviceRequestIds
@@ -392,7 +387,7 @@ class CommissionService
      */
     public function getAlreadyLiquidatedServices(array $serviceRequestIds): array
     {
-        return \App\Models\CommissionLiquidationDetail::whereIn('service_request_id', $serviceRequestIds)
+        return CommissionLiquidationDetail::whereIn('service_request_id', $serviceRequestIds)
             ->whereHas('liquidation', function($query) {
                 $query->whereNotIn('status', [CommissionLiquidation::STATUS_CANCELLED]);
             })
