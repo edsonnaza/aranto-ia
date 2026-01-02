@@ -59,6 +59,11 @@ class CommissionController extends Controller
             ];
         });
 
+        // Create a new paginator with the transformed data
+        $transformedPaginator = $paginatedLiquidations->setCollection(
+            collect($liquidations)
+        );
+
         // Get pending approvals (draft status only)
         $pendingApprovals = CommissionLiquidation::with(['professional.specialties'])
             ->where('status', CommissionLiquidation::STATUS_DRAFT)
@@ -87,7 +92,7 @@ class CommissionController extends Controller
                 ->where('commission_percentage', '>', 0)
                 ->orderBy('last_name')
                 ->get(),
-            'liquidations' => $paginatedLiquidations->setCollection($liquidations),
+            'liquidations' => $transformedPaginator,
             'pendingApprovals' => $pendingApprovals,
         ]);
     }
@@ -443,8 +448,8 @@ class CommissionController extends Controller
             $endDate = $request->input('end_date');
             $professionalId = $request->input('professional_id');
 
-            $query = CommissionLiquidation::with(['professional.specialties', 'professional.user'])
-                ->whereIn('status', [CommissionLiquidation::STATUS_DRAFT, CommissionLiquidation::STATUS_APPROVED, CommissionLiquidation::STATUS_PAID]);
+            $query = CommissionLiquidation::with(['professional.specialties'])
+                ->where('status', CommissionLiquidation::STATUS_PAID);
 
             // Apply date filters - search within the period range
             if ($startDate) {
@@ -473,7 +478,7 @@ class CommissionController extends Controller
 
                 return [
                     'professional_id' => $first->professional_id,
-                    'professional_name' => $professional ? $professional->user?->name ?? "{$professional->first_name} {$professional->last_name}" : 'Desconocido',
+                    'professional_name' => $professional ? "{$professional->first_name} {$professional->last_name}" : 'Desconocido',
                     'specialty_name' => $professional && $professional->specialties?->first() 
                         ? $professional->specialties->first()->name 
                         : 'N/A',
@@ -481,22 +486,14 @@ class CommissionController extends Controller
                     'total_service_amount' => $totalGrossAmount,
                     'commission_percentage' => $commissionPercentage,
                     'commission_amount' => $commissionAmount,
-                    'liquidation_status' => $group->first(fn($l) => $l->status === CommissionLiquidation::STATUS_PAID)?->status ?? 'pending',
+                    'liquidation_status' => CommissionLiquidation::STATUS_PAID,
                 ];
             })->values();
 
             // Calculate totals
             $totalCommission = $professionals->sum('commission_amount');
-            $paidCommission = 0;
+            $paidCommission = $totalCommission; // All are paid since we filtered by STATUS_PAID
             $pendingCommission = 0;
-
-            foreach ($professionals as $prof) {
-                if ($prof['liquidation_status'] === CommissionLiquidation::STATUS_PAID) {
-                    $paidCommission += $prof['commission_amount'];
-                } else {
-                    $pendingCommission += $prof['commission_amount'];
-                }
-            }
 
             $summary = [
                 'total_liquidations' => $liquidations->count(),

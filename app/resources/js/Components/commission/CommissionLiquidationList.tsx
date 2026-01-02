@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { useCommissionLiquidations } from '@/hooks/medical'
+import { getStatusColor } from '@/lib/constants/status-colors'
 import type { CommissionLiquidation } from '@/types'
 
 
@@ -97,38 +98,26 @@ function CommissionLiquidationList({
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Pendiente
-          </Badge>
-        )
-      case 'approved':
-        return (
-          <Badge variant="default" className="flex items-center gap-1 bg-blue-100 text-blue-800">
-            <CheckCircle className="h-3 w-3" />
-            Aprobada
-          </Badge>
-        )
-      case 'paid':
-        return (
-          <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3" />
-            Pagada
-          </Badge>
-        )
-      case 'cancelled':
-        return (
-          <Badge variant="destructive" className="flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Cancelada
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">{status}</Badge>
+    const config = getStatusColor(status)
+    
+    if (!config) {
+      return <Badge variant="outline">{status}</Badge>
     }
+
+    const iconMap: Record<string, React.ReactNode> = {
+      pending: <Clock className="h-3 w-3" />,
+      approved: <CheckCircle className="h-3 w-3" />,
+      paid: <CheckCircle className="h-3 w-3" />,
+      cancelled: <AlertCircle className="h-3 w-3" />,
+      draft: <AlertCircle className="h-3 w-3" />,
+    }
+
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
+        {iconMap[status]}
+        {config.label}
+      </Badge>
+    )
   }
 
   if (loading && liquidations.length === 0) {

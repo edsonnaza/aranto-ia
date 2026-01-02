@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
-import { useCommissionReports } from '@/hooks/medical'
+//import { useCommissionReports } from '@/hooks/medical'
+import { getStatusColor } from '@/lib/constants/status-colors'
 import type { CommissionReport, CommissionReportSummary } from '@/types'
 
 interface CommissionReportProps {
@@ -25,6 +26,14 @@ export default function CommissionReport({ className }: CommissionReportProps) {
   const [summaryData, setSummaryData] = useState<CommissionReportSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Helper function to handle Calendar onSelect
+  const handleDateSelect = (date: unknown, setDate: (date: Date | undefined) => void, setOpen: (open: boolean) => void) => {
+    if (date instanceof Date) {
+      setDate(date)
+      setOpen(false)
+    }
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-PY', {
@@ -154,12 +163,8 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                   <Calendar
                     mode="single"
                     selected={startDate}
-                    onSelect={(date) => {
-                      setStartDate(date)
-                      setStartDateOpen(false)
-                    }}
+                    onSelect={(date) => handleDateSelect(date, setStartDate, setStartDateOpen)}
                     initialFocus
-                    disabled={(date) => endDate ? date > endDate : false}
                   />
                 </PopoverContent>
               </Popover>
@@ -188,12 +193,8 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                   <Calendar
                     mode="single"
                     selected={endDate}
-                    onSelect={(date) => {
-                      setEndDate(date)
-                      setEndDateOpen(false)
-                    }}
+                    onSelect={(date) => handleDateSelect(date, setEndDate, setEndDateOpen)}
                     initialFocus
-                    disabled={(date) => startDate ? date < startDate : false}
                   />
                 </PopoverContent>
               </Popover>
@@ -332,15 +333,11 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                         {formatCurrency(prof.commission_amount)}
                       </td>
                       <td className="p-2 text-center">
-                        <Badge
-                          variant={
-                            prof.liquidation_status === 'liquidated' ? 'default' :
-                            prof.liquidation_status === 'pending' ? 'secondary' : 'destructive'
-                          }
-                        >
-                          {prof.liquidation_status === 'liquidated' ? 'Liquidado' :
-                           prof.liquidation_status === 'pending' ? 'Pendiente' : 'Sin liquidar'}
-                        </Badge>
+                        {prof.liquidation_status && (
+                          <Badge variant={getStatusColor(prof.liquidation_status)?.variant || 'outline'}>
+                            {getStatusColor(prof.liquidation_status)?.label || prof.liquidation_status}
+                          </Badge>
+                        )}
                       </td>
                     </tr>
                   ))}
