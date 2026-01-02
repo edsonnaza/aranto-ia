@@ -6,6 +6,7 @@ import AppLayout from '@/layouts/app-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { getStatusColor } from '@/lib/constants/status-colors'
 import { type BreadcrumbItem } from '@/types'
 
 interface MedicalDashboardProps {
@@ -184,21 +185,30 @@ export default function MedicalDashboard({ stats, recentActivity = [] }: Medical
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Citas Pendientes</span>
-                  <Badge variant={stats.pending_appointments > 0 ? 'destructive' : 'default'}>
+                  <Badge 
+                    variant={getStatusColor('PENDING')?.variant}
+                    className={stats.pending_appointments > 0 ? getStatusColor('PENDING')?.className : getStatusColor('ACTIVE')?.className}
+                  >
                     {stats.pending_appointments}
                   </Badge>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Citas Recientes</span>
-                  <Badge variant="outline">
+                  <Badge 
+                    variant={getStatusColor('COMPLETED')?.variant}
+                    className={getStatusColor('COMPLETED')?.className}
+                  >
                     {stats.recent_appointments}
                   </Badge>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Tipos de Seguro</span>
-                  <Badge variant="outline">
+                  <Badge 
+                    variant={getStatusColor('ACTIVE')?.variant}
+                    className={getStatusColor('ACTIVE')?.className}
+                  >
                     {stats.total_insurance_types}
                   </Badge>
                 </div>

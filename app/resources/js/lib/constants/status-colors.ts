@@ -59,6 +59,43 @@ export const STATUS_COLORS = {
     className: 'bg-gray-100 text-gray-800 border border-gray-300',
     label: 'Inactivo',
   },
+
+  // Estados de Presupuestos (Budgets)
+  BUDGET_DRAFT: {
+    variant: 'secondary' as const,
+    className: 'bg-gray-100 text-gray-800 border border-gray-300',
+    label: 'Borrador',
+  },
+  BUDGET_PENDING: {
+    variant: 'secondary' as const,
+    className: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+    label: 'Pendiente',
+  },
+  BUDGET_APPROVED: {
+    variant: 'default' as const,
+    className: 'bg-blue-100 text-blue-800 border border-blue-300',
+    label: 'Aprobado',
+  },
+  BUDGET_ACTIVE: {
+    variant: 'default' as const,
+    className: 'bg-green-100 text-green-800 border border-green-300',
+    label: 'Activo',
+  },
+  BUDGET_COMPLETED: {
+    variant: 'default' as const,
+    className: 'bg-green-100 text-green-800 border border-green-300',
+    label: 'Completado',
+  },
+  BUDGET_EXCEEDED: {
+    variant: 'destructive' as const,
+    className: 'bg-red-100 text-red-800 border border-red-300',
+    label: 'Excedido',
+  },
+  BUDGET_CANCELLED: {
+    variant: 'destructive' as const,
+    className: 'bg-red-100 text-red-800 border border-red-300',
+    label: 'Cancelado',
+  },
 }
 
 /**

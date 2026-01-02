@@ -62,3 +62,7 @@ export type { CommissionFilters, UseCommissionLiquidationsReturn } from './useCo
 // Commission Reports Hooks
 export { useCommissionReports } from './useCommissionReports'
 export type { CommissionReportFilters, UseCommissionReportsReturn } from './useCommissionReports'
+
+// Commission Dashboard Hooks
+export { useCommissionDashboard } from './useCommissionDashboard'
+export type { CommissionDashboardData } from './useCommissionDashboard'

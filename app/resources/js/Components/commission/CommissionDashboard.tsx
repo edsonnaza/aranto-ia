@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
-  DollarSign,
-  Users,
-  FileText,
-  TrendingUp,
   Clock,
   CheckCircle,
   AlertTriangle,
-  Calendar
+  Calendar,
+  TrendingUp
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useCommissionReports } from '@/hooks/medical'
+import { useCommissionDashboard } from '@/hooks/medical/useCommissionDashboard'
+import { CommissionSummaryCards } from './CommissionSummaryCards'
+import { getStatusColor } from '@/lib/constants/status-colors'
+import type { CommissionDashboardData } from '@/hooks/medical/useCommissionDashboard'
 
 
 interface CommissionDashboardProps {
@@ -23,92 +23,7 @@ interface CommissionDashboardProps {
 }
 
 export default function CommissionDashboard({ className }: CommissionDashboardProps) {
-  // Usamos un tipo local para los datos del dashboard
-  type DashboardData = {
-    summary: {
-      total_commissions: number
-      active_professionals: number
-      total_liquidations: number
-      pending_liquidations: number
-      growth_rate: number
-    }
-    monthly_trend: Array<{
-      month: string
-      amount: number
-      liquidations: number
-    }>
-    pending_approvals: Array<{
-      id: number
-      professional_name: string
-      period_start: string
-      period_end: string
-      commission_amount: number
-      days_pending: number
-    }>
-    top_professionals: Array<{
-      id: number
-      name: string
-      specialty: string
-      total_commissions: number
-      liquidations_count: number
-    }>
-    recent_liquidations: Array<{
-      id: number
-      professional_name: string
-      specialty_name: string
-      period_start: string
-      period_end: string
-      commission_amount: number
-      status: string
-      created_at: string
-    }>
-  }
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
-
-  // El hook no tiene getDashboardData, así que simulamos loading/error
-  const { loading, error } = useCommissionReports()
-
-  // Simulación temporal de carga de datos
-  const loadDashboardData = useCallback(async () => {
-    try {
-      const response = await fetch('/medical/commissions/dashboard-data')
-      if (!response.ok) {
-        throw new Error('Error al cargar datos del dashboard')
-      }
-      const data = await response.json()
-      setDashboardData(data)
-    } catch (err) {
-      console.error('Error loading dashboard data:', err)
-      // Fallback to mock data if fetch fails
-      setDashboardData({
-        summary: {
-          total_commissions: 10000000,
-          active_professionals: 12,
-          total_liquidations: 34,
-          pending_liquidations: 3,
-          growth_rate: 5.2,
-        },
-        monthly_trend: [
-          { month: '2025-11', amount: 2000000, liquidations: 8 },
-          { month: '2025-12', amount: 3000000, liquidations: 10 },
-        ],
-        pending_approvals: [
-          { id: 1, professional_name: 'Dr. Pérez', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, days_pending: 2 },
-        ],
-        top_professionals: [
-          { id: 1, name: 'Dr. Pérez', specialty: 'Cardiología', total_commissions: 3000000, liquidations_count: 5 },
-        ],
-        recent_liquidations: [
-          { id: 1, professional_name: 'Dr. Pérez', specialty_name: 'Cardiología', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, status: 'paid', created_at: '2025-12-01' },
-        ],
-      })
-    }
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadDashboardData()
-  }, [loadDashboardData])
+  const { data: dashboardData, loading, error, refetch } = useCommissionDashboard()
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-PY', {
@@ -167,62 +82,14 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
         </Alert>
       )}
 
-      {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Comisiones</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.total_commissions)}</div>
-            <p className="text-xs text-muted-foreground">
-              Este mes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profesionales Activos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.active_professionals}</div>
-            <p className="text-xs text-muted-foreground">
-              Con comisiones este mes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Liquidaciones</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.total_liquidations}</div>
-            <p className="text-xs text-muted-foreground">
-              {summary.pending_liquidations} pendientes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Crecimiento</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {summary.growth_rate >= 0 ? '+' : ''}{summary.growth_rate.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground">
-              vs mes anterior
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Main Metrics using CommissionSummaryCards component */}
+      <CommissionSummaryCards
+        totalCommissions={summary.total_commissions}
+        activeProfessionals={summary.active_professionals}
+        totalLiquidations={summary.total_liquidations}
+        pendingLiquidations={summary.pending_liquidations}
+        growthRate={summary.growth_rate}
+      />
 
       {/* Monthly Trend */}
       <Card>
@@ -231,7 +98,7 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {monthly_trend.map((month: DashboardData['monthly_trend'][number], index: number) => (
+            {monthly_trend.map((month: CommissionDashboardData['monthly_trend'][number], index: number) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-20 text-sm font-medium">
@@ -239,7 +106,7 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
                   </div>
                   <div className="flex-1 max-w-xs">
                     <Progress
-                      value={(month.amount / Math.max(...monthly_trend.map((m: DashboardData['monthly_trend'][number]) => m.amount))) * 100}
+                      value={(month.amount / Math.max(...monthly_trend.map((m: CommissionDashboardData['monthly_trend'][number]) => m.amount))) * 100}
                       className="h-2"
                     />
                   </div>
@@ -273,7 +140,7 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
               </div>
             ) : (
               <div className="space-y-3">
-                {pending_approvals.slice(0, 5).map((approval: DashboardData['pending_approvals'][number]) => (
+                {pending_approvals.slice(0, 5).map((approval: CommissionDashboardData['pending_approvals'][number]) => (
                   <div key={approval.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
                       <div className="font-medium">{approval.professional_name}</div>
@@ -309,7 +176,7 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {top_professionals.map((professional: DashboardData['top_professionals'][number], index: number) => (
+              {top_professionals.map((professional: CommissionDashboardData['top_professionals'][number], index: number) => (
                 <div key={professional.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
@@ -356,7 +223,7 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
                 </tr>
               </thead>
               <tbody>
-                {recent_liquidations.map((liquidation: DashboardData['recent_liquidations'][number]) => (
+                {recent_liquidations.map((liquidation: CommissionDashboardData['recent_liquidations'][number]) => (
                   <tr key={liquidation.id} className="border-b hover:bg-muted/50">
                     <td className="p-2">
                       <div>
@@ -374,13 +241,10 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
                     </td>
                     <td className="p-2 text-center">
                       <Badge
-                        variant={
-                          liquidation.status === 'paid' ? 'default' :
-                          liquidation.status === 'approved' ? 'secondary' : 'outline'
-                        }
+                        variant={getStatusColor(liquidation.status)?.variant || 'outline'}
+                        className={getStatusColor(liquidation.status)?.className}
                       >
-                        {liquidation.status === 'paid' ? 'Pagada' :
-                         liquidation.status === 'approved' ? 'Aprobada' : 'Pendiente'}
+                        {getStatusColor(liquidation.status)?.label || liquidation.status}
                       </Badge>
                     </td>
                     <td className="p-2 text-center text-sm">

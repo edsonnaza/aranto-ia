@@ -304,7 +304,7 @@ class CommissionLiquidation extends Model
         $array = parent::toArray();
         
         // Ensure professional data is included with specialties
-        if ($this->relationLoaded('professional')) {
+        if ($this->relationLoaded('professional') && $this->professional !== null) {
             $array['professional'] = $this->professional->toArray();
             if ($this->professional->relationLoaded('specialties')) {
                 $array['professional']['specialties'] = $this->professional->specialties->toArray();

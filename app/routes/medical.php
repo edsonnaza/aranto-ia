@@ -148,6 +148,16 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     });
 
     // Commission Liquidations Management
+    
+    // Commission API - MUST be before resource() to avoid parameter capture
+    Route::post('commission-data', [CommissionController::class, 'getCommissionData'])
+        ->name('commissions.data');
+    Route::get('commissions/dashboard-data', [CommissionController::class, 'getDashboardData'])
+        ->name('commissions.dashboard-data');
+    Route::post('commissions/report-data', [CommissionController::class, 'reportData'])
+        ->name('commissions.report-data');
+    
+    // Commission Resource
     Route::resource('commissions', CommissionController::class)->names([
         'index' => 'commissions.index',
         'create' => 'commissions.create',
@@ -175,15 +185,9 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('commissions.pending');
 
     // Commission API
-    Route::post('commission-data', [CommissionController::class, 'getCommissionData'])
-        ->name('commissions.data');
     Route::get('commissions/{commission}/transactions', [CommissionController::class, 'getTransactions'])
         ->name('commissions.transactions');
     Route::get('commissions/{commission}/details', [CommissionController::class, 'getDetails'])
         ->name('commissions.details');
-    Route::get('commissions/dashboard-data', [CommissionController::class, 'getDashboardData'])
-        ->name('commissions.dashboard-data');
-    Route::post('commissions/report-data', [CommissionController::class, 'reportData'])
-        ->name('commissions.report-data');
 
 });
