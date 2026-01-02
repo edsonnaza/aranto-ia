@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 //import { useCommissionReports } from '@/hooks/medical'
-import { getStatusColor } from '@/lib/constants/status-colors'
+import { getStatusColor, getStatusClassName } from '@/lib/constants/status-colors'
 import type { CommissionReport, CommissionReportSummary } from '@/types'
 
 interface CommissionReportProps {
@@ -334,9 +334,9 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                       </td>
                       <td className="p-2 text-center">
                         {prof.liquidation_status && (
-                          <Badge variant={getStatusColor(prof.liquidation_status)?.variant || 'outline'}>
+                          <span className={cn('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium', getStatusClassName(prof.liquidation_status))}>
                             {getStatusColor(prof.liquidation_status)?.label || prof.liquidation_status}
-                          </Badge>
+                          </span>
                         )}
                       </td>
                     </tr>

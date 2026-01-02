@@ -10,7 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { useCommissionLiquidations } from '@/hooks/medical'
-import { getStatusColor } from '@/lib/constants/status-colors'
+import { getStatusColor, getStatusClassName } from '@/lib/constants/status-colors'
+import { cn } from '@/lib/utils'
 import type { CommissionLiquidation } from '@/types'
 
 
@@ -113,10 +114,10 @@ function CommissionLiquidationList({
     }
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
+      <span className={cn('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium', getStatusClassName(status))}>
         {iconMap[status]}
         {config.label}
-      </Badge>
+      </span>
     )
   }
 
