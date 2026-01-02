@@ -70,29 +70,39 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
 
   // Simulación temporal de carga de datos
   const loadDashboardData = useCallback(async () => {
-    // Aquí deberías hacer el fetch real, pero para ESLint/TS usamos datos mock
-    setDashboardData({
-      summary: {
-        total_commissions: 10000000,
-        active_professionals: 12,
-        total_liquidations: 34,
-        pending_liquidations: 3,
-        growth_rate: 5.2,
-      },
-      monthly_trend: [
-        { month: '2025-11', amount: 2000000, liquidations: 8 },
-        { month: '2025-12', amount: 3000000, liquidations: 10 },
-      ],
-      pending_approvals: [
-        { id: 1, professional_name: 'Dr. Pérez', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, days_pending: 2 },
-      ],
-      top_professionals: [
-        { id: 1, name: 'Dr. Pérez', specialty: 'Cardiología', total_commissions: 3000000, liquidations_count: 5 },
-      ],
-      recent_liquidations: [
-        { id: 1, professional_name: 'Dr. Pérez', specialty_name: 'Cardiología', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, status: 'paid', created_at: '2025-12-01' },
-      ],
-    })
+    try {
+      const response = await fetch('/medical/commissions/dashboard-data')
+      if (!response.ok) {
+        throw new Error('Error al cargar datos del dashboard')
+      }
+      const data = await response.json()
+      setDashboardData(data)
+    } catch (err) {
+      console.error('Error loading dashboard data:', err)
+      // Fallback to mock data if fetch fails
+      setDashboardData({
+        summary: {
+          total_commissions: 10000000,
+          active_professionals: 12,
+          total_liquidations: 34,
+          pending_liquidations: 3,
+          growth_rate: 5.2,
+        },
+        monthly_trend: [
+          { month: '2025-11', amount: 2000000, liquidations: 8 },
+          { month: '2025-12', amount: 3000000, liquidations: 10 },
+        ],
+        pending_approvals: [
+          { id: 1, professional_name: 'Dr. Pérez', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, days_pending: 2 },
+        ],
+        top_professionals: [
+          { id: 1, name: 'Dr. Pérez', specialty: 'Cardiología', total_commissions: 3000000, liquidations_count: 5 },
+        ],
+        recent_liquidations: [
+          { id: 1, professional_name: 'Dr. Pérez', specialty_name: 'Cardiología', period_start: '2025-11-01', period_end: '2025-11-30', commission_amount: 500000, status: 'paid', created_at: '2025-12-01' },
+        ],
+      })
+    }
   }, [])
 
   useEffect(() => {

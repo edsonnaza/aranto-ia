@@ -439,6 +439,169 @@ class CommissionController extends Controller
     }
 
     /**
+     * Get dashboard summary statistics
+     * 
+     * @return array<string, int|float>
+     */
+    private function getDashboardSummary(): array
+    {
+        $allLiquidations = CommissionLiquidation::all();
+        $totalCommissions = $allLiquidations->sum('commission_amount');
+        $activeProfessionals = CommissionLiquidation::distinct()->count('professional_id');
+        $totalLiquidations = $allLiquidations->count();
+        $pendingLiquidations = CommissionLiquidation::whereIn('status', [
+            CommissionLiquidation::STATUS_DRAFT, 
+            CommissionLiquidation::STATUS_APPROVED
+        ])->count();
+
+        return [
+            'total_commissions' => $totalCommissions,
+            'active_professionals' => $activeProfessionals,
+            'total_liquidations' => $totalLiquidations,
+            'pending_liquidations' => $pendingLiquidations,
+            'growth_rate' => $this->calculateGrowthRate(),
+        ];
+    }
+
+    /**
+     * Calculate growth rate for current month
+     * 
+     * @return float
+     */
+    private function calculateGrowthRate(): float
+    {
+        $currentMonthTotal = CommissionLiquidation::where('status', CommissionLiquidation::STATUS_PAID)
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->sum('commission_amount');
+        
+        $lastMonthTotal = CommissionLiquidation::where('status', CommissionLiquidation::STATUS_PAID)
+            ->whereMonth('created_at', now()->subMonth()->month)
+            ->whereYear('created_at', now()->subMonth()->year)
+            ->sum('commission_amount');
+
+        return $lastMonthTotal > 0 
+            ? (($currentMonthTotal - $lastMonthTotal) / $lastMonthTotal) * 100 
+            : 0;
+    }
+
+    /**
+     * Get monthly trend data for dashboard
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    private function getMonthlyTrend()
+    {
+        return CommissionLiquidation::where('status', CommissionLiquidation::STATUS_PAID)
+            ->get()
+            ->groupBy(fn($item) => $item->created_at->format('Y-m'))
+            ->map(fn($group) => [
+                'month' => $group->first()->created_at->format('Y-m'),
+                'amount' => $group->sum('commission_amount'),
+                'liquidations' => $group->count(),
+            ])
+            ->sortBy('month')
+            ->values()
+            ->take(3);
+    }
+
+    /**
+     * Get pending approvals for dashboard
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    private function getPendingApprovals()
+    {
+        return CommissionLiquidation::with(['professional'])
+            ->where('status', CommissionLiquidation::STATUS_DRAFT)
+            ->orderBy('created_at', 'asc')
+            ->limit(5)
+            ->get()
+            ->map(fn($liq) => [
+                'id' => $liq->id,
+                'professional_name' => $liq->professional->full_name ?? 'Desconocido',
+                'period_start' => $liq->period_start,
+                'period_end' => $liq->period_end,
+                'commission_amount' => $liq->commission_amount,
+                'days_pending' => $liq->created_at->diffInDays(now()),
+            ]);
+    }
+
+    /**
+     * Get top professionals by commission
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    private function getTopProfessionals()
+    {
+        return CommissionLiquidation::with(['professional'])
+            ->where('status', CommissionLiquidation::STATUS_PAID)
+            ->get()
+            ->groupBy('professional_id')
+            ->map(function($group) {
+                $first = $group->first();
+                $professional = $first->professional;
+                $specialty = $professional->specialties->where('pivot.is_primary', true)->first();
+                
+                return [
+                    'id' => $professional->id,
+                    'name' => $professional->full_name ?? 'Desconocido',
+                    'specialty' => $specialty?->name ?? 'N/A',
+                    'total_commissions' => $group->sum('commission_amount'),
+                    'liquidations_count' => $group->count(),
+                ];
+            })
+            ->sortByDesc('total_commissions')
+            ->values()
+            ->take(5);
+    }
+
+    /**
+     * Get recent liquidations for dashboard
+     * 
+     * @return \Illuminate\Support\Collection
+     */
+    private function getRecentLiquidations()
+    {
+        return CommissionLiquidation::with(['professional'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function($liq) {
+                $specialty = $liq->professional->specialties->where('pivot.is_primary', true)->first();
+                return [
+                    'id' => $liq->id,
+                    'professional_name' => $liq->professional->full_name ?? 'Desconocido',
+                    'specialty_name' => $specialty?->name ?? 'N/A',
+                    'period_start' => $liq->period_start,
+                    'period_end' => $liq->period_end,
+                    'commission_amount' => $liq->commission_amount,
+                    'status' => $liq->status,
+                    'created_at' => $liq->created_at->toDateString(),
+                ];
+            });
+    }
+
+    /**
+     * Get dashboard data with real statistics
+     */
+    public function getDashboardData(): \Illuminate\Http\JsonResponse
+    {
+        try {
+            return response()->json([
+                'summary' => $this->getDashboardSummary(),
+                'monthly_trend' => $this->getMonthlyTrend(),
+                'pending_approvals' => $this->getPendingApprovals(),
+                'top_professionals' => $this->getTopProfessionals(),
+                'recent_liquidations' => $this->getRecentLiquidations(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('DashboardData Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
      * Get commission report with real data
      */
     public function reportData(Request $request): \Illuminate\Http\JsonResponse
