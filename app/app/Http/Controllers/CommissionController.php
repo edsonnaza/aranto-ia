@@ -26,7 +26,7 @@ class CommissionController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = CommissionLiquidation::with(['professional', 'generatedBy', 'approvedBy'])
+        $query = CommissionLiquidation::with(['professional.specialties', 'generatedBy', 'approvedBy'])
             ->orderBy('created_at', 'desc');
 
         // Apply filters
@@ -38,7 +38,26 @@ class CommissionController extends Controller
             $query->where('status', $request->status);
         }
 
-        $liquidations = $query->paginate(20);
+        $paginatedLiquidations = $query->paginate(20);
+
+        // Transform liquidations to include professional data
+        $liquidations = $paginatedLiquidations->map(function($liquidation) {
+            $specialty = $liquidation->professional->specialties->where('pivot.is_primary', true)->first();
+            return [
+                'id' => $liquidation->id,
+                'professional_id' => $liquidation->professional_id,
+                'professional_name' => $liquidation->professional->full_name ?? 'N/A',
+                'specialty_name' => $specialty?->name ?? 'Sin especialidad',
+                'period_start' => $liquidation->period_start,
+                'period_end' => $liquidation->period_end,
+                'total_services' => $liquidation->total_services,
+                'total_amount' => $liquidation->gross_amount,
+                'commission_percentage' => $liquidation->commission_percentage,
+                'commission_amount' => $liquidation->commission_amount,
+                'created_at' => $liquidation->created_at->toDateString(),
+                'status' => $liquidation->status,
+            ];
+        });
 
         // Get pending approvals (draft status only)
         $pendingApprovals = CommissionLiquidation::with(['professional.specialties'])
@@ -68,7 +87,7 @@ class CommissionController extends Controller
                 ->where('commission_percentage', '>', 0)
                 ->orderBy('last_name')
                 ->get(),
-            'liquidations' => $liquidations,
+            'liquidations' => $paginatedLiquidations->setCollection($liquidations),
             'pendingApprovals' => $pendingApprovals,
         ]);
     }
@@ -410,6 +429,103 @@ class CommissionController extends Controller
                 'total_commission' => $details->sum('commission_amount'),
             ]);
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Get commission report with real data
+     */
+    public function reportData(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $professionalId = $request->input('professional_id');
+
+            $query = CommissionLiquidation::with(['professional.specialties', 'professional.user'])
+                ->whereIn('status', [CommissionLiquidation::STATUS_DRAFT, CommissionLiquidation::STATUS_APPROVED, CommissionLiquidation::STATUS_PAID]);
+
+            // Apply date filters - search within the period range
+            if ($startDate) {
+                $query->where('period_end', '>=', $startDate);
+            }
+
+            if ($endDate) {
+                $query->where('period_start', '<=', $endDate);
+            }
+
+            if ($professionalId) {
+                $query->where('professional_id', $professionalId);
+            }
+
+            $liquidations = $query->orderBy('created_at', 'desc')->get();
+
+            // Group by professional
+            $professionals = $liquidations->groupBy('professional_id')->map(function ($group) {
+                $first = $group->first();
+                $professional = $first->professional;
+                
+                // Calculate commission properly
+                $totalGrossAmount = $group->sum('gross_amount');
+                $commissionPercentage = $first->commission_percentage ?? 0;
+                $commissionAmount = $totalGrossAmount * ($commissionPercentage / 100);
+
+                return [
+                    'professional_id' => $first->professional_id,
+                    'professional_name' => $professional ? $professional->user?->name ?? "{$professional->first_name} {$professional->last_name}" : 'Desconocido',
+                    'specialty_name' => $professional && $professional->specialties?->first() 
+                        ? $professional->specialties->first()->name 
+                        : 'N/A',
+                    'total_services' => $group->sum('total_services'),
+                    'total_service_amount' => $totalGrossAmount,
+                    'commission_percentage' => $commissionPercentage,
+                    'commission_amount' => $commissionAmount,
+                    'liquidation_status' => $group->first(fn($l) => $l->status === CommissionLiquidation::STATUS_PAID)?->status ?? 'pending',
+                ];
+            })->values();
+
+            // Calculate totals
+            $totalCommission = $professionals->sum('commission_amount');
+            $paidCommission = 0;
+            $pendingCommission = 0;
+
+            foreach ($professionals as $prof) {
+                if ($prof['liquidation_status'] === CommissionLiquidation::STATUS_PAID) {
+                    $paidCommission += $prof['commission_amount'];
+                } else {
+                    $pendingCommission += $prof['commission_amount'];
+                }
+            }
+
+            $summary = [
+                'total_liquidations' => $liquidations->count(),
+                'total_commission' => $totalCommission,
+                'paid_commission' => $paidCommission,
+                'pending_commission' => $pendingCommission,
+            ];
+
+            $reportSummary = [
+                'total_professionals' => $professionals->count(),
+                'total_services' => $liquidations->sum('total_services'),
+                'total_amount' => $liquidations->sum('gross_amount'),
+                'total_commissions' => $totalCommission,
+            ];
+
+            return response()->json([
+                'report' => [
+                    'professionals' => $professionals,
+                    'period' => [
+                        'start' => $startDate,
+                        'end' => $endDate,
+                    ],
+                    'summary' => $summary,
+                    'liquidations' => $liquidations,
+                ],
+                'summary' => $reportSummary,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('ReportData Error: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }

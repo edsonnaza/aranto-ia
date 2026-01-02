@@ -295,4 +295,22 @@ class CommissionLiquidation extends Model
     {
         return $query->where('status', self::STATUS_PAID);
     }
+
+    /**
+     * Convert to array with professional data properly included
+     */
+    public function toArray()
+    {
+        $array = parent::toArray();
+        
+        // Ensure professional data is included with specialties
+        if ($this->relationLoaded('professional')) {
+            $array['professional'] = $this->professional->toArray();
+            if ($this->professional->relationLoaded('specialties')) {
+                $array['professional']['specialties'] = $this->professional->specialties->toArray();
+            }
+        }
+        
+        return $array;
+    }
 }

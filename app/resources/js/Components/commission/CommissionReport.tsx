@@ -17,15 +17,14 @@ interface CommissionReportProps {
 }
 
 export default function CommissionReport({ className }: CommissionReportProps) {
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
   const [startDateOpen, setStartDateOpen] = useState(false)
   const [endDateOpen, setEndDateOpen] = useState(false)
   const [reportData, setReportData] = useState<CommissionReport | null>(null)
   const [summaryData, setSummaryData] = useState<CommissionReportSummary | null>(null)
-
-  // Simulación temporal de loading y error
-  const { loading, error } = useCommissionReports()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-PY', {
@@ -34,35 +33,43 @@ export default function CommissionReport({ className }: CommissionReportProps) {
     }).format(amount)
   }
 
-  // Simulación temporal de generación de reporte
+  // Generar reporte con datos reales
   const handleGenerateReport = async () => {
     if (!startDate || !endDate) return
-    setReportData({
-      professionals: [
-        {
-          professional_name: 'Dr. Pérez',
-          specialty_name: 'Cardiología',
-          total_services: 10,
-          total_service_amount: 2000000,
-          commission_percentage: 10,
-          commission_amount: 200000,
-          liquidation_status: 'pending',
-        }
-      ],
-      summary: {
-        total_liquidations: 1,
-        total_commission: 200000,
-        paid_commission: 0,
-        pending_commission: 200000,
-      },
-      liquidations: [],
-    })
-    setSummaryData({
-      total_professionals: 1,
-      total_services: 10,
-      total_amount: 2000000,
-      total_commissions: 200000,
-    })
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const startDateStr = format(startDate, 'yyyy-MM-dd')
+      const endDateStr = format(endDate, 'yyyy-MM-dd')
+
+      const response = await fetch('/medical/commissions/report-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          start_date: startDateStr,
+          end_date: endDateStr,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al generar el reporte')
+      }
+
+      const data = await response.json()
+      setReportData(data.report)
+      setSummaryData(data.summary)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+      setReportData(null)
+      setSummaryData(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleExportReport = () => {
@@ -75,8 +82,10 @@ export default function CommissionReport({ className }: CommissionReportProps) {
 
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob)
+      const startDateStr = startDate ? format(startDate, 'yyyy-MM-dd') : ''
+      const endDateStr = endDate ? format(endDate, 'yyyy-MM-dd') : ''
       link.setAttribute('href', url)
-      link.setAttribute('download', `reporte-comisiones-${startDate}-${endDate}.csv`)
+      link.setAttribute('download', `reporte-comisiones-${startDateStr}-${endDateStr}.csv`)
       link.style.visibility = 'hidden'
       document.body.appendChild(link)
       link.click()
@@ -144,12 +153,13 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={startDate ? new Date(startDate) : undefined}
+                    selected={startDate}
                     onSelect={(date) => {
-                      setStartDate(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
+                      setStartDate(date)
                       setStartDateOpen(false)
                     }}
                     initialFocus
+                    disabled={(date) => endDate ? date > endDate : false}
                   />
                 </PopoverContent>
               </Popover>
@@ -177,12 +187,13 @@ export default function CommissionReport({ className }: CommissionReportProps) {
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={endDate ? new Date(endDate) : undefined}
+                    selected={endDate}
                     onSelect={(date) => {
-                      setEndDate(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
+                      setEndDate(date)
                       setEndDateOpen(false)
                     }}
                     initialFocus
+                    disabled={(date) => startDate ? date < startDate : false}
                   />
                 </PopoverContent>
               </Popover>

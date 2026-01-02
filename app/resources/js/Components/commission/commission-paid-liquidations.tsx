@@ -178,7 +178,7 @@ export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiq
                               {liquidation.total_services || 0}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatCurrency(liquidation.total_amount || 0)}
+                              {formatCurrency(liquidation.gross_amount || 0)}
                             </TableCell>
                             <TableCell className="text-sm">
                               {liquidation.paid_at ? formatDate(liquidation.paid_at) : '-'}
