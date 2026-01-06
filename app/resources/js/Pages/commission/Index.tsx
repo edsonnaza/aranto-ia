@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Head } from '@inertiajs/react'
+import { Head, usePage } from '@inertiajs/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import AppLayout from '@/layouts/app-layout'
@@ -17,17 +17,25 @@ import type { Professional, CommissionLiquidation } from '@/types'
 
 interface CommissionIndexProps {
   professionals: Professional[]
-  liquidations?: {
-    data: CommissionLiquidation[]
-    current_page: number
-    last_page: number
-    per_page: number
-    total: number
-  }
+  liquidations?: any
   pendingApprovals?: CommissionLiquidation[]
+  defaultCommission?: number
+  filters?: {
+    professional_id?: string
+    status?: string
+    date_from?: string
+    date_to?: string
+  }
 }
 
-export default function CommissionIndex({ professionals, liquidations, pendingApprovals }: CommissionIndexProps) {
+export default function CommissionIndex({ 
+  professionals, 
+  liquidations, 
+  pendingApprovals, 
+  defaultCommission = 10,
+  filters = {}
+}: CommissionIndexProps) {
+  const { props } = usePage()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedLiquidationId, setSelectedLiquidationId] = useState<number | null>(null)
 
@@ -56,7 +64,6 @@ export default function CommissionIndex({ professionals, liquidations, pendingAp
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
               <TabsTrigger value="create">Crear Liquidación</TabsTrigger>
               <TabsTrigger value="list">Liquidaciones</TabsTrigger>
-              <TabsTrigger value="paid">Pagadas</TabsTrigger>
               <TabsTrigger value="reports">Reportes</TabsTrigger>
               <TabsTrigger value="approvals">Aprobaciones</TabsTrigger>
               <TabsTrigger value="settings">Configuración</TabsTrigger>
@@ -79,7 +86,8 @@ export default function CommissionIndex({ professionals, liquidations, pendingAp
 
             <TabsContent value="list">
               <CommissionLiquidationList
-                initialLiquidations={liquidations?.data || []}
+                liquidations={liquidations || { data: [], current_page: 1, last_page: 1, per_page: 20, total: 0, from: 1, to: 0, path: '' }}
+                filters={filters}
                 onViewDetails={(liquidation) => handleViewDetails(liquidation.id)}
                 onEdit={() => {
                   // TODO: Implement edit functionality
@@ -122,13 +130,26 @@ export default function CommissionIndex({ professionals, liquidations, pendingAp
 
             <TabsContent value="approvals">
               <CommissionPendingApprovals
-                initialApprovals={pendingApprovals || []}
+                initialApprovals={
+                  (pendingApprovals || []).map((approval) => ({
+                    id: approval.id,
+                    professional_name: approval.professional_name || 'N/A',
+                    specialty_name: approval.specialty_name,
+                    period_start: approval.period_start,
+                    period_end: approval.period_end,
+                    total_services: approval.total_services,
+                    total_amount: approval.total_amount || approval.gross_amount || 0,
+                    commission_percentage: approval.commission_percentage,
+                    commission_amount: approval.commission_amount,
+                    created_at: approval.created_at,
+                  }))
+                }
                 onViewDetail={(liquidationId) => handleViewDetails(liquidationId)}
               />
             </TabsContent>
 
             <TabsContent value="settings">
-              <CommissionSettings professionals={professionals} />
+              <CommissionSettings professionals={professionals} defaultCommission={defaultCommission} />
             </TabsContent>
           </Tabs>
         </div>

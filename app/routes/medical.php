@@ -190,4 +190,10 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     Route::get('commissions/{commission}/details', [CommissionController::class, 'getDetails'])
         ->name('commissions.details');
 
+    // Professional Commissions Management
+    Route::get('commissions/professional-commissions', [CommissionController::class, 'getProfessionalCommissions'])
+        ->name('commissions.professional-commissions');
+    Route::post('commissions/professional/{professionalId}/commission-percentage', [CommissionController::class, 'updateProfessionalCommission'])
+        ->name('commissions.update-professional-commission');
+
 });

@@ -1,331 +1,285 @@
-import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Settings, Save, User, Percent, Loader2 } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import { ColumnDef } from '@tanstack/react-table'
+import { Settings, User, Edit, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { DataTable } from '../ui/data-table' 
+//import { DataTableProps } from '@/components/ui/data-table'
+import { useProfessionalCommissions } from '@/hooks/useProfessionalCommissions'
 
-import type { CommissionSettings as CommissionSettingsType, Professional } from '@/types'
-
-const commissionSettingsSchema = z.object({
-  default_commission_percentage: z.number().min(0).max(100),
-  minimum_commission_amount: z.number().min(0),
-  maximum_commission_amount: z.number().min(0),
-  auto_approve_threshold: z.number().min(0),
-  payment_deadline_days: z.number().min(1).max(365),
-})
-
-type CommissionSettingsFormData = z.infer<typeof commissionSettingsSchema>
-
-const professionalCommissionSchema = z.object({
-  professional_id: z.number(),
-  commission_percentage: z.number().min(0).max(100),
-})
-
-type ProfessionalCommissionFormData = z.infer<typeof professionalCommissionSchema>
+import type { Professional } from '@/types'
 
 interface CommissionSettingsProps {
   professionals: Professional[]
+  defaultCommission: number
 }
 
-export default function CommissionSettings({ professionals }: CommissionSettingsProps) {
-  const [settings] = useState<CommissionSettingsType | null>({
-    default_commission_percentage: 10,
-    minimum_commission_amount: 10000,
-    maximum_commission_amount: 100000,
-    auto_approve_threshold: 50000,
-    payment_deadline_days: 30,
-  })
-  const [professionalCommissions] = useState<Record<number, number>>({ 1: 12 })
-  const [editingProfessional, setEditingProfessional] = useState<number | null>(null)
+interface ProfessionalRow {
+  id: number
+  first_name: string
+  last_name: string
+  specialty: string
+  commission_percentage: number | null
+  isCustom: boolean
+  defaultCommission: number
+}
 
-  // Simulación temporal de loading y error
-  const loading = false
-  const error = null
+export default function CommissionSettings({
+  professionals: initialProfessionals,
+  defaultCommission,
+}: CommissionSettingsProps) {
+  const { loading: updating, error: updateError, updateCommission } = useProfessionalCommissions()
+  const [professionals, setProfessionals] = useState<Professional[]>(initialProfessionals)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  const settingsForm = useForm<CommissionSettingsFormData>({
-    resolver: zodResolver(commissionSettingsSchema),
-    defaultValues: {
-      default_commission_percentage: 0,
-      minimum_commission_amount: 0,
-      maximum_commission_amount: 0,
-      auto_approve_threshold: 0,
-      payment_deadline_days: 30,
-    },
-  })
-
-  const professionalForm = useForm<ProfessionalCommissionFormData>({
-    resolver: zodResolver(professionalCommissionSchema),
-    defaultValues: {
-      professional_id: 0,
-      commission_percentage: 0,
-    },
-  })
-
-  // Simulación temporal de settings y comisiones
-
-
-
-
-  const startEditingProfessional = (professionalId: number, currentPercentage: number) => {
-    setEditingProfessional(professionalId)
-    professionalForm.reset({
-      professional_id: professionalId,
-      commission_percentage: currentPercentage,
-    })
+  const handleEditClick = (professionalId: number, currentPercentage: number) => {
+    setEditingId(professionalId)
+    setEditValue(currentPercentage.toString())
+    setSaveError(null)
+    setSuccessMessage(null)
   }
 
-  const cancelEditing = () => {
-    setEditingProfessional(null)
-    professionalForm.reset()
+  const handleCancel = () => {
+    setEditingId(null)
+    setEditValue('')
+    setSaveError(null)
+  }
+
+  const handleSave = async (professionalId: number, professionalName: string) => {
+    try {
+      setSaveError(null)
+      setSuccessMessage(null)
+
+      const percentage = parseFloat(editValue)
+      if (isNaN(percentage) || percentage < 0 || percentage > 100) {
+        setSaveError('El porcentaje debe ser un número entre 0 y 100')
+        return
+      }
+
+      await updateCommission(professionalId, percentage)
+
+      // Actualizar el estado local
+      setProfessionals(prevProfessionals =>
+        prevProfessionals.map(p =>
+          p.id === professionalId
+            ? { ...p, commission_percentage: percentage }
+            : p
+        )
+      )
+
+      setSuccessMessage(`Comisión de ${professionalName} actualizada a ${percentage}%`)
+      setEditingId(null)
+      setEditValue('')
+
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Error al guardar')
+    }
+  }
+
+  // Preparar datos para la tabla
+  const tableData: ProfessionalRow[] = useMemo(() => {
+    return professionals.map(professional => {
+      const specialty =
+        professional.specialties && professional.specialties.length > 0
+          ? professional.specialties.length === 1
+            ? professional.specialties[0].name
+            : `${professional.specialties[0].name} + ${professional.specialties.length - 1}`
+          : 'Sin especialidad'
+
+      return {
+        id: professional.id,
+        first_name: professional.first_name || '',
+        last_name: professional.last_name || '',
+        specialty,
+        commission_percentage: professional.commission_percentage ?? null,
+        isCustom: professional.commission_percentage !== null && professional.commission_percentage !== undefined,
+        defaultCommission,
+      }
+    })
+  }, [professionals, defaultCommission])
+
+  // Definir columnas de la tabla
+  const columns: ColumnDef<ProfessionalRow>[] = [
+    {
+      id: 'name',
+      header: 'Profesional',
+      accessorFn: (row) => `${row.first_name} ${row.last_name}`,
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium">{row.original.first_name} {row.original.last_name}</div>
+          <div className="text-sm text-muted-foreground">{row.original.specialty}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'commission',
+      header: 'Porcentaje de Comisión',
+      cell: ({ row }) => {
+        const percentage = row.original.commission_percentage ?? row.original.defaultCommission
+        const isCustom = row.original.isCustom
+
+        if (editingId === row.original.id) {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.10"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  placeholder="0"
+                  className="w-20 text-center"
+                />
+                <span className="ml-1 text-sm font-medium">%</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleSave(row.original.id, `${row.original.first_name} ${row.original.last_name}`)}
+                disabled={updating}
+                className="gap-1"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={updating}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )
+        }
+
+        return (
+          <div className="flex items-center gap-3">
+            <div className="text-left">
+              <div className="text-lg font-bold text-blue-600">{percentage}%</div>
+              <div className="text-xs text-muted-foreground">
+             
+              </div>
+            </div>
+            {isCustom && <Badge variant="secondary">Personalizado</Badge>}
+          </div>
+        )
+      },
+    },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ row }) => {
+        if (editingId === row.original.id) {
+          return null
+        }
+
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleEditClick(row.original.id, row.original.commission_percentage ?? row.original.defaultCommission)}
+            className="gap-1"
+          >
+            <Edit className="h-4 w-4" />
+            Editar
+          </Button>
+        )
+      },
+    },
+  ]
+
+  // Crear estructura de datos para DataTable
+  const paginatedData = {
+    data: tableData,
+    current_page: 1,
+    per_page: 20,
+    total: tableData.length,
+    last_page: 1,
+    from: 1,
+    to: tableData.length,
+    links: [],
   }
 
   return (
     <div className="space-y-6">
+      {/* Default Commission Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            Configuración de Comisiones
+            Configuración General de Comisiones
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <Form {...settingsForm}>
-            <form className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={settingsForm.control}
-                  name="default_commission_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Porcentaje de Comisión Predeterminado</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                          />
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <Percent className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Porcentaje aplicado cuando no hay configuración específica por profesional
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={settingsForm.control}
-                  name="payment_deadline_days"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Días Límite para Pago</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="365"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 30)}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Días después de la aprobación para realizar el pago
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={settingsForm.control}
-                  name="minimum_commission_amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Monto Mínimo de Comisión</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Monto mínimo para generar una liquidación (0 = sin límite)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={settingsForm.control}
-                  name="maximum_commission_amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Monto Máximo de Comisión</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Monto máximo por liquidación (0 = sin límite)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={settingsForm.control}
-                  name="auto_approve_threshold"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Umbral de Auto-Aprobación</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Liquidaciones por debajo de este monto se aprueban automáticamente (0 = desactivado)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Porcentaje de Comisión Predeterminado</label>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="text-3xl font-bold text-blue-600">{defaultCommission}%</div>
+                <p className="text-sm text-muted-foreground">
+                  Este es el porcentaje que se aplica a todos los profesionales sin comisión personalizada
+                </p>
               </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Guardar Configuración
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Professional Commissions */}
+      {/* Professional Commissions Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
             Comisiones por Profesional
           </CardTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Edita los porcentajes individuales para cada profesional. Si está vacío, se usará el predeterminado.
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {professionals.map((professional) => {
-              const currentPercentage = professionalCommissions[professional.id] || settings?.default_commission_percentage || 0
-              const isEditing = editingProfessional === professional.id
+          {updateError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{updateError}</AlertDescription>
+            </Alert>
+          )}
 
-              return (
-                <div key={professional.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <div className="font-medium">{professional.first_name} {professional.last_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {professional.specialties && professional.specialties.length > 0
-                        ? professional.specialties[0].name
-                        : 'Sin especialidad'}
-                    </div>
-                  </div>
+          {saveError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
 
-                  {isEditing ? (
-                    <Form {...professionalForm}>
-                      <form
-                        // Sin lógica de envío
-                        className="flex items-center gap-2"
-                      >
-                        <FormField
-                          control={professionalForm.control}
-                          name="commission_percentage"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center gap-2">
-                              <FormControl>
-                                <div className="relative w-20">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
-                                    {...field}
-                                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                  />
-                                </div>
-                              </FormControl>
-                              <Percent className="h-4 w-4 text-muted-foreground" />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" size="sm" disabled={loading}>
-                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar'}
-                        </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={cancelEditing}>
-                          Cancelar
-                        </Button>
-                      </form>
-                    </Form>
-                  ) : (
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="font-medium">{currentPercentage}%</div>
-                        <div className="text-sm text-muted-foreground">
-                          {professionalCommissions[professional.id] !== undefined ? 'Personalizado' : 'Predeterminado'}
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startEditingProfessional(professional.id, currentPercentage)}
-                      >
-                        Editar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          {successMessage && (
+            <Alert className="mb-4 bg-green-50 border-green-200">
+              <AlertDescription className="text-green-800">{successMessage}</AlertDescription>
+            </Alert>
+          )}
+
+          {professionals.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No hay profesionales registrados
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={paginatedData}
+              searchable={true}
+              searchPlaceholder="Buscar profesional..."
+              searchKey="name"
+              emptyMessage="No se encontraron profesionales"
+              pageSizes={[10, 20, 50]}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

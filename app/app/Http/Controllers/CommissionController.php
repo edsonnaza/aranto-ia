@@ -38,6 +38,14 @@ class CommissionController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Get date range filters, default to today if not provided
+        $dateFrom = $request->filled('date_from') ? $request->date_from : now()->toDateString();
+        $dateTo = $request->filled('date_to') ? $request->date_to : now()->toDateString();
+
+        // Apply date range filter
+        $query->whereDate('created_at', '>=', $dateFrom);
+        $query->whereDate('created_at', '<=', $dateTo);
+
         $paginatedLiquidations = $query->paginate(20);
 
         // Transform liquidations to include professional data
@@ -88,12 +96,18 @@ class CommissionController extends Controller
             });
 
         return Inertia::render('commission/Index', [
-            'professionals' => \App\Models\Professional::select('id', 'first_name', 'last_name', 'commission_percentage')
-                ->where('commission_percentage', '>', 0)
+            'professionals' => \App\Models\Professional::with('specialties')
+                ->select('id', 'first_name', 'last_name', 'commission_percentage')
                 ->orderBy('last_name')
                 ->get(),
             'liquidations' => $transformedPaginator,
             'pendingApprovals' => $pendingApprovals,
+            'filters' => [
+                'professional_id' => $request->professional_id,
+                'status' => $request->status,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
         ]);
     }
 
@@ -427,11 +441,32 @@ class CommissionController extends Controller
                     ];
                 });
 
+            $totalServices = $details->sum('service_amount');
+            $totalCommission = $details->sum('commission_amount');
+
+            // Get professional specialty name
+            $professional = $commission->load('professional.specialties')->professional;
+            $specialtyName = $professional?->specialties?->first()?->name ?? 'N/A';
+
             return response()->json([
+                'liquidation' => [
+                    'id' => $commission->id,
+                    'professional_name' => $professional?->full_name ?? 'N/A',
+                    'professional_specialty' => $specialtyName,
+                    'period_start' => $commission->period_start,
+                    'period_end' => $commission->period_end,
+                    'status' => $commission->status,
+                    'total_services' => $commission->total_services,
+                    'gross_amount' => $commission->gross_amount,
+                    'commission_percentage' => $commission->commission_percentage,
+                    'commission_amount' => $commission->commission_amount,
+                    'generated_at' => $commission->created_at,
+                    'approved_at' => $commission->updated_at,
+                ],
                 'details' => $details,
                 'count' => $details->count(),
-                'total_services' => $details->sum('service_amount'),
-                'total_commission' => $details->sum('commission_amount'),
+                'total_services' => $totalServices,
+                'total_commission' => $totalCommission,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 400);
@@ -445,10 +480,11 @@ class CommissionController extends Controller
      */
     private function getDashboardSummary(): array
     {
-        $allLiquidations = CommissionLiquidation::all();
+        // Excluir liquidaciones canceladas
+        $allLiquidations = CommissionLiquidation::where('status', '!=', CommissionLiquidation::STATUS_CANCELLED)->get();
         $totalCommissions = $allLiquidations->sum('commission_amount');
         $activeProfessionals = CommissionLiquidation::distinct()->count('professional_id');
-        $totalLiquidations = $allLiquidations->count();
+        $totalLiquidations = CommissionLiquidation::where('status', '!=', CommissionLiquidation::STATUS_CANCELLED)->count();
         $pendingLiquidations = CommissionLiquidation::whereIn('status', [
             CommissionLiquidation::STATUS_DRAFT, 
             CommissionLiquidation::STATUS_APPROVED
@@ -686,6 +722,92 @@ class CommissionController extends Controller
             ]);
         } catch (\Exception $e) {
             \Log::error('ReportData Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Get professional commissions for settings
+     */
+    public function getProfessionalCommissions()
+    {
+        try {
+            $commissions = \DB::table('professional_commission_settings')
+                ->select('id', 'professional_id', 'commission_percentage', 'created_at', 'updated_at')
+                ->get();
+
+            return response()->json($commissions);
+        } catch (\Exception $e) {
+            \Log::error('ProfessionalCommissions Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Update professional commission percentage
+     */
+    public function updateProfessionalCommission(Request $request, $professionalId)
+    {
+        try {
+            $validated = $request->validate([
+                'commission_percentage' => 'required|numeric|min:0|max:100',
+            ]);
+
+            // Update directly in professionals table
+            $professional = \App\Models\Professional::findOrFail($professionalId);
+            $professional->commission_percentage = $validated['commission_percentage'];
+            $professional->save();
+
+            return response()->json([
+                'message' => 'Comisión actualizada correctamente',
+                'professional_id' => $professionalId,
+                'commission_percentage' => $validated['commission_percentage'],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('UpdateProfessionalCommission Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * API: Get all professional commissions (JSON response)
+     */
+    public function apiGetProfessionalCommissions()
+    {
+        try {
+            $commissions = \DB::table('professional_commission_settings')
+                ->select('id', 'professional_id', 'commission_percentage', 'created_at', 'updated_at')
+                ->get();
+
+            return response()->json($commissions->toArray());
+        } catch (\Exception $e) {
+            \Log::error('API ProfessionalCommissions Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * API: Update professional commission percentage
+     */
+    public function apiUpdateProfessionalCommission(Request $request, $professionalId)
+    {
+        try {
+            $validated = $request->validate([
+                'commission_percentage' => 'required|numeric|min:0|max:100',
+            ]);
+
+            // Update directly in professionals table
+            $professional = \App\Models\Professional::findOrFail($professionalId);
+            $professional->commission_percentage = $validated['commission_percentage'];
+            $professional->save();
+
+            return response()->json([
+                'message' => 'Comisión actualizada correctamente',
+                'professional_id' => $professionalId,
+                'commission_percentage' => $validated['commission_percentage'],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('API UpdateProfessionalCommission Error: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }

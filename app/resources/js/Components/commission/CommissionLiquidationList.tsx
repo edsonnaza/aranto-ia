@@ -1,59 +1,55 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Eye, Edit, Trash2, CheckCircle, Clock, AlertCircle, MoreHorizontal, XCircle } from 'lucide-react'
+import { router } from '@inertiajs/react'
+import { ColumnDef } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import { DataTable, PaginatedData } from '@/components/ui/data-table'
+import { CommissionItemsModal } from './commission-items-modal'
 import { useCommissionLiquidations } from '@/hooks/medical'
+import { useDateFormat } from '@/hooks/useDateFormat'
 import { getStatusColor, getStatusClassName } from '@/lib/constants/status-colors'
 import { cn } from '@/lib/utils'
 import type { CommissionLiquidation } from '@/types'
 
 
 interface CommissionLiquidationListProps {
-  initialLiquidations?: CommissionLiquidation[]
+  liquidations: PaginatedData<CommissionLiquidation>
+  filters: {
+    professional_id?: string
+    status?: string
+    date_from?: string
+    date_to?: string
+  }
   onViewDetails?: (liquidation: CommissionLiquidation) => void
   onEdit?: (liquidation: CommissionLiquidation) => void
   onDelete?: (liquidation: CommissionLiquidation) => void
-  refreshTrigger?: number
-  onSelectionChange?: (selected: CommissionLiquidation[]) => void
 }
 
 export default CommissionLiquidationList;
 
 function CommissionLiquidationList({
-  initialLiquidations = [],
+  liquidations,
+  filters,
   onViewDetails,
   onEdit,
   onDelete,
-  //refreshTrigger,
-  onSelectionChange,
 }: CommissionLiquidationListProps) {
-  const [liquidations, setLiquidations] = useState<CommissionLiquidation[]>(initialLiquidations)
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const { toFrontend, toBackend } = useDateFormat()
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [confirmCancelDialogOpen, setConfirmCancelDialogOpen] = useState(false)
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
+  const [showItemsModal, setShowItemsModal] = useState(false)
+  const [selectedItemsLiquidation, setSelectedItemsLiquidation] = useState<CommissionLiquidation | null>(null)
 
   // Usar el hook solo para delete y cancel
   const { deleteLiquidation, cancelLiquidation, loading, error } = useCommissionLiquidations()
-
-  // Actualizar liquidations cuando cambien las props
-  useEffect(() => {
-    setLiquidations(initialLiquidations)
-  }, [initialLiquidations])
-
-  // Notificar selección al padre
-  useEffect(() => {
-    if (onSelectionChange) {
-      onSelectionChange(liquidations.filter(l => selectedIds.includes(l.id)))
-    }
-  }, [selectedIds, liquidations, onSelectionChange])
 
   const handleDeleteClick = (liquidation: CommissionLiquidation) => {
     setSelectedLiquidation(liquidation)
@@ -66,7 +62,8 @@ function CommissionLiquidationList({
     deleteLiquidation(selectedLiquidation.id, {
       onSuccess: () => {
         setSelectedLiquidation(null)
-        // Las liquidaciones se actualizarán automáticamente con Inertia
+        // Refresca solo los datos necesarios usando Inertia
+        router.reload({ only: ['liquidations'] })
       }
     })
   }
@@ -82,7 +79,8 @@ function CommissionLiquidationList({
     cancelLiquidation(selectedLiquidation.id, {
       onSuccess: () => {
         setSelectedLiquidation(null)
-        // Las liquidaciones se actualizarán automáticamente con Inertia
+        // Refresca solo los datos necesarios usando Inertia
+        router.reload({ only: ['liquidations'] })
       }
     })
   }
@@ -92,10 +90,6 @@ function CommissionLiquidationList({
       style: 'currency',
       currency: 'PYG',
     }).format(amount)
-  }
-
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yyyy', { locale: es })
   }
 
   const getStatusBadge = (status: string) => {
@@ -121,28 +115,142 @@ function CommissionLiquidationList({
     )
   }
 
-  if (loading && liquidations.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-muted-foreground">
-            Cargando liquidaciones...
+  // Define columns for DataTable
+  const columns = useMemo<ColumnDef<CommissionLiquidation>[]>(() => [
+    {
+      accessorKey: "professional_name",
+      header: "Profesional",
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <div className="font-medium">{row.getValue("professional_name")}</div>
+          <div className="text-xs text-muted-foreground">
+            {row.original.specialty_name}
           </div>
-        </CardContent>
-      </Card>
-    )
-  }
+        </div>
+      ),
+    },
+    {
+      accessorKey: "period_start",
+      header: "Período",
+      cell: ({ row }) => (
+        <div className="text-sm">
+          {format(new Date(row.getValue("period_start")), 'dd/MM/yyyy', { locale: es })} - {format(new Date(row.original.period_end), 'dd/MM/yyyy', { locale: es })}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "total_services",
+      header: "Servicios",
+      cell: ({ row }) => (
+        <div className="text-center">
+          {row.getValue("total_services")}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "total_amount",
+      header: "Monto Total",
+      cell: ({ row }) => {
+        const total = row.getValue("total_amount") as number
+        return (
+          <div className="text-right font-medium">
+            {formatCurrency(total)}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "commission_amount",
+      header: "Comisión",
+      cell: ({ row }) => (
+        <div className="text-right">
+          <div className="font-medium">
+            {formatCurrency(row.getValue("commission_amount"))}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            ({row.original.commission_percentage}%)
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "created_at",
+      header: "Fecha Creación",
+      cell: ({ row }) => (
+        <div className="text-sm">
+          {format(new Date(row.getValue("created_at")), 'dd/MM/yyyy', { locale: es })}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Estado",
+      cell: ({ row }) => getStatusBadge(row.getValue("status")),
+    },
+    {
+      id: "actions",
+      header: "Acciones",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem 
+              onClick={() => {
+                setSelectedItemsLiquidation(row.original)
+                setShowItemsModal(true)
+              }}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Ver Items
+            </DropdownMenuItem>
+            {onViewDetails && (
+              <DropdownMenuItem onClick={() => onViewDetails(row.original)}>
+                <Eye className="mr-2 h-4 w-4" />
+                Ver Detalles
+              </DropdownMenuItem>
+            )}
+            {onEdit && row.original.status === 'draft' && (
+              <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </DropdownMenuItem>
+            )}
+            {row.original.status === 'approved' && (
+              <DropdownMenuItem
+                onClick={() => handleCancelClick(row.original)}
+                className="text-orange-600"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Cancelar Aprobación
+              </DropdownMenuItem>
+            )}
+            {onDelete && row.original.status === 'draft' && (
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(row.original)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ], [formatCurrency, onViewDetails, onEdit, onDelete])
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Liquidaciones de Comisiones</span>
-            <Badge variant="secondary">
-              {liquidations.length} liquidaciones
-            </Badge>
-          </CardTitle>
+          <CardTitle>Liquidaciones de Comisiones</CardTitle>
+          <CardDescription>
+            {liquidations.total} liquidaciones encontradas
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -150,184 +258,30 @@ function CommissionLiquidationList({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
-          {liquidations.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No hay liquidaciones registradas</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === liquidations.length}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setSelectedIds(liquidations.map(l => l.id))
-                          } else {
-                            setSelectedIds([])
-                          }
-                        }}
-                        aria-label="Seleccionar todos"
-                      />
-                    </TableHead>
-                    <TableHead>Profesional</TableHead>
-                    <TableHead>Período</TableHead>
-                    <TableHead className="text-right">Servicios</TableHead>
-                    <TableHead className="text-right">Monto Total</TableHead>
-                    <TableHead className="text-right">Comisión</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-center">Fecha Creación</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {liquidations.map((liquidation) => (
-                    <TableRow key={liquidation.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(liquidation.id)}
-                          onChange={e => {
-                            if (e.target.checked) {
-                              setSelectedIds(prev => [...prev, liquidation.id])
-                            } else {
-                              setSelectedIds(prev => prev.filter(id => id !== liquidation.id))
-                            }
-                          }}
-                          aria-label="Seleccionar liquidación"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{liquidation.professional_name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {liquidation.specialty_name}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {formatDate(liquidation.period_start)} - {formatDate(liquidation.period_end)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {liquidation.total_services}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(liquidation.total_amount ?? 0)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div>
-                          <div className="font-medium">
-                            {formatCurrency(liquidation.commission_amount)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            ({liquidation.commission_percentage}%)
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {getStatusBadge(liquidation.status)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="text-sm">
-                          {formatDate(liquidation.created_at)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {onViewDetails && (
-                              <DropdownMenuItem onClick={() => onViewDetails(liquidation)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Ver Detalles
-                              </DropdownMenuItem>
-                            )}
-                            {onEdit && liquidation.status === 'draft' && (
-                              <DropdownMenuItem onClick={() => onEdit(liquidation)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Editar
-                              </DropdownMenuItem>
-                            )}
-                            {liquidation.status === 'approved' && (
-                              <DropdownMenuItem
-                                onClick={() => handleCancelClick(liquidation)}
-                                className="text-orange-600"
-                              >
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Cancelar Aprobación
-                              </DropdownMenuItem>
-                            )}
-                            {onDelete && liquidation.status === 'draft' && (
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(liquidation)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          
+          <DataTable
+            columns={columns}
+            data={liquidations}
+            initialStatus={filters.status || ""}
+            searchPlaceholder="Buscar por profesional o número..."
+            emptyMessage="No se encontraron liquidaciones con los filtros aplicados"
+            statusFilterable={true}
+            dateRangeFilterable={true}
+            onDateRangeChange={({ from, to }) => {
+              const params = new URLSearchParams(window.location.search)
+              if (from) params.set('date_from', toBackend(from))
+              else params.delete('date_from')
+              if (to) params.set('date_to', toBackend(to))
+              else params.delete('date_to')
+              params.set('page', '1')
+              const url = window.location.pathname + '?' + params.toString()
+              router.get(url, {}, { preserveState: true, replace: true })
+            }}
+            initialDateFrom={filters.date_from || ""}
+            initialDateTo={filters.date_to || ""}
+          />
         </CardContent>
       </Card>
-
-      {/* Summary Footer */}
-      {liquidations.length > 0 && (
-        <Card className="border-t-4 border-t-blue-500">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {selectedIds.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Seleccionadas</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">
-                  {liquidations.filter(l => l.status === 'paid' && selectedIds.includes(l.id)).length}
-                </div>
-                <div className="text-sm text-muted-foreground">Pagadas (selección)</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(
-                    liquidations.filter(l => selectedIds.includes(l.id)).reduce((sum, l) => sum + l.commission_amount, 0)
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">Total Comisiones (selección)</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-purple-600">
-                  {formatCurrency(
-                    liquidations
-                      .filter(l => l.status === 'paid' && selectedIds.includes(l.id))
-                      .reduce((sum, l) => sum + l.commission_amount, 0)
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">Pagado (selección)</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Confirmation Dialog for Delete */}
       <ConfirmationDialog
@@ -359,6 +313,16 @@ function CommissionLiquidationList({
         cancelText="Mantener Aprobación"
         onConfirm={handleConfirmCancel}
         variant="destructive"
+      />
+
+      {/* Commission Items Modal */}
+      <CommissionItemsModal
+        isOpen={showItemsModal}
+        onClose={() => {
+          setShowItemsModal(false)
+          setSelectedItemsLiquidation(null)
+        }}
+        liquidationId={selectedItemsLiquidation?.id || 0}
       />
     </div>
   )

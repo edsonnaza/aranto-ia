@@ -364,12 +364,6 @@ export function CommissionPaidLiquidations({ initialLiquidations = [] }: PaidLiq
             setSelectedItemsLiquidation(null)
           }}
           liquidationId={selectedItemsLiquidation.id}
-          liquidationTitle={`Liquidación #${selectedItemsLiquidation.id}`}
-          professionalName={
-            selectedItemsLiquidation.professional
-              ? `${selectedItemsLiquidation.professional.first_name} ${selectedItemsLiquidation.professional.last_name}`
-              : ''
-          }
         />
       )}
     </>
