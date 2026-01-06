@@ -2,7 +2,7 @@
 
 namespace App\Helpers;
 
-use App\Models\MedicalService;
+use App\Models\Service;
 use Illuminate\Support\Str;
 
 class ServiceCodeHelper
@@ -103,7 +103,7 @@ class ServiceCodeHelper
         $code = $baseCode;
         $counter = 1;
         
-        while (MedicalService::where('code', $code)->exists()) {
+        while (Service::where('code', $code)->exists()) {
             $code = $baseCode . '-' . str_pad($counter, 2, '0', STR_PAD_LEFT);
             $counter++;
         }
@@ -130,6 +130,30 @@ class ServiceCodeHelper
         ];
         
         return strtr($string, $unwanted_array);
+    }
+
+    /**
+     * Sanitiza un nombre de servicio: elimina acentos y convierte a Title Case
+     * Ejemplo: "ACOMPAÃ'AMIENTO DE RN A TRASLADO" -> "Acompanamiento De Rn A Traslado"
+     *
+     * @param string $name
+     * @return string
+     */
+    public static function sanitizeServiceName(string $name): string
+    {
+        // Primero, remover acentos y caracteres corruptos
+        $sanitized = self::removeAccents($name);
+        
+        // Convertir a minúsculas primero
+        $sanitized = Str::lower($sanitized);
+        
+        // Convertir a Title Case (primera letra mayúscula de cada palabra)
+        $sanitized = ucwords($sanitized);
+        
+        // Limpiar espacios múltiples
+        $sanitized = preg_replace('/\s+/', ' ', trim($sanitized));
+        
+        return $sanitized;
     }
 
     /**

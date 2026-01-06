@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Models\LegacyServiceMapping;
+use App\Helpers\ServiceCodeHelper;
 use Carbon\Carbon;
 
 class ServicesFromLegacySeeder extends Seeder
@@ -75,22 +76,38 @@ class ServicesFromLegacySeeder extends Seeder
 
         foreach ($legacyProducts as $product) {
             try {
+                // Sanitize service name: remove accents and convert to Title Case
+                $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
+                
                 // Check if service already exists by code or name
-                $existingService = Service::where('code', $this->generateCode(trim($product->Nombre)))
-                    ->orWhere('name', trim($product->Nombre))
+                $existingService = Service::where('code', $this->generateCode($sanitizedName))
+                    ->orWhere('name', $sanitizedName)
                     ->first();
 
                 if ($existingService) {
                     $this->command->line("  ⊘ Omitido (existe): {$product->Nombre}");
+                    
+                    // Still create mapping for existing service to enable price migration
+                    LegacyServiceMapping::updateOrCreate(
+                        ['legacy_product_id' => $product->IdProducto],
+                        [
+                            'service_id' => $existingService->id,
+                            'legacy_name' => trim($product->Nombre),
+                        ]
+                    );
+                    
                     $skippedCount++;
                     continue;
                 }
 
+                // Sanitize service name: remove accents and convert to Title Case
+                $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
+                
                 // Create service
                 $service = Service::create([
-                    'name' => trim($product->Nombre),
+                    'name' => $sanitizedName,
                     'description' => trim($product->Descripcion) ?: null,
-                    'code' => $this->generateCode(trim($product->Nombre)),
+                    'code' => $this->generateCode($sanitizedName),
                     'base_price' => (float) ($product->PrecioVenta ?? 0),
                     'category' => 'CONSULTATION', // Default category enum value
                     'is_active' => true,
