@@ -17,6 +17,10 @@ interface DataTableToolbarProps {
   dateTo: string | null
   onDateFromChange: (val: string | null) => void
   onDateToChange: (val: string | null) => void
+  statusFilterable?: boolean
+  status?: string
+  statusOptions?: Array<{ value: string; label: string }>
+  onStatusChange?: (val: string) => void
   insuranceFilterable: boolean
   insuranceType: string
   insuranceTypeOptions: Array<{ id: number; name: string }>
@@ -38,6 +42,10 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
   dateTo,
   onDateFromChange,
   onDateToChange,
+  statusFilterable = false,
+  status = "",
+  statusOptions = [],
+  onStatusChange,
   insuranceFilterable,
   insuranceType,
   insuranceTypeOptions,
@@ -74,16 +82,35 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
         <DateInputWithCalendar
           value={dateFrom}
           onChange={onDateFromChange}
-          placeholder="Desde (dd/mm/yyyy)"
+          placeholder="dd-mm-yyyy"
           disabled={loading}
         />
         <span className="mx-1">-</span>
         <DateInputWithCalendar
           value={dateTo}
           onChange={onDateToChange}
-          placeholder="Hasta (dd/mm/yyyy)"
+          placeholder="dd-mm-yyyy"
           disabled={loading}
         />
+      </div>
+    )}
+    {statusFilterable && (
+      <div className="flex items-center space-x-2 ml-4">
+        <Select
+          value={status}
+          onValueChange={onStatusChange}
+          disabled={loading}
+        >
+          <SelectTrigger className="h-8 w-160px">
+            <SelectValue placeholder="Filtrar por estado" />
+          </SelectTrigger>
+          <SelectContent side="top">
+            <SelectItem value="all">Todos</SelectItem>
+            {statusOptions.map(option => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     )}
     {insuranceFilterable && (

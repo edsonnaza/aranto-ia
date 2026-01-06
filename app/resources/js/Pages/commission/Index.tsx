@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Head, usePage } from '@inertiajs/react'
+import { Head } from '@inertiajs/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import AppLayout from '@/layouts/app-layout'
@@ -17,7 +17,17 @@ import type { Professional, CommissionLiquidation } from '@/types'
 
 interface CommissionIndexProps {
   professionals: Professional[]
-  liquidations?: any
+  liquidations?: {
+    data: CommissionLiquidation[]
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+    from: number
+    to: number
+    path: string
+    links: Array<{ url: string | null; label: string; active: boolean }>
+  }
   pendingApprovals?: CommissionLiquidation[]
   defaultCommission?: number
   filters?: {
@@ -35,7 +45,7 @@ export default function CommissionIndex({
   defaultCommission = 10,
   filters = {}
 }: CommissionIndexProps) {
-  const { props } = usePage()
+  // const { props } = usePage()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedLiquidationId, setSelectedLiquidationId] = useState<number | null>(null)
 
@@ -86,7 +96,7 @@ export default function CommissionIndex({
 
             <TabsContent value="list">
               <CommissionLiquidationList
-                liquidations={liquidations || { data: [], current_page: 1, last_page: 1, per_page: 20, total: 0, from: 1, to: 0, path: '' }}
+                liquidations={liquidations || { data: [], current_page: 1, last_page: 1, per_page: 20, total: 0, from: 1, to: 0, path: '', links: [] }}
                 filters={filters}
                 onViewDetails={(liquidation) => handleViewDetails(liquidation.id)}
                 onEdit={() => {

@@ -60,8 +60,11 @@ export interface DataTableProps<TData, TValue> {
   insuranceFilterable?: boolean
   insuranceTypeOptions?: Array<{ id: number; name: string }>
   paymentStatusFilterable?: boolean
+  statusFilterable?: boolean
+  statusOptions?: Array<{ value: string; label: string }>
   onSearch?: (search: string) => void
   onDateRangeChange?: (dateRange: { from: string | null; to: string | null }) => void
+  onStatusChange?: (status: string) => void
   onPageChange?: (page: number) => void
   onPageSizeChange?: (pageSize: number) => void
   onSelectionChange?: (selectedRows: TData[]) => void
@@ -72,6 +75,7 @@ export interface DataTableProps<TData, TValue> {
   initialDateFrom?: string
   initialDateTo?: string
   initialPaymentStatus?: string
+  initialStatus?: string
   initialInsuranceType?: string
 }
 
@@ -86,9 +90,11 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
     selectable = false,
     dateRangeFilterable = false,
     insuranceFilterable = false,
+    statusFilterable = false,
     paymentStatusFilterable = false,
     onSearch,
     onDateRangeChange,
+    onStatusChange,
     onPageChange,
     onPageSizeChange,
     onSelectionChange,
@@ -98,9 +104,11 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
     pageSizes = [10, 20, 30, 50, 100],
     initialDateFrom = "",
     initialDateTo = "",
-  initialPaymentStatus = "",
-  initialInsuranceType = "",
+    initialStatus = "",
+    initialPaymentStatus = "",
+    initialInsuranceType = "",
     insuranceTypeOptions = [],
+    statusOptions = [],
   } = props
 
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -110,8 +118,9 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
   const [searchValue, setSearchValue] = React.useState("")
   const [dateFrom, setDateFrom] = React.useState<string | null>(initialDateFrom || null)
   const [dateTo, setDateTo] = React.useState<string | null>(initialDateTo || null)
-  const [insuranceType, setInsuranceType] = React.useState<string>("")
-  const [paymentStatus, setPaymentStatus] = React.useState<string>("")
+  const [status, setStatus] = React.useState<string>(initialStatus || "all")
+  const [insuranceType, setInsuranceType] = React.useState<string>(initialInsuranceType || "all")
+  const [paymentStatus, setPaymentStatus] = React.useState<string>(initialPaymentStatus || "all")
 
   const memoData = React.useMemo(() => data.data, [data.data])
   const memoColumns = React.useMemo(() => columns, [columns])
@@ -212,6 +221,13 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
           onDateToChange={(val) => {
             setDateTo(val)
             if (onDateRangeChange) onDateRangeChange({ from: dateFrom, to: val })
+          }}
+          statusFilterable={statusFilterable}
+          status={status}
+          statusOptions={statusOptions}
+          onStatusChange={(val) => {
+            setStatus(val)
+            if (onStatusChange) onStatusChange(val)
           }}
           insuranceFilterable={insuranceFilterable}
           insuranceType={insuranceType}

@@ -14,6 +14,7 @@ import { DataTable, PaginatedData } from '@/components/ui/data-table'
 import { CommissionItemsModal } from './commission-items-modal'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import { useDateFormat } from '@/hooks/useDateFormat'
+import { useCurrencyFormatter } from '@/stores/currency'
 import { getStatusColor, getStatusClassName } from '@/lib/constants/status-colors'
 import { cn } from '@/lib/utils'
 import type { CommissionLiquidation } from '@/types'
@@ -41,7 +42,8 @@ function CommissionLiquidationList({
   onEdit,
   onDelete,
 }: CommissionLiquidationListProps) {
-  const { toFrontend, toBackend } = useDateFormat()
+  const { toBackend } = useDateFormat()
+  const { format: formatCurrency } = useCurrencyFormatter()
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [confirmCancelDialogOpen, setConfirmCancelDialogOpen] = useState(false)
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
@@ -49,7 +51,7 @@ function CommissionLiquidationList({
   const [selectedItemsLiquidation, setSelectedItemsLiquidation] = useState<CommissionLiquidation | null>(null)
 
   // Usar el hook solo para delete y cancel
-  const { deleteLiquidation, cancelLiquidation, loading, error } = useCommissionLiquidations()
+  const { deleteLiquidation, cancelLiquidation, error } = useCommissionLiquidations()
 
   const handleDeleteClick = (liquidation: CommissionLiquidation) => {
     setSelectedLiquidation(liquidation)
@@ -83,13 +85,6 @@ function CommissionLiquidationList({
         router.reload({ only: ['liquidations'] })
       }
     })
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-PY', {
-      style: 'currency',
-      currency: 'PYG',
-    }).format(amount)
   }
 
   const getStatusBadge = (status: string) => {
@@ -262,10 +257,16 @@ function CommissionLiquidationList({
           <DataTable
             columns={columns}
             data={liquidations}
-            initialStatus={filters.status || ""}
             searchPlaceholder="Buscar por profesional o número..."
             emptyMessage="No se encontraron liquidaciones con los filtros aplicados"
             statusFilterable={true}
+            statusOptions={[
+              { value: 'draft', label: 'Borrador' },
+              { value: 'pending', label: 'Pendiente' },
+              { value: 'approved', label: 'Aprobado' },
+              { value: 'paid', label: 'Pagado' },
+              { value: 'cancelled', label: 'Cancelado' },
+            ]}
             dateRangeFilterable={true}
             onDateRangeChange={({ from, to }) => {
               const params = new URLSearchParams(window.location.search)
@@ -277,8 +278,17 @@ function CommissionLiquidationList({
               const url = window.location.pathname + '?' + params.toString()
               router.get(url, {}, { preserveState: true, replace: true })
             }}
+            onStatusChange={(status) => {
+              const params = new URLSearchParams(window.location.search)
+              if (status !== 'all') params.set('status', status)
+              else params.delete('status')
+              params.set('page', '1')
+              const url = window.location.pathname + '?' + params.toString()
+              router.get(url, {}, { preserveState: true, replace: true })
+            }}
             initialDateFrom={filters.date_from || ""}
             initialDateTo={filters.date_to || ""}
+            initialStatus={filters.status || "all"}
           />
         </CardContent>
       </Card>

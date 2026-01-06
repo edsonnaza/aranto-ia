@@ -14,6 +14,13 @@ export interface DateInputWithCalendarProps {
 
 export function DateInputWithCalendar({ value, onChange, placeholder, disabled }: DateInputWithCalendarProps) {
   const [open, setOpen] = React.useState(false)
+  const [month, setMonth] = React.useState<Date>(() => {
+    const parsed = value ? parseDate(value) : new Date()
+    return parsed || new Date()
+  })
+  
+  const parsedDate = value ? parseDate(value) : undefined
+  
   type DateRange = { from: Date | undefined; to?: Date | undefined }
   const handleSelect = (date: Date | Date[] | DateRange | undefined) => {
     if (!date) return
@@ -26,15 +33,25 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
       selectedDate = date.from
     }
     if (!selectedDate) return
-    // Formatear dd/mm/yyyy
-    const formatted = selectedDate.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    })
+    // Formatear dd-mm-yyyy
+    const day = String(selectedDate.getDate()).padStart(2, '0')
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+    const year = selectedDate.getFullYear()
+    const formatted = `${day}-${month}-${year}`
     onChange(formatted)
     setOpen(false)
   }
+
+  // Actualizar el mes cuando cambia el valor
+  React.useEffect(() => {
+    if (value && open) {
+      const parsed = parseDate(value)
+      if (parsed) {
+        setMonth(parsed)
+      }
+    }
+  }, [value, open])
+
   return (
     <div className="flex items-center gap-2">
       <Input
@@ -43,7 +60,7 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        pattern="^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/\d{4}$"
+        pattern="^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[012])-\d{4}$"
         className="w-36"
         onKeyDown={e => {
           if (e.key === 'Enter') e.preventDefault();
@@ -63,7 +80,9 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
         <PopoverContent className="p-0" align="start">
           <Calendar
             mode="single"
-            selected={value ? parseDate(value) : undefined}
+            selected={parsedDate}
+            month={month}
+            onMonthChange={setMonth}
             onSelect={handleSelect}
             initialFocus
           />
@@ -74,8 +93,8 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
 }
 
 function parseDate(str: string): Date | undefined {
-  // Espera dd/mm/yyyy
-  const [d, m, y] = str.split("/").map(Number)
+  // Espera dd-mm-yyyy
+  const [d, m, y] = str.split("-").map(Number)
   if (!d || !m || !y) return undefined
   return new Date(y, m - 1, d)
 }

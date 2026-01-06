@@ -95,6 +95,11 @@ class CommissionController extends Controller
                 ];
             });
 
+        // Convert dates to dd-mm-yyyy format for frontend
+        $formatDate = function($date) {
+            return \Carbon\Carbon::parse($date)->format('d-m-Y');
+        };
+
         return Inertia::render('commission/Index', [
             'professionals' => \App\Models\Professional::with('specialties')
                 ->select('id', 'first_name', 'last_name', 'commission_percentage')
@@ -105,8 +110,8 @@ class CommissionController extends Controller
             'filters' => [
                 'professional_id' => $request->professional_id,
                 'status' => $request->status,
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
+                'date_from' => $formatDate($dateFrom),
+                'date_to' => $formatDate($dateTo),
             ],
         ]);
     }
