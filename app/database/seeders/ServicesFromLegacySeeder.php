@@ -4,10 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\MedicalService;
+use App\Models\Service;
 use App\Models\ServiceCategory;
-use App\Models\ServicePrice;
-use App\Models\InsuranceType;
 use Carbon\Carbon;
 
 class ServicesFromLegacySeeder extends Seeder
@@ -17,195 +15,119 @@ class ServicesFromLegacySeeder extends Seeder
      */
     public function run(): void
     {
-        // Map legacy category IDs to aranto category IDs
+        $this->command->info('Iniciando migración de servicios desde legacy...');
+
+        // Map legacy category IDs to aranto service_categories IDs
         $categoryMapping = [
-            22 => null, // Will find by name "Servicios Sanatoriales"
-            23 => null, // Will find by name "Consultas Consultorios"
-            25 => null, // Will find by name "Servicios Otorrinonaringologia"
+            22 => 7,   // Legacy 22 (Servicios Sanatoriales) -> Aranto 7
+            23 => 8,   // Legacy 23 (Consultas Consultorios) -> Aranto 8
+            24 => 10,  // Legacy 24 (Servicios Cardiologia) -> Aranto 10
+            25 => 9,   // Legacy 25 (Servicios Otorrinonaringologia) -> Aranto 9
         ];
 
-        // Find actual category IDs in aranto
-        $categories = ServiceCategory::whereIn('name', [
-            'Servicios Sanatoriales',
-            'Consultas Consultorios',
-            'Servicios Otorrinonaringologia'
-        ])->pluck('id', 'name')->toArray();
-
-        // Create categories if they don't exist
-        if (!isset($categories['Servicios Sanatoriales'])) {
-            $cat = ServiceCategory::create([
-                'name' => 'Servicios Sanatoriales',
-                'status' => 'active'
-            ]);
-            $categoryMapping[22] = $cat->id;
-        } else {
-            $categoryMapping[22] = $categories['Servicios Sanatoriales'];
+        // Verify categories exist
+        $this->command->info('Verificando categorías...');
+        $categoriesMap = [];
+        
+        foreach ($categoryMapping as $legacyId => $arantoId) {
+            $category = ServiceCategory::find($arantoId);
+            if ($category) {
+                $categoriesMap[$legacyId] = $arantoId;
+                $this->command->line("  ✓ Categoría {$legacyId} -> {$arantoId}: {$category->name}");
+            } else {
+                $this->command->warn("  ⊘ Categoría {$arantoId} no existe en aranto");
+            }
         }
 
-        if (!isset($categories['Consultas Consultorios'])) {
-            $cat = ServiceCategory::create([
-                'name' => 'Consultas Consultorios',
-                'status' => 'active'
-            ]);
-            $categoryMapping[23] = $cat->id;
-        } else {
-            $categoryMapping[23] = $categories['Consultas Consultorios'];
-        }
-
-        if (!isset($categories['Servicios Otorrinonaringologia'])) {
-            $cat = ServiceCategory::create([
-                'name' => 'Servicios Otorrinonaringologia',
-                'status' => 'active'
-            ]);
-            $categoryMapping[25] = $cat->id;
-        } else {
-            $categoryMapping[25] = $categories['Servicios Otorrinonaringologia'];
-        }
-
-        // Insurance type mapping - legacy idseguro to aranto insurance_type_id
-        $insuranceMapping = $this->buildInsuranceMapping();
-
-        // Get connection to legacy database
-        $legacyConnection = DB::connection('legacy');
-
-        // Fetch products from legacy database (only from categories 22, 23, 25)
-        $legacyProducts = $legacyConnection->table('producto')
-            ->whereIn('IdCategoria', [22, 23, 25])
+        // Get products from legacy
+        $this->command->info('Obteniendo productos de legacy...');
+        $legacyProducts = DB::connection('legacy')
+            ->table('producto')
+            ->whereIn('IdCategoria', [22, 23, 24, 25])
             ->where('Estado', 'ACTIVO')
             ->get();
 
-        $this->command->info("Found {$legacyProducts->count()} products to migrate");
+        $this->command->info("Encontrados {$legacyProducts->count()} productos activos en legacy");
+        $this->command->info('');
 
         $createdCount = 0;
         $skippedCount = 0;
+        $failedCount = 0;
 
         foreach ($legacyProducts as $product) {
             try {
-                // Check if service already exists
-                $existingService = MedicalService::where('name', $product->Nombre)->first();
-                
+                // Check if service already exists by code or name
+                $existingService = Service::where('code', $this->generateCode(trim($product->Nombre)))
+                    ->orWhere('name', trim($product->Nombre))
+                    ->first();
+
                 if ($existingService) {
-                    $this->command->warn("Service '{$product->Nombre}' already exists, skipping");
+                    $this->command->line("  ⊘ Omitido (existe): {$product->Nombre}");
                     $skippedCount++;
                     continue;
                 }
 
-                // Create the service
-                $service = MedicalService::create([
-                    'name' => $product->Nombre,
-                    'description' => $product->Descripcion,
-                    'category_id' => $categoryMapping[$product->IdCategoria],
-                    'code' => $this->generateCode($product->Nombre),
-                    'duration_minutes' => 30, // Default value
-                    'requires_appointment' => true,
-                    'requires_preparation' => false,
-                    'preparation_instructions' => null,
-                    'default_commission_percentage' => 0,
-                    'status' => 'active'
+                // Create service
+                $service = Service::create([
+                    'name' => trim($product->Nombre),
+                    'description' => trim($product->Descripcion) ?: null,
+                    'code' => $this->generateCode(trim($product->Nombre)),
+                    'base_price' => (float) ($product->PrecioVenta ?? 0),
+                    'category' => 'CONSULTATION', // Default category enum value
+                    'is_active' => true,
+                    'professional_commission_percentage' => 0,
                 ]);
 
-                // Migrate prices for this product
-                $this->migratePrices($product->IdProducto, $service->id, $insuranceMapping, $legacyConnection);
+                // Attach category using pivot table
+                if (isset($categoriesMap[$product->IdCategoria])) {
+                    $service->serviceCategories()->attach($categoriesMap[$product->IdCategoria]);
+                }
 
-                $this->command->info("Created service: {$service->name} (ID: {$service->id})");
+                $this->command->line("  ✓ Creado: {$service->name} (ID: {$service->id})");
                 $createdCount++;
 
             } catch (\Exception $e) {
-                $this->command->error("Error processing product {$product->IdProducto}: {$e->getMessage()}");
-                $skippedCount++;
+                $this->command->error("  ✗ Error en producto {$product->IdProducto}: {$e->getMessage()}");
+                $failedCount++;
             }
         }
 
-        $this->command->info("Migration completed:");
-        $this->command->info("- Created: {$createdCount}");
-        $this->command->info("- Skipped: {$skippedCount}");
-    }
-
-    /**
-     * Migrate prices for a product
-     */
-    private function migratePrices($legacyProductId, $serviceId, $insuranceMapping, $legacyConnection): void
-    {
-        $legacyPrices = $legacyConnection->table('producto_precios')
-            ->where('idproducto', $legacyProductId)
-            ->where('activo', 'SI')
-            ->where('eliminado', 'NO')
-            ->get();
-
-        foreach ($legacyPrices as $price) {
-            try {
-                // Map insurance type
-                $insuranceTypeId = $insuranceMapping[$price->idseguro] ?? null;
-
-                if (!$insuranceTypeId) {
-                    $this->command->warn("Insurance type ID {$price->idseguro} not found for product {$legacyProductId}");
-                    continue;
-                }
-
-                // Check if price already exists
-                $existingPrice = ServicePrice::where('service_id', $serviceId)
-                    ->where('insurance_type_id', $insuranceTypeId)
-                    ->first();
-
-                if ($existingPrice) {
-                    continue;
-                }
-
-                // Create price
-                ServicePrice::create([
-                    'service_id' => $serviceId,
-                    'insurance_type_id' => $insuranceTypeId,
-                    'price' => (float) $price->PrecioVenta,
-                    'effective_from' => Carbon::now()->startOfDay(),
-                    'effective_until' => null,
-                    'created_by' => null,
-                    'notes' => "Migrated from legacy product {$legacyProductId}"
-                ]);
-
-            } catch (\Exception $e) {
-                $this->command->error("Error creating price for service {$serviceId}: {$e->getMessage()}");
-            }
+        $this->command->info('');
+        $this->command->info('Migración completada:');
+        $this->command->line("  ✓ Servicios creados: {$createdCount}");
+        $this->command->line("  ⊘ Omitidos: {$skippedCount}");
+        if ($failedCount > 0) {
+            $this->command->warn("  ✗ Fallidos: {$failedCount}");
         }
     }
 
     /**
-     * Build mapping between legacy insurance IDs and aranto insurance types
-     */
-    private function buildInsuranceMapping(): array
-    {
-        // Get all insurance types from aranto
-        $insuranceTypes = InsuranceType::pluck('id', 'name')->toArray();
-
-        return [
-            1 => $insuranceTypes['Particular'] ?? 1, // Particular
-            2 => $insuranceTypes['UNIMED'] ?? null,
-            3 => $insuranceTypes['MAPFRE'] ?? null,
-            4 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            5 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            6 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            7 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            8 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            9 => $insuranceTypes['SEGUROS MONTERREY'] ?? null,
-            10 => $insuranceTypes['Admisionales'] ?? null,
-            11 => $insuranceTypes['UNIMED'] ?? null,
-        ];
-    }
-
-    /**
-     * Generate a code from service name
+     * Generate unique service code from name
      */
     private function generateCode(string $name): string
     {
-        // Generate code from first letters of words
+        // Get first letters of words, max 8 chars
         $words = explode(' ', $name);
         $code = '';
         
         foreach ($words as $word) {
-            if (strlen($code) < 10) {
+            if (strlen($code) < 8 && !empty($word)) {
                 $code .= strtoupper(substr($word, 0, 1));
             }
         }
 
-        return $code ?: 'SRV';
+        $baseCode = $code ?: 'SRV';
+
+        // Ensure uniqueness by checking if code exists and appending suffix if needed
+        $finalCode = $baseCode;
+        $counter = 1;
+        
+        while (Service::where('code', $finalCode)->exists()) {
+            // Add numeric suffix to make it unique
+            $finalCode = substr($baseCode, 0, 9 - strlen($counter)) . $counter;
+            $counter++;
+        }
+
+        return $finalCode;
     }
 }

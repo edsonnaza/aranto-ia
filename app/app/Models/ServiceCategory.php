@@ -47,6 +47,19 @@ class ServiceCategory extends Model
     }
 
     /**
+     * Get all services in this category (many-to-many).
+     */
+    public function services()
+    {
+        return $this->belongsToMany(
+            Service::class,
+            'service_service_category',
+            'service_category_id',
+            'service_id'
+        )->withTimestamps();
+    }
+
+    /**
      * Check if this category is active.
      */
     public function isActive(): bool

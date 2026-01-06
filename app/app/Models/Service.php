@@ -37,6 +37,17 @@ class Service extends Model
         'is_active' => 'boolean',
     ];
 
+    // Relations
+    public function serviceCategories()
+    {
+        return $this->belongsToMany(
+            ServiceCategory::class,
+            'service_service_category',
+            'service_id',
+            'service_category_id'
+        )->withTimestamps();
+    }
+
     // Scopes
     public function scopeActive($query)
     {
