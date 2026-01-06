@@ -41,7 +41,6 @@ class PatientsFromLegacySeeder extends Seeder
         $offset = 0;
         $inserted = 0;
         $skipped = 0;
-        $now = now();
         $usedDocuments = []; // Track usadas para evitar duplicados
 
         $this->command->info("Procesando pacientes en bloques de {$blockSize}...");
