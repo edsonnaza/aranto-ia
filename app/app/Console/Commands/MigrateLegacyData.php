@@ -2,153 +2,200 @@
 
 namespace App\Console\Commands;
 
-use App\Services\LegacyMigrationService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 
 class MigrateLegacyData extends Command
 {
-    protected $signature = 'legacy:migrate {table? : Tabla específica a migrar} {--list : Listar todas las tablas de la base de datos legacy} {--test : Probar conexión con la base de datos legacy} {--count=10 : Cantidad de registros a migrar en prueba}';
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'legacy:migrate {--force : Skip confirmation} {--report : Generate detailed report}';
 
-    protected $description = 'Migrar datos desde la base de datos legacy (db_legacy_infomed)';
+    /**
+     * The description of the console command.
+     *
+     * @var string
+     */
+    protected $description = 'Migrate all data from legacy database with sanitizations and validations (AUTOMATED)';
 
-    protected $legacyService;
-
-    public function __construct(LegacyMigrationService $legacyService)
-    {
-        parent::__construct();
-        $this->legacyService = $legacyService;
-    }
-
+    /**
+     * Execute the console command.
+     */
     public function handle()
     {
-        // Prueba de conexión
-        if ($this->option('test')) {
-            return $this->testConnection();
-        }
+        $this->printBanner();
 
-        // Listar tablas
-        if ($this->option('list')) {
-            return $this->listTables();
-        }
-
-        // Migrar tabla específica
-        if ($this->argument('table')) {
-            return $this->migrateTable($this->argument('table'));
-        }
-
-        // Si no hay opciones, mostrar menú
-        $this->showMenu();
-    }
-
-    private function testConnection()
-    {
-        $this->info('Probando conexión con la base de datos legacy...');
-        
-        if ($this->legacyService->testConnection()) {
-            $this->info('✓ Conexión exitosa con db_legacy_infomed');
-            return 0;
-        } else {
-            $this->error('✗ No se pudo conectar a la base de datos legacy');
+        // Verificar que legacy está disponible
+        if (!$this->checkLegacyConnection()) {
+            $this->error('✗ No se puede conectar a legacy database');
             return 1;
         }
-    }
 
-    private function listTables()
-    {
-        $this->info('Tablas en db_legacy_infomed:');
-        $tables = $this->legacyService->getLegacyTables();
-        
-        $tableList = [];
-        foreach ($tables as $table) {
-            $tableName = reset($table);
-            $count = $this->legacyService->getLegacyTableCount($tableName);
-            $tableList[] = [
-                'Tabla' => $tableName,
-                'Registros' => $count,
-            ];
-        }
-
-        $this->table(['Tabla', 'Registros'], $tableList);
-        return 0;
-    }
-
-    private function migrateTable(string $tableName)
-    {
-        $this->info("Obteniendo estructura de la tabla: {$tableName}");
-        
-        try {
-            $structure = $this->legacyService->getLegacyTableStructure($tableName);
-            $this->line("\nEstructura de la tabla {$tableName}:");
-            
-            $columns = [];
-            foreach ($structure as $field) {
-                $columns[] = [
-                    'Campo' => $field->Field,
-                    'Tipo' => $field->Type,
-                    'Nulo' => $field->Null,
-                    'Clave' => $field->Key,
-                ];
-            }
-            
-            $this->table(['Campo', 'Tipo', 'Nulo', 'Clave'], $columns);
-            
-            $count = $this->legacyService->getLegacyTableCount($tableName);
-            $this->line("\nTotal de registros: {$count}");
-            
-            // Opción de migrar
-            if ($this->confirm("¿Deseas migrar esta tabla a aranto_medical?")) {
-                $this->info("Migrando tabla {$tableName}...");
-                $result = $this->legacyService->migrateTable($tableName, $tableName);
-                
-                if ($result['success']) {
-                    $this->info("✓ Migración completada");
-                    $this->line("  - Registros migrados: {$result['migrated_rows']}/{$result['total_rows']}");
-                    if ($result['failed_rows'] > 0) {
-                        $this->warn("  - Registros fallidos: {$result['failed_rows']}");
-                    }
-                } else {
-                    $this->error("✗ Error en migración: {$result['error']}");
-                    return 1;
-                }
-            }
-            
-            return 0;
-        } catch (\Exception $e) {
-            $this->error("Error: " . $e->getMessage());
-            return 1;
-        }
-    }
-
-    private function showMenu()
-    {
-        $this->info('=== Migración de Datos Legacy ===');
-        $this->line('');
-        $this->line('Opciones disponibles:');
-        $this->line('  php artisan legacy:migrate --test          Probar conexión');
-        $this->line('  php artisan legacy:migrate --list          Listar tablas');
-        $this->line('  php artisan legacy:migrate {tabla}         Migrar tabla específica');
-        $this->line('');
-        
-        $choice = $this->choice(
-            'Selecciona una opción',
-            [
-                'Probar conexión',
-                'Listar tablas',
-                'Migrar tabla específica',
-                'Salir',
-            ]
-        );
-
-        switch ($choice) {
-            case 'Probar conexión':
-                return $this->testConnection();
-            case 'Listar tablas':
-                return $this->listTables();
-            case 'Migrar tabla específica':
-                $table = $this->ask('Ingresa el nombre de la tabla a migrar');
-                return $this->migrateTable($table);
-            default:
+        // Pedir confirmación
+        if (!$this->option('force')) {
+            if (!$this->confirm('¿Ejecutar migración COMPLETA desde legacy? (incluye sanitaciones y validaciones)')) {
+                $this->line('Migración cancelada');
                 return 0;
+            }
         }
+
+        // Ejecutar migración
+        try {
+            $this->info('');
+            $this->info('Iniciando migración completa automatizada...');
+            $this->info('');
+
+            $startTime = microtime(true);
+
+            // Ejecutar el seeder maestro
+            $this->call('db:seed', [
+                '--class' => 'MasterLegacyMigrationSeeder',
+            ]);
+
+            $duration = number_format(microtime(true) - $startTime, 2);
+
+            $this->printSuccess($duration);
+
+            // Generar reporte si se solicita
+            if ($this->option('report')) {
+                $this->generateDetailedReport();
+            }
+
+            return 0;
+
+        } catch (\Exception $e) {
+            $this->error('✗ Error durante la migración:');
+            $this->error($e->getMessage());
+            return 1;
+        }
+    }
+
+    /**
+     * Verificar conexión a legacy
+     */
+    private function checkLegacyConnection(): bool
+    {
+        try {
+            DB::connection('legacy')->getPdo();
+            $this->line('✓ Conexión a legacy verificada');
+            
+            // Contar productos
+            $count = DB::connection('legacy')
+                ->table('producto')
+                ->count();
+            
+            $this->line("  Productos disponibles: {$count}");
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Generar reporte detallado
+     */
+    private function generateDetailedReport(): void
+    {
+        $this->info('');
+        $this->info('Generando reporte detallado...');
+
+        $report = "REPORTE DETALLADO DE MIGRACIÓN LEGACY → ARANTO\n";
+        $report .= str_repeat('=', 80) . "\n";
+        $report .= "Fecha: " . now()->format('Y-m-d H:i:s') . "\n\n";
+
+        // Datos de servicios
+        $totalServices = DB::table('services')->count();
+        $servicesFromLegacy = DB::table('legacy_service_mappings')->count();
+        $withAccents = DB::table('services')
+            ->whereRaw("name LIKE '%ó%' OR name LIKE '%á%' OR name LIKE '%í%'")
+            ->count();
+        $corrupted = DB::table('services')
+            ->whereRaw("name LIKE '%¿%' OR name LIKE '%½%'")
+            ->count();
+
+        $report .= "SERVICIOS:\n";
+        $report .= "  Total: {$totalServices}\n";
+        $report .= "  Desde legacy: {$servicesFromLegacy}\n";
+        $report .= "  Con acentos válidos: {$withAccents}\n";
+        $report .= "  Caracteres corruptos: {$corrupted}\n";
+        $report .= "  Estado: " . ($corrupted === 0 ? "✓ LIMPIO\n" : "✗ REQUIERE LIMPIEZA\n");
+        $report .= "\n";
+
+        // Precios
+        $totalPrices = DB::table('service_prices')->count();
+        $pricesByInsurance = DB::table('service_prices')
+            ->select('insurance_type_id', DB::raw('COUNT(*) as count'))
+            ->groupBy('insurance_type_id')
+            ->get();
+
+        $report .= "PRECIOS DE SERVICIOS:\n";
+        $report .= "  Total: {$totalPrices}\n";
+        foreach ($pricesByInsurance as $price) {
+            $insurance = DB::table('insurance_types')->find($price->insurance_type_id);
+            $report .= "    • " . ($insurance->name ?? 'Unknown') . ": {$price->count}\n";
+        }
+        $report .= "\n";
+
+        // Especialidades
+        $specialties = DB::table('specialties')->count();
+        $report .= "ESPECIALIDADES: {$specialties}\n\n";
+
+        // Profesionales
+        $professionals = DB::table('professionals')->count();
+        $report .= "PROFESIONALES: {$professionals}\n\n";
+
+        // Pacientes
+        $patients = DB::table('patients')->count();
+        $report .= "PACIENTES: {$patients}\n\n";
+
+        // Seguros
+        $insurances = DB::table('insurance_types')->count();
+        $report .= "TIPOS DE SEGUROS: {$insurances}\n\n";
+
+        // Categorías
+        $categories = DB::table('service_categories')->count();
+        $report .= "CATEGORÍAS DE SERVICIOS: {$categories}\n\n";
+
+        $reportPath = storage_path('logs/detailed_report_' . now()->format('Y-m-d_H-i-s') . '.txt');
+        file_put_contents($reportPath, $report);
+
+        $this->info("✓ Reporte guardado en: {$reportPath}");
+    }
+
+    /**
+     * Imprimir banner
+     */
+    private function printBanner(): void
+    {
+        $this->line('');
+        $this->line(str_repeat('═', 80));
+        $this->line('╔' . str_repeat('═', 78) . '╗');
+        $this->line('║' . '  LEGACY → ARANTO MIGRATION TOOL' . str_repeat(' ', 46) . '║');
+        $this->line('║' . '  Automated full migration with sanitizations' . str_repeat(' ', 32) . '║');
+        $this->line('╚' . str_repeat('═', 78) . '╝');
+        $this->line(str_repeat('═', 80));
+        $this->line('');
+    }
+
+    /**
+     * Imprimir éxito
+     */
+    private function printSuccess(string $duration): void
+    {
+        $this->line('');
+        $this->line(str_repeat('═', 80));
+        $this->info('✓ MIGRACIÓN COMPLETADA EXITOSAMENTE');
+        $this->line(str_repeat('═', 80));
+        $this->line('');
+        $this->line("Tiempo total: {$duration}s");
+        $this->line('');
+        $this->info('Sistema listo para producción');
+        $this->line('');
+        $this->line(str_repeat('═', 80));
     }
 }
+
