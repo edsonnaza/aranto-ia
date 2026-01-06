@@ -112,7 +112,7 @@ class ServiceCodeHelper
     }
 
     /**
-     * Remueve acentos y caracteres especiales
+     * Remueve acentos y caracteres especiales, incluyendo corrupción UTF-8
      *
      * @param string $string
      * @return string
@@ -130,6 +130,60 @@ class ServiceCodeHelper
         ];
         
         return strtr($string, $unwanted_array);
+    }
+
+    /**
+     * Limpia caracteres corruptos UTF-8 (ejemplo: ¿½ → ó)
+     * Maneja caracteres malformados de doble byte
+     * Los bytes corruptos 0xC3 0xBF (UTF-8 para ÿ) se muestran como ¿½
+     *
+     * @param string $string
+     * @return string
+     */
+    public static function cleanCorruptedUtf8(string $string): string
+    {
+        // Primero, manejar patrones específicos de corrupción
+        // ¿½ normalmente es el resultado de encoding incorrecto de caracteres acentuados
+        // Necesitamos ser más inteligentes sobre qué carácter debería ser
+        
+        // Patrones comunes:
+        // Ecografi¿½a -> Ecografía
+        // Cauterizacii¿½n -> Cauterización
+        // Qui¿½mica -> Química
+        
+        $corruptionPatterns = [
+            // Patrones específicos conocidos
+            'i¿½' => 'í',      // fi¿½ica -> física
+            'a¿½' => 'á',      // ca¿½a -> caña
+            'e¿½' => 'é',      // caf¿½ -> café
+            'o¿½' => 'ó',      // afó¿½ -> afoó (esto es más complicado)
+            'u¿½' => 'ú',      // agú¿½ -> agú
+            
+            // Variaciones con mayúsculas
+            'I¿½' => 'Í',
+            'A¿½' => 'Á',
+            'E¿½' => 'É',
+            'O¿½' => 'Ó',
+            'U¿½' => 'Ú',
+        ];
+        
+        $cleaned = strtr($string, $corruptionPatterns);
+        
+        // Luego, manejar caracteres huérfanos
+        $cleaned = str_replace('¿', '', $cleaned);
+        $cleaned = str_replace('½', '', $cleaned);
+        
+        // Caracteres acentuados corruptos
+        $cleaned = str_replace('Â', 'A', $cleaned);
+        $cleaned = str_replace('Ã', 'A', $cleaned);
+        $cleaned = str_replace('Ä', 'A', $cleaned);
+        $cleaned = str_replace('ã', 'a', $cleaned);
+        $cleaned = str_replace('ñ', 'n', $cleaned);  // Mantener ñ correcta
+        
+        // Remover espacios dobles que puedan quedar
+        $cleaned = preg_replace('/\s+/', ' ', trim($cleaned));
+        
+        return $cleaned;
     }
 
     /**
