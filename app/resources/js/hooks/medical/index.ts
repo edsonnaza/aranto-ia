@@ -66,3 +66,12 @@ export type { CommissionReportFilters, UseCommissionReportsReturn } from './useC
 // Commission Dashboard Hooks
 export { useCommissionDashboard } from './useCommissionDashboard'
 export type { CommissionDashboardData } from './useCommissionDashboard'
+
+// Specialties Hooks
+export { default as useSpecialties } from './useSpecialties'
+export type { 
+  Specialty, 
+  SpecialtiesIndexData,
+  SpecialtiesListData,
+  SpecialtyFormData 
+} from './useSpecialties'

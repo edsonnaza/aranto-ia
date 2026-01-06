@@ -6,6 +6,7 @@ use App\Http\Controllers\ServiceCategoryController;
 use App\Http\Controllers\MedicalServiceController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\ProfessionalController;
+use App\Http\Controllers\SpecialtyController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ReceptionController;
 use App\Http\Controllers\CommissionController;
@@ -59,6 +60,19 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         'update' => 'service-categories.update',
         'destroy' => 'service-categories.destroy'
     ]);
+
+    // Specialties Management
+    Route::resource('specialties', SpecialtyController::class)->names([
+        'index' => 'specialties.index',
+        'create' => 'specialties.create',
+        'store' => 'specialties.store',
+        'show' => 'specialties.show',
+        'edit' => 'specialties.edit',
+        'update' => 'specialties.update',
+        'destroy' => 'specialties.destroy'
+    ]);
+    Route::patch('specialties/{specialty}/toggle-status', [SpecialtyController::class, 'toggleStatus'])
+        ->name('specialties.toggle-status');
 
     // Medical Services Management
     Route::resource('medical-services', MedicalServiceController::class)->names([

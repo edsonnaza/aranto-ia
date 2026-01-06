@@ -164,6 +164,13 @@ export default function MedicalDashboard({ stats, recentActivity = [] }: Medical
                 </Button>
                 
                 <Button asChild variant="outline" className="justify-start">
+                  <Link href="/medical/specialties">
+                    <Heart className="h-4 w-4 mr-2" />
+                    Gestionar Especialidades
+                  </Link>
+                </Button>
+                
+                <Button asChild variant="outline" className="justify-start">
                   <Link href="/medical/professionals">
                     <UserCheck className="h-4 w-4 mr-2" />
                     Ver Profesionales
