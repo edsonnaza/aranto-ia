@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Models\Service;
+use App\Models\MedicalService;
 use Illuminate\Support\Str;
 
 class ServiceCodeHelper

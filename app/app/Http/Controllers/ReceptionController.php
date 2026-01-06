@@ -103,7 +103,9 @@ class ReceptionController extends Controller
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get()
-                ->groupBy('category.name')
+                ->groupBy(function ($service) {
+                    return $service->category ? $service->category->name : 'Sin Categoría';
+                })
                 ->map(function ($services, $categoryName) {
                     return [
                         'category' => $categoryName,
@@ -119,8 +121,7 @@ class ReceptionController extends Controller
                                 'label' => $service->name . ' (' . $service->code . ')',
                                 'name' => $service->name,
                                 'code' => $service->code,
-                                'base_price' => $service->base_price,
-                                'estimated_duration' => $service->estimated_duration,
+                                'duration_minutes' => $service->duration_minutes,
                                 'prices_by_insurance' => $pricesByInsurance->toArray(),
                             ];
                         })->values()
@@ -184,11 +185,11 @@ class ReceptionController extends Controller
             ]);
         }
 
-        // Si no hay precio específico, usar base_price
+        // Si no hay precio específico, retornar null (no hay fallback a base_price)
         return response()->json([
-            'price' => $service->base_price,
+            'price' => null,
             'found' => false,
-            'source' => 'base_price'
+            'source' => 'not_found'
         ]);
     }
 }

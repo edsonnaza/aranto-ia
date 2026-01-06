@@ -2,6 +2,30 @@
 
 Sistema de gestión médica con módulo de caja registradora desarrollado con Laravel + React + TypeScript.
 
+**Estado**: 🚀 **Listo para producción con sistema automatizado de migración Legacy**
+
+## 📚 Documentación Principal
+
+### 🎯 Para Comenzar Rápido
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Índice maestro de toda la documentación
+- **[EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)** - Resumen ejecutivo del sistema
+
+### 🚀 Para Ejecutar en Producción
+```bash
+# Un comando para migrar toda la data de legacy a aranto
+# (incluyendo todas las sanitaciones y validaciones)
+php artisan legacy:migrate --force
+```
+
+Documentación detallada:
+- **[AUTOMATED_MIGRATION_GUIDE.md](AUTOMATED_MIGRATION_GUIDE.md)** - Guía rápida y referencia
+- **[PRODUCTION_MIGRATION_GUIDE.md](PRODUCTION_MIGRATION_GUIDE.md)** - Checklist completo para producción
+
+### 📊 Para Entender el Sistema
+- **[MIGRATION_SYSTEM_DIAGRAM.md](MIGRATION_SYSTEM_DIAGRAM.md)** - Diagramas visuales de los 6 pasos de migración
+- **[SANITIZATION_SUMMARY.md](SANITIZATION_SUMMARY.md)** - Detalles técnicos de sanitizaciones
+- **[UTF8_CLEANUP_SUMMARY.md](UTF8_CLEANUP_SUMMARY.md)** - Detalles de limpieza UTF-8
+
 ## 🚀 Stack Tecnológico
 
 - **Backend**: Laravel 12 + PHP 8.4
