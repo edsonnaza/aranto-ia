@@ -153,13 +153,13 @@ export default function ProfessionalsIndex({
       },
     },
     {
-      accessorKey: 'active',
+      accessorKey: 'is_active',
       header: 'Estado',
       cell: ({ row }) => {
-        const active = row.getValue('active') as boolean
+        const isActive = row.getValue('is_active') as boolean
         return (
-          <Badge variant={active ? 'default' : 'secondary'}>
-            {active ? 'Activo' : 'Inactivo'}
+          <Badge variant={isActive ? 'default' : 'secondary'}>
+            {isActive ? 'Activo' : 'Inactivo'}
           </Badge>
         )
       },

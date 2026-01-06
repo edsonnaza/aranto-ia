@@ -60,7 +60,10 @@ class ProfessionalsFromLegacySeeder extends Seeder
             $documentNumber = trim($professional->Nro_Doc) ?: "PROF_{$professional->Id}";
             $documentType = $this->mapDocumentType($professional->Tipo_Doc);
             $gender = $this->mapGender($professional->genero);
-            $isActive = trim($professional->Activo) === '1' ? 1 : 0;
+            
+            // Tratar Activo como booleano: convertir a int (0 o 1)
+            $isActiveValue = (int)trim($professional->Activo);
+            $isActive = $isActiveValue === 1 ? true : false;
 
             // Obtener specialty_id
             $specialtyId = $this->mapSpecialty($professional, $specialtyMap);
@@ -70,7 +73,7 @@ class ProfessionalsFromLegacySeeder extends Seeder
             $commission = (float)$commission; // El valor ya está en formato correcto (ej: 70, no 0.7)
 
             // Status: active si Activo=1, inactive si Activo=0
-            $status = $isActive === 1 ? 'active' : 'inactive';
+            $status = $isActive ? 'active' : 'inactive';
 
             // Fecha alta
             $hireDate = $this->validateDate($professional->fechaalta) ? 
@@ -93,7 +96,7 @@ class ProfessionalsFromLegacySeeder extends Seeder
                 'commission_percentage' => $commission,
                 'commission_calculation_method' => 'percentage',
                 'status' => $status,
-                'is_active' => $isActive,
+                'is_active' => (int)$isActive, // Cast a int para el campo tinyint(1)
                 'hire_date' => $hireDate,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -140,8 +143,28 @@ class ProfessionalsFromLegacySeeder extends Seeder
             // Usar el mismo ID del legacy ya que fue insertado con el mismo ID
             $professionalId = $legacyProf->Id;
 
-            // Mapear la especialidad
-            $specialtyId = $this->mapSpecialtyId($legacyProf, $specialtyMap);
+            // PRIORIDAD 1: Usar Especialidad_Id directo si existe y es válido (> 0)
+            $specialtyId = null;
+            if (!empty($legacyProf->Especialidad_Id) && (int)$legacyProf->Especialidad_Id > 0) {
+                $specialtyId = (int)$legacyProf->Especialidad_Id;
+                
+                // Verificar que la especialidad existe en aranto_medical
+                $exists = DB::connection('mysql')
+                    ->table('specialties')
+                    ->where('id', $specialtyId)
+                    ->exists();
+                
+                if (!$exists) {
+                    $specialtyId = null;
+                }
+            }
+            
+            // PRIORIDAD 2: Si no hay ID directo, mapear por nombre
+            if (!$specialtyId) {
+                $specialtyId = $this->mapSpecialtyId($legacyProf, $specialtyMap);
+            }
+            
+            // Si aún no hay especialidad, omitir este profesional
             if (!$specialtyId) {
                 continue;
             }
