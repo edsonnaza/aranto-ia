@@ -48,6 +48,14 @@ class Service extends Model
         )->withTimestamps();
     }
 
+    /**
+     * Get all prices for this service.
+     */
+    public function prices()
+    {
+        return $this->hasMany(ServicePrice::class, 'service_id');
+    }
+
     // Scopes
     public function scopeActive($query)
     {
