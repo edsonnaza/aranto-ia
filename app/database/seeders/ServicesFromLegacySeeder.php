@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\LegacyServiceMapping;
 use Carbon\Carbon;
 
 class ServicesFromLegacySeeder extends Seeder
@@ -17,12 +18,30 @@ class ServicesFromLegacySeeder extends Seeder
     {
         $this->command->info('Iniciando migración de servicios desde legacy...');
 
-        // Map legacy category IDs to aranto service_categories IDs
+        // Map legacy category IDs to aranto service_categories IDs (COMPLETE)
         $categoryMapping = [
             22 => 7,   // Legacy 22 (Servicios Sanatoriales) -> Aranto 7
             23 => 8,   // Legacy 23 (Consultas Consultorios) -> Aranto 8
             24 => 10,  // Legacy 24 (Servicios Cardiologia) -> Aranto 10
             25 => 9,   // Legacy 25 (Servicios Otorrinonaringologia) -> Aranto 9
+            26 => 11,  // Legacy 26 (Servicios Radiologia IMAP) -> Aranto 11
+            27 => 12,  // Legacy 27 (Servicios Ecografias) -> Aranto 12
+            28 => 13,  // Legacy 28 (Alquileres) -> Aranto 13
+            29 => 14,  // Legacy 29 (Servicios de Urgencia) -> Aranto 14
+            30 => 15,  // Legacy 30 (Servicios de Analisis) -> Aranto 15
+            31 => 16,  // Legacy 31 (Consulta en Urgencia) -> Aranto 16
+            32 => 17,  // Legacy 32 (Odontologia) -> Aranto 17
+            33 => 18,  // Legacy 33 (IMAP S.A) -> Aranto 18
+            34 => 19,  // Legacy 34 (Servicios de RX) -> Aranto 19
+            35 => 20,  // Legacy 35 (Mamografia) -> Aranto 20
+            36 => 21,  // Legacy 36 (Ecografias de Urgencias) -> Aranto 21
+            37 => 22,  // Legacy 37 (Procedimientos Generales) -> Aranto 22
+            40 => 23,  // Legacy 40 (MASTOLOGIA) -> Aranto 23
+            41 => 24,  // Legacy 41 (MASTOLOGIA Especial) -> Aranto 24
+            45 => 25,  // Legacy 45 (Honorario Medico Particular) -> Aranto 25
+            46 => 26,  // Legacy 46 (Honorario Medico Unimed) -> Aranto 26
+            47 => 27,  // Legacy 47 (Sala Internacion) -> Aranto 27
+            48 => 28,  // Legacy 48 (Tes De Marcha) -> Aranto 28
         ];
 
         // Verify categories exist
@@ -43,7 +62,7 @@ class ServicesFromLegacySeeder extends Seeder
         $this->command->info('Obteniendo productos de legacy...');
         $legacyProducts = DB::connection('legacy')
             ->table('producto')
-            ->whereIn('IdCategoria', [22, 23, 24, 25])
+            ->whereIn('IdCategoria', array_keys($categoryMapping))
             ->where('Estado', 'ACTIVO')
             ->get();
 
@@ -82,6 +101,13 @@ class ServicesFromLegacySeeder extends Seeder
                 if (isset($categoriesMap[$product->IdCategoria])) {
                     $service->serviceCategories()->attach($categoriesMap[$product->IdCategoria]);
                 }
+
+                // Store mapping from legacy product ID to aranto service ID
+                LegacyServiceMapping::create([
+                    'legacy_product_id' => $product->IdProducto,
+                    'service_id' => $service->id,
+                    'legacy_name' => trim($product->Nombre),
+                ]);
 
                 $this->command->line("  ✓ Creado: {$service->name} (ID: {$service->id})");
                 $createdCount++;
