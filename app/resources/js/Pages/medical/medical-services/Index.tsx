@@ -52,6 +52,7 @@ interface MedicalServicesIndexProps {
 
 export default function MedicalServicesIndex({ 
   services, 
+  categories,
   filters, 
   stats 
 }: MedicalServicesIndexProps) {
@@ -66,6 +67,8 @@ export default function MedicalServicesIndex({
     links: []
   }
 
+  const safeCategories = categories || []
+
   const safeStats = stats || {
     total: 0,
     active: 0,
@@ -77,6 +80,7 @@ export default function MedicalServicesIndex({
   // Local state for form inputs - prevents losing values during debounce/navigation
   const [localSearch, setLocalSearch] = useState<string>(safeFilters.search || '')
   const [localStatus, setLocalStatus] = useState<string>(safeFilters.status || '')
+  const [localCategory, setLocalCategory] = useState<string>(safeFilters.category_id || '')
 
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
@@ -99,8 +103,8 @@ export default function MedicalServicesIndex({
     searchTimeoutRef.current = setTimeout(() => {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
-      if (safeFilters.category_id) params.set('category_id', safeFilters.category_id)
-      if (safeFilters.status) params.set('status', safeFilters.status)
+      if (localCategory) params.set('category_id', localCategory)
+      if (localStatus) params.set('status', localStatus)
       router.get(window.location.pathname + '?' + params.toString())
     }, 500) // Wait 500ms after user stops typing
   }
@@ -119,15 +123,26 @@ export default function MedicalServicesIndex({
     
     const params = new URLSearchParams()
     if (localSearch) params.set('search', localSearch)
-    if (safeFilters.category_id) params.set('category_id', safeFilters.category_id)
+    if (localCategory) params.set('category_id', localCategory)
     if (status && status !== 'all') params.set('status', status)
+    router.get(window.location.pathname + '?' + params.toString())
+  }
+
+  const handleCategoryChange = (categoryId: string) => {
+    // Update local state immediately
+    setLocalCategory(categoryId)
+    
+    const params = new URLSearchParams()
+    if (localSearch) params.set('search', localSearch)
+    if (categoryId) params.set('category_id', categoryId)
+    if (localStatus) params.set('status', localStatus)
     router.get(window.location.pathname + '?' + params.toString())
   }
 
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams()
     if (localSearch) params.set('search', localSearch)
-    if (safeFilters.category_id) params.set('category_id', safeFilters.category_id)
+    if (localCategory) params.set('category_id', localCategory)
     if (localStatus) params.set('status', localStatus)
     params.set('page', page.toString())
     router.get(window.location.pathname + '?' + params.toString())
@@ -136,7 +151,7 @@ export default function MedicalServicesIndex({
   const handlePageSizeChange = (pageSize: number) => {
     const params = new URLSearchParams()
     if (localSearch) params.set('search', localSearch)
-    if (safeFilters.category_id) params.set('category_id', safeFilters.category_id)
+    if (localCategory) params.set('category_id', localCategory)
     if (localStatus) params.set('status', localStatus)
     params.set('per_page', pageSize.toString())
     // Reset to page 1 when changing page size
@@ -375,6 +390,42 @@ export default function MedicalServicesIndex({
 
         {/* Data Table */}
         <div className="bg-white shadow rounded-lg">
+          {/* Filter Bar */}
+          <div className="px-6 py-4 border-b border-gray-200 flex gap-4 items-end flex-wrap">
+            <div className="flex-1 min-w-48">
+              <label htmlFor="category-filter" className="block text-sm font-medium text-gray-700 mb-1">
+                Filtrar por Categoría
+              </label>
+              <select
+                id="category-filter"
+                value={localCategory}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Todas las categorías</option>
+                {safeCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {(localCategory || localSearch || localStatus) && (
+              <button
+                onClick={() => {
+                  setLocalSearch('')
+                  setLocalCategory('')
+                  setLocalStatus('')
+                  router.get(window.location.pathname)
+                }}
+                className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
+          {/* Data Table */}
           <DataTable
             columns={columns}
             data={safeServices}
