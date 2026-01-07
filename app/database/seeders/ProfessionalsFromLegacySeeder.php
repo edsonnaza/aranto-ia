@@ -342,6 +342,11 @@ class ProfessionalsFromLegacySeeder extends Seeder
      */
     private function migrateCommissions($legacyProfessionals, $now): void
     {
+        // Truncar tabla primero
+        DB::connection('mysql')->statement('SET FOREIGN_KEY_CHECKS=0');
+        DB::connection('mysql')->table('professional_commission_settings')->truncate();
+        DB::connection('mysql')->statement('SET FOREIGN_KEY_CHECKS=1');
+        
         $commissions = [];
         $commissionsCount = 0;
 
@@ -353,9 +358,13 @@ class ProfessionalsFromLegacySeeder extends Seeder
 
             $professionalId = $legacyProf->Id;
             
-            // Obtener valores de comisión (usar cinterno si existe, si no comision)
-            $commissionPercentage = $legacyProf->cinterno ?? $legacyProf->comision ?? 0;
-            $commissionPercentage = (float)$commissionPercentage;
+            // Obtener valores de comisión: usar cinterno si > 0, si no usar comision
+            $commissionPercentage = 0;
+            if ((float)$legacyProf->cinterno > 0) {
+                $commissionPercentage = (float)$legacyProf->cinterno;
+            } elseif ((float)$legacyProf->comision > 0) {
+                $commissionPercentage = (float)$legacyProf->comision;
+            }
 
             // Solo crear registro si hay comisión > 0
             if ($commissionPercentage > 0) {

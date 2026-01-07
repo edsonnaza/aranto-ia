@@ -129,6 +129,7 @@ class ServiceRequestController extends Controller
                 ->orderBy('name')
                 ->get(),
             'professionals' => Professional::where('status', 'active')
+                ->with('commissionSettings')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(),
@@ -352,6 +353,7 @@ class ServiceRequestController extends Controller
                 ->orderBy('name')
                 ->get(),
             'professionals' => Professional::where('status', 'active')
+                ->with('commissionSettings')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(),

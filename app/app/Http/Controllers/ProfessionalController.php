@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Professional;
 use App\Models\MedicalService;
 use App\Models\ProfessionalCommission;
+use App\Models\ProfessionalCommissionSettings;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -35,7 +36,7 @@ class ProfessionalController extends Controller
     public function index(Request $request): Response
     {
         $query = Professional::query()
-            ->with(['commissions', 'services', 'specialties'])
+            ->with(['commissionSettings', 'commissions', 'services', 'specialties'])
             ->withCount(['commissions', 'services']);
 
         // Search functionality
@@ -90,7 +91,7 @@ class ProfessionalController extends Controller
             'active' => Professional::where('status', 'active')->count(),
             'inactive' => Professional::where('status', 'inactive')->count(),
             'specialties' => Professional::has('specialties')->count(),
-            'avg_commission' => (float) (Professional::where('status', 'active')->avg('commission_percentage') ?? 0),
+            'avg_commission' => (float) (ProfessionalCommissionSettings::avg('commission_percentage') ?? Professional::where('status', 'active')->avg('commission_percentage') ?? 0),
             'total_commissions' => (float) (ProfessionalCommission::sum('commission_amount') ?? 0)
         ];
 
