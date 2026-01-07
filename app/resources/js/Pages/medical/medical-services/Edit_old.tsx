@@ -323,7 +323,7 @@ const MedicalServicesEdit = ({ service, categories = [], insuranceTypes = [], st
                                                             className="w-3 h-3 rounded-full"
                                                             style={{ backgroundColor: getInsuranceTypeColor(price.insurance_type_id) }}
                                                         />
-                                                        <span className="text-sm font-medium text-gray-700 min-w-[120px]">
+                                                        <span className="text-sm font-medium text-gray-700 min-w-120px">
                                                             {getInsuranceTypeName(price.insurance_type_id)}
                                                         </span>
                                                     </div>

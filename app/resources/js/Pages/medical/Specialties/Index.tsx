@@ -93,7 +93,7 @@ export default function SpecialtiesIndex({ specialties, stats, filters, flash }:
             accessorKey: 'description',
             header: 'Descripción',
             cell: ({ row }) => (
-                <div className="max-w-[300px] truncate text-muted-foreground">
+                <div className="max-w-300px truncate text-muted-foreground">
                     {row.getValue('description') || 'Sin descripción'}
                 </div>
             ),

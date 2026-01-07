@@ -38,6 +38,7 @@ interface CloseCashModalProps {
         opening: number;
         income: number;
         current: number;
+        expense: number;
     };
     transactions?: Array<{
         id: number;
@@ -51,7 +52,7 @@ interface CloseCashModalProps {
 export default function CloseCashModal({ 
     isOpen, 
     onClose, 
-    balance = { opening: 0, income: 0, current: 0 },
+    balance = { opening: 0, income: 0, current: 0, expense: 0 },
     transactions = []
 }: CloseCashModalProps) {
     console.log('CloseCashModal rendered, isOpen:', isOpen);

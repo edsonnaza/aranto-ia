@@ -77,7 +77,7 @@ export default function InsuranceTypesIndex({
       cell: ({ row }) => {
         const description = row.getValue('description') as string
         return (
-          <div className="max-w-[300px] truncate text-sm text-gray-600">
+          <div className="max-w-300px truncate text-sm text-gray-600">
             {description || 'Sin descripción'}
           </div>
         )

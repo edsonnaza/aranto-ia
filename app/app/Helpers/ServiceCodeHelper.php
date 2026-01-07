@@ -104,7 +104,7 @@ class ServiceCodeHelper
         $code = $baseCode;
         $counter = 1;
         
-        while (Service::where('code', $code)->exists()) {
+        while (MedicalService::where('code', $code)->exists()) {
             $code = $baseCode . '-' . str_pad($counter, 2, '0', STR_PAD_LEFT);
             $counter++;
         }

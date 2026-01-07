@@ -261,7 +261,7 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px]">
+            <DropdownMenuContent align="end" className="w-200px">
               <DropdownMenuLabel>Mostrar columnas</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {table

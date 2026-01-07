@@ -19,35 +19,35 @@ class CashRegisterUsersSeeder extends Seeder
                 'email' => 'admin@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'super_admin',
+                'role' => 'super-admin', // Coincide con NavigationPermissionsSeeder
             ],
             [
                 'name' => 'Dr. Juan Pérez',
                 'email' => 'doctor@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'admin',
+                'role' => 'admin', // Coincide con NavigationPermissionsSeeder
             ],
             [
                 'name' => 'María González',
                 'email' => 'cajero@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'cajero', // Specific role for detailed permissions
+                'role' => 'cashier', // Coincide con NavigationPermissionsSeeder (cashier, no cajero)
             ],
             [
                 'name' => 'Carlos Supervisor',
                 'email' => 'supervisor@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'supervisor',
+                'role' => 'accountant', // Cambiar a rol existente en NavigationPermissionsSeeder
             ],
             [
                 'name' => 'Ana Auditor',
                 'email' => 'auditor@aranto.com',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role' => 'auditor',
+                'role' => 'viewer', // Cambiar a rol existente en NavigationPermissionsSeeder
             ],
         ];
 
@@ -60,14 +60,9 @@ class CashRegisterUsersSeeder extends Seeder
                 $userData
             );
 
-            // Assign specific role to user
+            // Assign role from navigation permissions seeder
             if (!$user->hasRole($role)) {
                 $user->assignRole($role);
-            }
-
-            // For cashier, also assign navigation role
-            if ($role === 'cajero' && !$user->hasRole('cashier')) {
-                $user->assignRole('cashier');
             }
         }
 
