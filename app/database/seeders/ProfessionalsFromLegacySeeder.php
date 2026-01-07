@@ -122,6 +122,14 @@ class ProfessionalsFromLegacySeeder extends Seeder
         
         $this->associateSpecialties($legacyProfessionals, $specialtyMap, $now);
 
+        // Migrar comisiones a professional_commissions
+        $this->command->info('Migrando comisiones de profesionales...');
+        DB::connection('mysql')->statement('SET FOREIGN_KEY_CHECKS=0');
+        DB::connection('mysql')->table('professional_commissions')->truncate();
+        DB::connection('mysql')->statement('SET FOREIGN_KEY_CHECKS=1');
+        
+        $this->migrateCommissions($legacyProfessionals, $now);
+
         $this->command->info("✓ Migración completada");
         $this->command->line("  - Profesionales insertados: {$inserted}");
         $this->command->line("  - Profesionales omitidos (eliminados): {$skipped}");
@@ -327,5 +335,50 @@ class ProfessionalsFromLegacySeeder extends Seeder
         }
 
         return null;
+    }
+
+    /**
+     * Migrar comisiones de profesionales a professional_commission_settings
+     */
+    private function migrateCommissions($legacyProfessionals, $now): void
+    {
+        $commissions = [];
+        $commissionsCount = 0;
+
+        foreach ($legacyProfessionals as $legacyProf) {
+            // Omitir eliminados
+            if (strtoupper(trim($legacyProf->eliminado)) !== 'NO') {
+                continue;
+            }
+
+            $professionalId = $legacyProf->Id;
+            
+            // Obtener valores de comisión (usar cinterno si existe, si no comision)
+            $commissionPercentage = $legacyProf->cinterno ?? $legacyProf->comision ?? 0;
+            $commissionPercentage = (float)$commissionPercentage;
+
+            // Solo crear registro si hay comisión > 0
+            if ($commissionPercentage > 0) {
+                $commissions[] = [
+                    'professional_id' => $professionalId,
+                    'commission_percentage' => $commissionPercentage,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+                
+                $commissionsCount++;
+            }
+        }
+
+        // Insertar comisiones en chunks
+        if (!empty($commissions)) {
+            collect($commissions)->chunk(50)->each(function ($chunk) {
+                DB::connection('mysql')->table('professional_commission_settings')->insert($chunk->toArray());
+            });
+            
+            $this->command->line("  ✓ {$commissionsCount} configuraciones de comisión migradas correctamente");
+        } else {
+            $this->command->warn("  ⊘ No se encontraron comisiones para migrar");
+        }
     }
 }
