@@ -174,7 +174,7 @@ export default function ServiceRequestDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw]! max-w-[900px]! max-h-[95vh]! overflow-y-auto">
+      <DialogContent className="w-[95vw]! max-w-900px! max-h-[95vh]! overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <EyeIcon className="h-5 w-5 text-gray-600" />

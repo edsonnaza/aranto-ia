@@ -373,7 +373,7 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
               <Button 
                 onClick={handlePayment}
                 disabled={!paymentMethod || isProcessing || paymentCompleted || amount <= 0 || amount > remainingAmount}
-                className="min-w-[120px]"
+                className="min-w-120px"
               >
                 {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' : 
                  amount === remainingAmount ? 'Completar Pago' : 'Pago Parcial'}

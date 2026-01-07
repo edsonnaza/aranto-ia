@@ -30,7 +30,7 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
         onValueChange={onPageSizeChange}
         disabled={loading}
       >
-        <SelectTrigger className="h-8 w-[70px]">
+        <SelectTrigger className="h-8 w-70px">
           <SelectValue placeholder={perPage} />
         </SelectTrigger>
         <SelectContent side="top">
@@ -40,7 +40,7 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
         </SelectContent>
       </Select>
     </div>
-    <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+    <div className="flex w-100px items-center justify-center text-sm font-medium">
       Página {currentPage} de {lastPage}
     </div>
     <div className="flex items-center space-x-2">

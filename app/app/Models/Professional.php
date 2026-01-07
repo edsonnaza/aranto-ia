@@ -115,6 +115,14 @@ class Professional extends Model
     }
 
     /**
+     * Get commission settings for this professional.
+     */
+    public function commissionSettings()
+    {
+        return $this->hasOne(ProfessionalCommissionSettings::class);
+    }
+
+    /**
      * Get services associated with this professional.
      */
     public function services(): BelongsToMany

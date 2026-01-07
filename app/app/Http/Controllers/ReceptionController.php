@@ -117,9 +117,24 @@ class ReceptionController extends Controller
                     ];
                 }),
             'professionals' => Professional::where('status', 'active')
+                ->with('commissionSettings')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->get(),
+                ->get()
+                ->map(function ($professional) {
+                    return [
+                        'id' => $professional->id,
+                        'first_name' => $professional->first_name,
+                        'last_name' => $professional->last_name,
+                        'full_name' => $professional->full_name,
+                        'document_type' => $professional->document_type,
+                        'document_number' => $professional->document_number,
+                        'phone' => $professional->phone,
+                        'email' => $professional->email,
+                        'status' => $professional->status,
+                        'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
+                    ];
+                }),
             'insuranceTypes' => InsuranceType::where('status', 'active')
                 ->orderBy('name')
                 ->get(),

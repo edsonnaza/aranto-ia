@@ -23,7 +23,7 @@ class ServiceCodeHelper
         // Obtener prefijo de categoría si existe
         $categoryPrefix = '';
         if ($categoryId) {
-            $category = \App\Models\ServiceCategory::find($categoryId);
+            $category = ServiceCategory::find($categoryId);
             if ($category) {
                 $categoryPrefix = self::generateCategoryPrefix($category->name) . '-';
             }
