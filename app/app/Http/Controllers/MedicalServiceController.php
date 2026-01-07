@@ -49,12 +49,17 @@ class MedicalServiceController extends Controller
             $query->where('requires_preparation', true);
         }
 
+        // Get per_page from request, default to 50
+        $perPage = (int) $request->get('per_page', 50);
+        // Limit max per_page to 100
+        $perPage = min($perPage, 100);
+
         $services = $query
             ->withCount(['servicePrices as active_prices_count' => function ($query) {
                 $query->active();
             }])
             ->orderBy('name')
-            ->paginate(15)
+            ->paginate($perPage)
             ->withQueryString();
 
         $categories = ServiceCategory::active()->orderBy('name')->get();

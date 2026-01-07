@@ -77,6 +77,7 @@ export interface DataTableProps<TData, TValue> {
   initialPaymentStatus?: string
   initialStatus?: string
   initialInsuranceType?: string
+  initialSearch?: string
 }
 
 function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
@@ -107,6 +108,7 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
     initialStatus = "",
     initialPaymentStatus = "",
     initialInsuranceType = "",
+    initialSearch = "",
     insuranceTypeOptions = [],
     statusOptions = [],
   } = props
@@ -115,7 +117,7 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-  const [searchValue, setSearchValue] = React.useState("")
+  const [searchValue, setSearchValue] = React.useState(initialSearch || "")
   const [dateFrom, setDateFrom] = React.useState<string | null>(initialDateFrom || null)
   const [dateTo, setDateTo] = React.useState<string | null>(initialDateTo || null)
   const [status, setStatus] = React.useState<string>(initialStatus || "all")
