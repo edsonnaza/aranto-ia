@@ -2,8 +2,8 @@
 
 namespace App\Helpers;
 
-use App\Models\Service;
 use App\Models\MedicalService;
+use App\Models\ServiceCategory;
 use Illuminate\Support\Str;
 
 class ServiceCodeHelper

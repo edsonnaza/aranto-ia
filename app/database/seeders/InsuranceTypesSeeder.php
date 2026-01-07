@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use App\Models\InsuranceType;
 
 class InsuranceTypesSeeder extends Seeder
 {
@@ -66,10 +66,11 @@ class InsuranceTypesSeeder extends Seeder
         ];
 
         foreach ($insuranceTypes as $insuranceType) {
-            DB::table('insurance_types')->insert(array_merge($insuranceType, [
-                'created_at' => now(),
-                'updated_at' => now()
-            ]));
+            // Usar firstOrCreate para evitar duplicados
+            InsuranceType::firstOrCreate(
+                ['code' => $insuranceType['code']],
+                $insuranceType
+            );
         }
     }
 }

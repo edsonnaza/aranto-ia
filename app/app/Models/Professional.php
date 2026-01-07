@@ -26,7 +26,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Illuminate\Support\Carbon|null $termination_date
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
- * @property boolean $is_active
  * @property-read string $full_name
  * @property-read string $formatted_document
  * @property-read float $years_of_service
@@ -58,7 +57,6 @@ class Professional extends Model
         'status',
         'hire_date',
         'termination_date',
-        'is_active',
     ];
 
     /**

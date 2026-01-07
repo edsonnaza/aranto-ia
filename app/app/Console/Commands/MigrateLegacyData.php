@@ -49,9 +49,19 @@ class MigrateLegacyData extends Command
             $this->info('Iniciando migración completa automatizada...');
             $this->info('');
 
+            // Paso 1: Limpiar BD completamente (migrate:fresh sin seeders)
+            $this->line('');
+            $this->line('📋 Paso 1: Limpiando base de datos y ejecutando migraciones...');
+            $this->call('migrate:fresh', [
+                '--force' => true,
+            ]);
+            $this->line('✅ Base de datos limpia y lista');
+
             $startTime = microtime(true);
 
-            // Ejecutar el seeder maestro
+            // Paso 2: Ejecutar el seeder maestro
+            $this->line('');
+            $this->line('📋 Paso 2: Ejecutando migraciones legacy...');
             $this->call('db:seed', [
                 '--class' => 'MasterLegacyMigrationSeeder',
             ]);

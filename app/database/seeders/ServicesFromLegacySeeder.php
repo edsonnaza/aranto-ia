@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Service;
+use App\Models\MedicalService;
 use App\Models\ServiceCategory;
 use App\Models\LegacyServiceMapping;
 use App\Helpers\ServiceCodeHelper;
@@ -80,7 +80,7 @@ class ServicesFromLegacySeeder extends Seeder
                 $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
                 
                 // Check if service already exists by code or name
-                $existingService = Service::where('code', $this->generateCode($sanitizedName))
+                $existingService = MedicalService::where('code', $this->generateCode($sanitizedName))
                     ->orWhere('name', $sanitizedName)
                     ->first();
 
@@ -103,20 +103,18 @@ class ServicesFromLegacySeeder extends Seeder
                 // Sanitize service name: remove accents and convert to Title Case
                 $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
                 
-                // Create service
-                $service = Service::create([
+                // Create medical service
+                $service = MedicalService::create([
                     'name' => $sanitizedName,
                     'description' => trim($product->Descripcion) ?: null,
                     'code' => $this->generateCode($sanitizedName),
-                    'base_price' => (float) ($product->PrecioVenta ?? 0),
-                    'category' => 'CONSULTATION', // Default category enum value
-                    'is_active' => true,
-                    'professional_commission_percentage' => 0,
+                    'status' => 'active',
                 ]);
 
-                // Attach category using pivot table
+                // Assign category
                 if (isset($categoriesMap[$product->IdCategoria])) {
-                    $service->serviceCategories()->attach($categoriesMap[$product->IdCategoria]);
+                    $service->category_id = $categoriesMap[$product->IdCategoria];
+                    $service->save();
                 }
 
                 // Store mapping from legacy product ID to aranto service ID
@@ -165,7 +163,7 @@ class ServicesFromLegacySeeder extends Seeder
         $finalCode = $baseCode;
         $counter = 1;
         
-        while (Service::where('code', $finalCode)->exists()) {
+        while (MedicalService::where('code', $finalCode)->exists()) {
             // Add numeric suffix to make it unique
             $finalCode = substr($baseCode, 0, 9 - strlen($counter)) . $counter;
             $counter++;

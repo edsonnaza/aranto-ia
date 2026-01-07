@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('service_service_category', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('service_id')->constrained('services')->onDelete('cascade');
+            $table->foreignId('service_id')->constrained('medical_services')->onDelete('cascade');
             $table->foreignId('service_category_id')->constrained('service_categories')->onDelete('cascade');
             $table->timestamps();
             

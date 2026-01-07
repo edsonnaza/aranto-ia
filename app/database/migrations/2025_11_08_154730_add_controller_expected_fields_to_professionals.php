@@ -13,16 +13,28 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('professionals', function (Blueprint $table) {
-            // Add fields expected by ProfessionalController
-            $table->string('identification', 20)->nullable()->after('user_id');
-            $table->string('license_number', 50)->nullable()->after('professional_license');
-            $table->boolean('is_active')->default(true)->after('status');
+            // Add fields expected by ProfessionalController only if they don't exist
+            if (!Schema::hasColumn('professionals', 'identification')) {
+                $table->string('identification', 20)->nullable()->after('user_id');
+            }
+            if (!Schema::hasColumn('professionals', 'license_number')) {
+                $table->string('license_number', 50)->nullable()->after('professional_license');
+            }
+            if (!Schema::hasColumn('professionals', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('status');
+            }
         });
 
-        // Populate new fields with existing data
-        DB::statement('UPDATE professionals SET identification = document_number');
-        DB::statement('UPDATE professionals SET license_number = professional_license');
-        DB::statement('UPDATE professionals SET is_active = CASE WHEN status = "active" THEN 1 ELSE 0 END');
+        // Populate new fields with existing data (only if they were created)
+        if (Schema::hasColumn('professionals', 'identification')) {
+            DB::statement('UPDATE professionals SET identification = document_number WHERE identification IS NULL');
+        }
+        if (Schema::hasColumn('professionals', 'license_number')) {
+            DB::statement('UPDATE professionals SET license_number = professional_license WHERE license_number IS NULL');
+        }
+        if (Schema::hasColumn('professionals', 'is_active')) {
+            DB::statement('UPDATE professionals SET is_active = CASE WHEN status = "active" THEN 1 ELSE 0 END WHERE is_active = 0');
+        }
     }
 
     /**

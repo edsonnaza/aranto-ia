@@ -91,7 +91,7 @@ class PendingServicesTest extends TestCase
         $insuranceB = \App\Models\InsuranceType::create(['name' => 'Beta', 'code' => 'BE', 'status' => 'active']);
 
         // Create supporting data for details
-        $service = \App\Models\Service::create(['name' => 'X-Ray', 'status' => 'active']);
+        $service = \App\Models\MedicalService::create(['name' => 'X-Ray', 'code' => 'XRAY', 'status' => 'active']);
         $professional = \App\Models\Professional::create(['first_name' => 'Doc', 'last_name' => 'One', 'status' => 'active']);
 
         // Request A with insurance Alpha

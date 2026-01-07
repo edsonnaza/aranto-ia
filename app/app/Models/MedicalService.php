@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
+use App\Models\ServiceCategory;
+use App\Models\ServicePrice;
+use App\Models\InsuranceType;
 
 /**
  * @property int $id
@@ -63,6 +66,21 @@ class MedicalService extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ServiceCategory::class);
+    }
+
+    /**
+     * Get all categories for this service (many-to-many via pivot).
+     * Nota: Actualmente usamos relación 1:N (category_id), pero esta relación
+     * se mantiene para compatibilidad con datos históricos en tabla pivot.
+     */
+    public function categories()
+    {
+        return $this->belongsToMany(
+            ServiceCategory::class,
+            'service_service_category',
+            'service_id',
+            'service_category_id'
+        )->withTimestamps();
     }
 
     /**

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('legacy_service_mappings', function (Blueprint $table) {
             $table->id();
             $table->integer('legacy_product_id')->unique()->comment('ID del producto en tabla legacy.producto');
-            $table->foreignId('service_id')->constrained('services')->onDelete('cascade')->comment('ID del servicio en tabla services');
+            $table->foreignId('service_id')->constrained('medical_services')->onDelete('cascade')->comment('ID del servicio en tabla medical_services');
             $table->string('legacy_name')->comment('Nombre del producto en legacy (snapshot)');
             $table->timestamps();
         });

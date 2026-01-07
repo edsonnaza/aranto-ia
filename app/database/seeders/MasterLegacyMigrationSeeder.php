@@ -115,12 +115,12 @@ class MasterLegacyMigrationSeeder extends Seeder
         $this->command->info('');
 
         $validations = [
-            'Services' => [
-                'total' => DB::table('services')->count(),
-                'con_acentos' => DB::table('services')
+            'Medical Services' => [
+                'total' => DB::table('medical_services')->count(),
+                'con_acentos' => DB::table('medical_services')
                     ->whereRaw("name LIKE '%ó%' OR name LIKE '%á%' OR name LIKE '%í%'")
                     ->count(),
-                'corruptos' => DB::table('services')
+                'corruptos' => DB::table('medical_services')
                     ->whereRaw("name LIKE '%¿%' OR name LIKE '%½%'")
                     ->count(),
             ],
@@ -152,7 +152,7 @@ class MasterLegacyMigrationSeeder extends Seeder
         }
 
         // Validar que no haya caracteres corruptos
-        $corruptedServices = DB::table('services')
+        $corruptedServices = DB::table('medical_services')
             ->whereRaw("name LIKE '%¿%' OR name LIKE '%½%'")
             ->count();
 
@@ -178,10 +178,10 @@ class MasterLegacyMigrationSeeder extends Seeder
         $report .= "=" . str_repeat("=", 78) . "\n\n";
 
         // Estadísticas de servicios
-        $totalServices = DB::table('services')->count();
+        $totalServices = DB::table('medical_services')->count();
         $fromLegacy = DB::table('legacy_service_mappings')->count();
 
-        $report .= "SERVICIOS:\n";
+        $report .= "SERVICIOS MÉDICOS:\n";
         $report .= "  Total en BD: {$totalServices}\n";
         $report .= "  Mapeados desde legacy: {$fromLegacy}\n";
         $report .= "  No-legacy: " . ($totalServices - $fromLegacy) . "\n";
@@ -200,7 +200,7 @@ class MasterLegacyMigrationSeeder extends Seeder
         }
 
         // Validación de caracteres corruptos
-        $corruptedCount = DB::table('services')
+        $corruptedCount = DB::table('medical_services')
             ->whereRaw("name LIKE '%¿%' OR name LIKE '%½%'")
             ->count();
 

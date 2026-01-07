@@ -14,17 +14,25 @@ return new class extends Migration
     {
         Schema::table('professionals', function (Blueprint $table) {
             // Renaming/adding missing columns that ProfessionalController expects
-            $table->string('identification', 20)->nullable()->after('user_id'); // Maps to document_number
-            $table->string('specialty', 100)->after('title'); // New specialty field
-            $table->string('license_number', 50)->nullable()->after('specialty'); // Maps to professional_license
-            $table->boolean('is_active')->default(true)->after('license_number'); // Maps to status
+            if (!Schema::hasColumn('professionals', 'identification')) {
+                $table->string('identification', 20)->nullable()->after('user_id'); // Maps to document_number
+            }
+            if (!Schema::hasColumn('professionals', 'specialty')) {
+                $table->string('specialty', 100)->nullable()->after('title'); // New specialty field
+            }
+            if (!Schema::hasColumn('professionals', 'license_number')) {
+                $table->string('license_number', 50)->nullable()->after('specialty'); // Maps to professional_license
+            }
+            if (!Schema::hasColumn('professionals', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('license_number'); // Maps to status
+            }
         });
 
         // Update existing data to match new structure
-        DB::statement('UPDATE professionals SET identification = document_number');
-        DB::statement('UPDATE professionals SET license_number = professional_license');
-        DB::statement('UPDATE professionals SET is_active = CASE WHEN status = "active" THEN 1 ELSE 0 END');
-        DB::statement('UPDATE professionals SET specialty = COALESCE(title, "General")');
+        DB::statement('UPDATE professionals SET identification = document_number WHERE identification IS NULL');
+        DB::statement('UPDATE professionals SET license_number = professional_license WHERE license_number IS NULL');
+        DB::statement('UPDATE professionals SET is_active = CASE WHEN status = "active" THEN 1 ELSE 0 END WHERE is_active = 0 AND status != "inactive"');
+        DB::statement('UPDATE professionals SET specialty = COALESCE(title, NULL) WHERE specialty IS NULL');
     }
 
     /**

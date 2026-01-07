@@ -87,10 +87,42 @@ class ReceptionController extends Controller
     public function create(): Response
     {
         return Inertia::render('medical/reception/Create', [
-            'patients' => [],
-            'medicalServices' => [],
-            'professionals' => [],
-            'insuranceTypes' => [],
+            'patients' => Patient::where('status', 'active')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name', 'document_type', 'document_number'])
+                ->map(function ($patient) {
+                    return [
+                        'value' => $patient->id,
+                        'label' => $patient->full_name . ' - ' . $patient->formatted_document,
+                        'full_name' => $patient->full_name,
+                        'document' => $patient->formatted_document,
+                    ];
+                }),
+            'medicalServices' => MedicalService::where('status', 'active')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($service) {
+                    return [
+                        'id' => $service->id,
+                        'name' => $service->name,
+                        'code' => $service->code,
+                        'description' => $service->description,
+                        'category_id' => $service->category_id,
+                        'category_name' => $service->category?->name,
+                        'duration_minutes' => $service->duration_minutes,
+                        'requires_appointment' => $service->requires_appointment,
+                        'requires_preparation' => $service->requires_preparation,
+                        'status' => $service->status,
+                    ];
+                }),
+            'professionals' => Professional::where('status', 'active')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(),
+            'insuranceTypes' => InsuranceType::where('status', 'active')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
