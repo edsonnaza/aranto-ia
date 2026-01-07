@@ -403,16 +403,16 @@ class MedicalServiceController extends Controller
             ->map(function ($service) {
                 // Obtener el precio más reciente de cualquier tipo de seguro como referencia
                 $currentPrice = $service->currentPrices()->first();
-                $priceDisplay = $currentPrice ? 'Bs. ' . number_format($currentPrice->price, 2) : 'Sin precio';
+                $priceDisplay = $currentPrice ? '₲ ' . number_format($currentPrice->price, 0, ',', '.') : 'Sin precio';
                 
                 return [
                     'id' => $service->id,
                     'label' => $service->name,
-                    'subtitle' => $service->category->name . ' - ' . $priceDisplay,
+                    'subtitle' => ($service->category ? $service->category->name : 'Sin Categoría') . ' - ' . $priceDisplay,
                     'code' => $service->code,
                     'current_price' => $currentPrice ? $currentPrice->price : null,
                     'duration_minutes' => $service->duration_minutes,
-                    'category' => $service->category->name
+                    'category' => $service->category ? $service->category->name : 'Sin Categoría'
                 ];
             });
 

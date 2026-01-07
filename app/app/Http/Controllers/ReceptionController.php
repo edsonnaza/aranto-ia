@@ -87,76 +87,10 @@ class ReceptionController extends Controller
     public function create(): Response
     {
         return Inertia::render('medical/reception/Create', [
-            'patients' => Patient::where('status', 'active')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get(['id', 'first_name', 'last_name', 'document_type', 'document_number'])
-                ->map(function ($patient) {
-                    return [
-                        'value' => $patient->id,
-                        'label' => $patient->full_name . ' - ' . $patient->formatted_document,
-                        'full_name' => $patient->full_name,
-                        'document' => $patient->formatted_document,
-                    ];
-                }),
-            'medicalServices' => MedicalService::with(['category', 'currentPrices.insuranceType'])
-                ->where('status', 'active')
-                ->orderBy('name')
-                ->get()
-                ->groupBy(function ($service) {
-                    return $service->category ? $service->category->name : 'Sin Categoría';
-                })
-                ->map(function ($services, $categoryName) {
-                    return [
-                        'category' => $categoryName,
-                        'services' => $services->map(function ($service) {
-                            // Obtener precios por seguro usando la relación currentPrices
-                            $pricesByInsurance = $service->currentPrices
-                                ->mapWithKeys(function ($price) {
-                                    return [$price->insurance_type_id => $price->price];
-                                });
-
-                            return [
-                                'value' => $service->id,
-                                'label' => $service->name . ' (' . $service->code . ')',
-                                'name' => $service->name,
-                                'code' => $service->code,
-                                'duration_minutes' => $service->duration_minutes,
-                                'prices_by_insurance' => $pricesByInsurance->toArray(),
-                            ];
-                        })->values()
-                    ];
-                })->values(),
-            'professionals' => Professional::where('status', 'active')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get(['id', 'first_name', 'last_name'])
-                ->map(function ($professional) {
-                    // Buscar la especialidad principal directamente
-                    $primarySpecialty = $professional->specialties()
-                        ->wherePivot('is_primary', true)
-                        ->first();
-                    
-                    $specialtyName = $primarySpecialty ? $primarySpecialty->name : 'Sin especialidad';
-                    
-                    return [
-                        'value' => $professional->id,
-                        'label' => $professional->full_name . ' - ' . $specialtyName,
-                        'full_name' => $professional->full_name,
-                        'specialty' => $specialtyName,
-                    ];
-                }),
-            'insuranceTypes' => InsuranceType::where('status', 'active')
-                ->orderBy('name')
-                ->get()
-                ->map(function ($insurance) {
-                    return [
-                        'value' => $insurance->id,
-                        'label' => $insurance->name . ' (' . $insurance->coverage_percentage . '% cobertura)',
-                        'name' => $insurance->name,
-                        'coverage_percentage' => $insurance->coverage_percentage,
-                    ];
-                }),
+            'patients' => [],
+            'medicalServices' => [],
+            'professionals' => [],
+            'insuranceTypes' => [],
         ]);
     }
 
