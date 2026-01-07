@@ -16,11 +16,11 @@ return new class extends Migration
             $table->dropForeign('service_prices_service_id_foreign');
         });
 
-        // Re-add the foreign key pointing to 'services' table
+        // Re-add the foreign key pointing to 'medical_services' table
         Schema::table('service_prices', function (Blueprint $table) {
             $table->foreign('service_id')
                 ->references('id')
-                ->on('services')
+                ->on('medical_services')
                 ->onDelete('cascade');
         });
     }
