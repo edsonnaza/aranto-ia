@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use App\Helpers\ServiceCodeHelper;
 
 class ProfessionalsFromLegacySeeder extends Seeder
 {
@@ -247,7 +248,10 @@ class ProfessionalsFromLegacySeeder extends Seeder
     }
 
     /**
-     * Normalizar nombres (Primera letra de cada palabra mayúscula)
+     * Normalizar nombres: sanitizar caracteres especiales como ñ, acentos, etc.
+     * Similar al proceso usado en servicios
+     * Ejemplo: "Jóse María Peña" → "Jose Maria Pena"
+     * 
      * Maneja títulos sin espacios después del punto (ej: "Lic.natalia" → "Lic. Natalia")
      */
     private function normalizeString($string): string
@@ -256,14 +260,17 @@ class ProfessionalsFromLegacySeeder extends Seeder
         
         $trimmed = trim($string);
         
-        // Paso 1: Agregar espacios después de puntos si no los tienen
-        // Patrón: punto seguido de letra (sin espacio) → punto + espacio + letra
-        $withSpaces = preg_replace('/(\.)([A-Za-z])/', '. $2', $trimmed);
+        // Paso 1: Sanitizar caracteres especiales usando ServiceCodeHelper
+        $sanitized = ServiceCodeHelper::removeAccents($trimmed);
         
-        // Paso 2: Normalizar múltiples espacios a un solo espacio
+        // Paso 2: Agregar espacios después de puntos si no los tienen
+        // Patrón: punto seguido de letra (sin espacio) → punto + espacio + letra
+        $withSpaces = preg_replace('/(\.)([A-Za-z])/', '. $2', $sanitized);
+        
+        // Paso 3: Normalizar múltiples espacios a un solo espacio
         $normalized = preg_replace('/\s+/', ' ', $withSpaces);
         
-        // Paso 3: Convertir a lowercase primero, luego capitalizar cada palabra
+        // Paso 4: Convertir a Title Case (primera letra de cada palabra mayúscula)
         return mb_convert_case($normalized, MB_CASE_TITLE, 'UTF-8');
     }
 

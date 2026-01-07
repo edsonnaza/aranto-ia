@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import SearchableInput from '@/components/ui/SearchableInput'
 import SelectItem from '@/components/ui/SelectItem'
+import { useSearch } from '@/hooks/medical'
+import { useServicePricing } from '@/hooks/medical'
 
 interface ServiceItem {
   id: string
@@ -54,11 +56,58 @@ export default function ServiceCartItem({
   onSearchServices,
   calculateTotal
 }: ServiceCartItemProps) {
+  const { searchProfessionals } = useSearch()
+  const { getServicePrice } = useServicePricing()
   const [selectedServiceName, setSelectedServiceName] = useState('')
+  const [selectedProfessionalName, setSelectedProfessionalName] = useState('')
+  const [selectedInsuranceName, setSelectedInsuranceName] = useState('')
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false)
 
   const handleServiceSelection = (selectedService: SelectOption) => {
     setSelectedServiceName(selectedService.label)
     onServiceSelect(selectedService, service.id)
+  }
+
+  const handleProfessionalSelection = (selectedProfessional: any) => {
+    setSelectedProfessionalName(selectedProfessional.label)
+    onUpdate(service.id, 'professional_id', selectedProfessional.id)
+  }
+
+  const handleInsuranceSelection = (selectedInsurance: any) => {
+    setSelectedInsuranceName(selectedInsurance.label)
+    onUpdate(service.id, 'insurance_type_id', selectedInsurance.id)
+  }
+
+  // Effect to fetch price when service or insurance changes
+  useEffect(() => {
+    if (service.medical_service_id > 0 && service.insurance_type_id > 0) {
+      const fetchPrice = async () => {
+        try {
+          setIsLoadingPrice(true)
+          const price = await getServicePrice(service.medical_service_id, service.insurance_type_id)
+          if (price !== null && price !== undefined && price > 0) {
+            onUpdate(service.id, 'unit_price', price)
+          }
+        } catch (error) {
+          console.error('Error fetching service price:', error)
+        } finally {
+          setIsLoadingPrice(false)
+        }
+      }
+
+      fetchPrice()
+    }
+  }, [service.medical_service_id, service.insurance_type_id, service.id, onUpdate, getServicePrice])
+
+  // Local search for insurance types
+  const searchInsuranceTypes = async (query: string) => {
+    if (!Array.isArray(insuranceTypes)) return []
+    return insuranceTypes
+      .filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
+      .map(i => ({
+        id: i.value,
+        label: i.label,
+      }))
   }
 
   const selectedService = flatServices.find(s => s.value === service.medical_service_id)
@@ -108,36 +157,30 @@ export default function ServiceCartItem({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Profesional *
           </label>
-          <SelectItem
-            value={service.professional_id.toString()}
-            onValueChange={(value: string) => onUpdate(service.id, 'professional_id', Number(value))}
-            required
-          >
-            <option value="0">Seleccionar...</option>
-            {professionals.map((professional) => (
-              <option key={professional.value} value={professional.value.toString()}>
-                {professional.label}
-              </option>
-            ))}
-          </SelectItem>
+          <SearchableInput
+            placeholder="Buscar profesional..."
+            value={selectedProfessionalName || ''}
+            onSelect={handleProfessionalSelection}
+            onSearch={searchProfessionals}
+            minSearchLength={1}
+            maxResults={10}
+            className="w-full"
+          />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Seguro *
           </label>
-          <SelectItem
-            value={service.insurance_type_id.toString()}
-            onValueChange={(value: string) => onUpdate(service.id, 'insurance_type_id', Number(value))}
-            required
-          >
-            <option value="0">Seleccionar...</option>
-            {insuranceTypes.map((insurance) => (
-              <option key={insurance.value} value={insurance.value.toString()}>
-                {insurance.label}
-              </option>
-            ))}
-          </SelectItem>
+          <SearchableInput
+            placeholder="Buscar seguro..."
+            value={selectedInsuranceName || ''}
+            onSelect={handleInsuranceSelection}
+            onSearch={searchInsuranceTypes}
+            minSearchLength={1}
+            maxResults={10}
+            className="w-full"
+          />
         </div>
 
         <div>

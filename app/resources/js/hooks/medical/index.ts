@@ -28,6 +28,10 @@ export type {
   UseReceptionReturn 
 } from './useReception'
 
+// Professionals Hook
+export { useProfessionals } from './useProfessionals'
+export type { Professional, UseProfessionalsReturn } from './useProfessionals'
+
 // Search Hooks
 export { useSearch } from './useSearch'
 export type {

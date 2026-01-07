@@ -21,6 +21,12 @@ export interface ServiceSearchResult extends SearchResult {
   category: string
 }
 
+export interface ProfessionalSearchResult extends SearchResult {
+  full_name: string
+  specialties?: string
+  commission_percentage?: number
+}
+
 export interface UseSearchReturn {
   // Patient search
   searchPatients: (query: string) => Promise<PatientSearchResult[]>
@@ -28,9 +34,13 @@ export interface UseSearchReturn {
   // Service search
   searchServices: (query: string) => Promise<ServiceSearchResult[]>
   
+  // Professional search
+  searchProfessionals: (query: string) => Promise<ProfessionalSearchResult[]>
+  
   // Loading states
   isSearchingPatients: boolean
   isSearchingServices: boolean
+  isSearchingProfessionals: boolean
   
   // Error handling
   searchError: string | null
@@ -39,6 +49,7 @@ export interface UseSearchReturn {
 export const useSearch = (): UseSearchReturn => {
   const [isSearchingPatients, setIsSearchingPatients] = useState(false)
   const [isSearchingServices, setIsSearchingServices] = useState(false)
+  const [isSearchingProfessionals, setIsSearchingProfessionals] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
   const searchPatients = useCallback(async (query: string): Promise<PatientSearchResult[]> => {
@@ -119,11 +130,50 @@ export const useSearch = (): UseSearchReturn => {
     }
   }, [])
 
+  const searchProfessionals = useCallback(async (query: string): Promise<ProfessionalSearchResult[]> => {
+    try {
+      setIsSearchingProfessionals(true)
+      setSearchError(null)
+
+      const response = await fetch(`/medical/professionals-search?q=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return data.map((professional: ProfessionalSearchResult) => ({
+        id: professional.id,
+        label: professional.label,
+        subtitle: professional.subtitle,
+        full_name: professional.full_name,
+        specialties: professional.specialties,
+        commission_percentage: professional.commission_percentage
+      }))
+    } catch (error) {
+      console.error('Error searching professionals:', error)
+      setSearchError('Error al buscar profesionales')
+      return []
+    } finally {
+      setIsSearchingProfessionals(false)
+    }
+  }, [])
+
   return {
     searchPatients,
     searchServices,
+    searchProfessionals,
     isSearchingPatients,
     isSearchingServices,
+    isSearchingProfessionals,
     searchError
   }
 }

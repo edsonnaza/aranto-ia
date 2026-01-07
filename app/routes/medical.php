@@ -124,6 +124,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         'update' => 'professionals.update',
         'destroy' => 'professionals.destroy'
     ]);
+    Route::get('professionals-search', [ProfessionalController::class, 'search'])
+        ->name('professionals.search');
     Route::get('professionals/{professional}/commission-report', [ProfessionalController::class, 'commissionReport'])
         ->name('professionals.commission-report');
     Route::patch('professionals/{professional}/toggle-status', [ProfessionalController::class, 'toggleStatus'])
@@ -159,6 +161,10 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         // Get service price by insurance type
         Route::get('/service-price', [ReceptionController::class, 'getServicePrice'])
             ->name('service-price');
+        
+        // Get professionals for selection
+        Route::get('/professionals', [ProfessionalController::class, 'apiGetProfessionals'])
+            ->name('professionals');
     });
 
     // Commission Liquidations Management

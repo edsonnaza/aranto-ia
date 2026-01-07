@@ -39,9 +39,9 @@ interface ReceptionCreateProps {
 }
 
 export default function ReceptionCreate({ 
-  medicalServices, 
-  professionals, 
-  insuranceTypes 
+  medicalServices = [],
+  professionals = [],
+  insuranceTypes = []
 }: ReceptionCreateProps) {
   const { loading, error, createServiceRequest } = useServiceRequests()
   const { searchPatients, searchServices } = useSearch()
@@ -60,13 +60,45 @@ export default function ReceptionCreate({
 
   // Flatten services for select options
   const flatServices = useMemo(() => {
-    return medicalServices.flatMap(category => 
-      category.services.map(service => ({
-        ...service,
+    if (!medicalServices || !Array.isArray(medicalServices) || medicalServices.length === 0) {
+      return []
+    }
+    
+    return medicalServices.flatMap(category => {
+      if (!category || !category.services || !Array.isArray(category.services)) {
+        return []
+      }
+      
+      return category.services.map(service => ({
+        id: service.id,
+        value: service.id,
+        label: `${service.name} (${service.code || 'N/A'})`,
+        name: service.name,
+        code: service.code,
+        base_price: service.base_price || 0,
+        estimated_duration: service.estimated_duration || 30,
         category: category.category
       }))
-    )
+    })
   }, [medicalServices])
+
+  // Transform professionals for SelectOption format
+  const professionalOptions = useMemo(() => {
+    if (!professionals || !Array.isArray(professionals)) return []
+    return professionals.map(prof => ({
+      value: prof.id,
+      label: prof.full_name || `${prof.first_name} ${prof.last_name}`
+    }))
+  }, [professionals])
+
+  // Transform insurance types for SelectOption format
+  const insuranceOptions = useMemo(() => {
+    if (!insuranceTypes || !Array.isArray(insuranceTypes)) return []
+    return insuranceTypes.map(insurance => ({
+      value: insurance.id,
+      label: insurance.name
+    }))
+  }, [insuranceTypes])
 
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
@@ -359,8 +391,8 @@ export default function ReceptionCreate({
                         service={service}
                         index={index}
                         flatServices={flatServices}
-                        professionals={professionals}
-                        insuranceTypes={insuranceTypes}
+                        professionals={professionalOptions}
+                        insuranceTypes={insuranceOptions}
                         onUpdate={updateService}
                         onRemove={removeServiceFromCart}
                         onServiceSelect={handleServiceSelect}

@@ -7,6 +7,7 @@ use App\Models\Patient;
 use App\Models\MedicalService;
 use App\Models\Professional;
 use App\Models\InsuranceType;
+use App\Models\ServiceCategory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -86,37 +87,13 @@ class ReceptionController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('medical/reception/Create', [
-            'patients' => Patient::where('status', 'active')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get(['id', 'first_name', 'last_name', 'document_type', 'document_number'])
-                ->map(function ($patient) {
-                    return [
-                        'value' => $patient->id,
-                        'label' => $patient->full_name . ' - ' . $patient->formatted_document,
-                        'full_name' => $patient->full_name,
-                        'document' => $patient->formatted_document,
-                    ];
-                }),
-            'medicalServices' => MedicalService::where('status', 'active')
-                ->orderBy('name')
-                ->get()
-                ->map(function ($service) {
-                    return [
-                        'id' => $service->id,
-                        'name' => $service->name,
-                        'code' => $service->code,
-                        'description' => $service->description,
-                        'category_id' => $service->category_id,
-                        'category_name' => $service->category?->name,
-                        'duration_minutes' => $service->duration_minutes,
-                        'requires_appointment' => $service->requires_appointment,
-                        'requires_preparation' => $service->requires_preparation,
-                        'status' => $service->status,
-                    ];
-                }),
-            'professionals' => Professional::where('status', 'active')
+        $professionals = [];
+        $medicalServices = [];
+        $insuranceTypes = [];
+        
+        try {
+            // Cargar profesionales
+            $professionals = Professional::where('status', 'active')
                 ->with('commissionSettings')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -134,11 +111,119 @@ class ReceptionController extends Controller
                         'status' => $professional->status,
                         'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
                     ];
-                }),
-            'insuranceTypes' => InsuranceType::where('status', 'active')
+                })->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error loading professionals in ReceptionController: ' . $e->getMessage());
+        }
+
+        try {
+            // Cargar servicios médicos agrupados por categoría
+            $medicalServices = ServiceCategory::where('status', 'active')
+                ->with(['services' => function ($query) {
+                    $query->where('status', 'active')->orderBy('name');
+                }])
                 ->orderBy('name')
-                ->get(),
+                ->get()
+                ->map(function ($category) {
+                    return [
+                        'id' => $category->id,
+                        'category' => $category->name,
+                        'services' => $category->services->map(function ($service) {
+                            return [
+                                'id' => $service->id,
+                                'name' => $service->name,
+                                'code' => $service->code,
+                                'base_price' => $service->base_price ?? 0,
+                                'estimated_duration' => $service->duration_minutes ?? 30,
+                            ];
+                        })->toArray(),
+                    ];
+                })->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error loading medical services in ReceptionController: ' . $e->getMessage());
+        }
+
+        try {
+            // Cargar tipos de seguros
+            $insuranceTypes = InsuranceType::where('status', 'active')
+                ->orderBy('name')
+                ->get()
+                ->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error loading insurance types in ReceptionController: ' . $e->getMessage());
+        }
+
+        return Inertia::render('medical/reception/Create', [
+            'patients' => [],
+            'medicalServices' => $medicalServices,
+            'professionals' => $professionals,
+            'insuranceTypes' => $insuranceTypes,
         ]);
+    }
+
+    /**
+     * Obtener servicios médicos agrupados por categoría
+     */
+    private function getMedicalServicesGroupedByCategory()
+    {
+        try {
+            $categories = ServiceCategory::where('status', 'active')
+                ->with(['services' => function ($query) {
+                    $query->where('status', 'active')->orderBy('name');
+                }])
+                ->orderBy('name')
+                ->get();
+
+            return $categories->map(function ($category) {
+                return [
+                    'id' => $category->id,
+                    'category' => $category->name,
+                    'services' => $category->services->map(function ($service) {
+                        return [
+                            'id' => $service->id,
+                            'name' => $service->name,
+                            'code' => $service->code,
+                            'base_price' => $service->base_price ?? 0,
+                            'estimated_duration' => $service->duration_minutes ?? 30,
+                        ];
+                    })->toArray(),
+                ];
+            })->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error getting medical services: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Obtener profesionales activos con comisiones
+     */
+    private function getActiveProfessionals()
+    {
+        try {
+            return Professional::where('status', 'active')
+                ->with('commissionSettings')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get()
+                ->map(function ($professional) {
+                    return [
+                        'id' => $professional->id,
+                        'first_name' => $professional->first_name,
+                        'last_name' => $professional->last_name,
+                        'full_name' => $professional->full_name,
+                        'document_type' => $professional->document_type,
+                        'document_number' => $professional->document_number,
+                        'phone' => $professional->phone,
+                        'email' => $professional->email,
+                        'status' => $professional->status,
+                        'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
+                    ];
+                })->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error getting professionals: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**

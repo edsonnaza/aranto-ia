@@ -83,7 +83,33 @@ class ProfessionalController extends Controller
 
         // Pagination
         $perPage = $request->get('per_page', 15);
-        $professionals = $query->paginate($perPage)->withQueryString();
+        $professionalsPaginated = $query->paginate($perPage)->withQueryString();
+
+        // Map professionals to include commission from commissionSettings
+        $professionals = $professionalsPaginated->through(function ($professional) {
+            // Get commission from commissionSettings, fallback to commission_percentage field
+            $commission = $professional->commissionSettings?->commission_percentage 
+                ?? $professional->commission_percentage 
+                ?? null;
+            
+            return [
+                'id' => $professional->id,
+                'first_name' => $professional->first_name,
+                'last_name' => $professional->last_name,
+                'document_type' => $professional->document_type,
+                'document_number' => $professional->document_number,
+                'email' => $professional->email,
+                'phone' => $professional->phone,
+                'license_number' => $professional->license_number,
+                'commission_percentage' => $commission,
+                'is_active' => $professional->status === 'active',
+                'status' => $professional->status,
+                'created_at' => $professional->created_at,
+                'specialties' => $professional->specialties ?? [],
+                'services' => $professional->services ?? [],
+                'commissionSettings' => $professional->commissionSettings,
+            ];
+        });
 
         // Statistics
         $stats = [
@@ -369,5 +395,87 @@ class ProfessionalController extends Controller
         
         return redirect()->back()
             ->with('success', "Profesional {$professional->full_name} {$status} exitosamente.");
+    }
+
+    /**
+     * API endpoint para obtener profesionales activos
+     * Utilizado por hooks frontend para cargar datos dinámicamente
+     * GET /medical/reception/professionals
+     */
+    public function apiGetProfessionals()
+    {
+        try {
+            $professionals = Professional::where('status', 'active')
+                ->with('commissionSettings')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get()
+                ->map(function ($professional) {
+                    return [
+                        'id' => $professional->id,
+                        'first_name' => $professional->first_name,
+                        'last_name' => $professional->last_name,
+                        'full_name' => $professional->full_name,
+                        'document_type' => $professional->document_type,
+                        'document_number' => $professional->document_number,
+                        'phone' => $professional->phone,
+                        'email' => $professional->email,
+                        'status' => $professional->status,
+                        'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
+                    ];
+                });
+
+            return response()->json([
+                'professionals' => $professionals,
+                'total' => count($professionals),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching professionals: ' . $e->getMessage());
+            return response()->json(['error' => 'Error fetching professionals'], 500);
+        }
+    }
+
+    /**
+     * Search for professionals (for SearchableInput component)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function search(Request $request)
+    {
+        try {
+            $query = $request->get('q', '');
+            
+            if (strlen($query) < 1) {
+                return response()->json([]);
+            }
+
+            $professionals = Professional::where('status', 'active')
+                ->with('commissionSettings')
+                ->where(function ($q) use ($query) {
+                    $q->where('first_name', 'like', "%{$query}%")
+                      ->orWhere('last_name', 'like', "%{$query}%")
+                      ->orWhere('document_number', 'like', "%{$query}%")
+                      ->orWhere('email', 'like', "%{$query}%");
+                })
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->limit(15)
+                ->get()
+                ->map(function ($professional) {
+                    return [
+                        'id' => $professional->id,
+                        'label' => $professional->full_name,
+                        'subtitle' => $professional->email ?? $professional->document_number,
+                        'full_name' => $professional->full_name,
+                        'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
+                    ];
+                });
+
+            return response()->json($professionals);
+        } catch (\Exception $e) {
+            \Log::error('Error searching professionals: ' . $e->getMessage());
+            return response()->json([], 500);
+        }
     }
 }

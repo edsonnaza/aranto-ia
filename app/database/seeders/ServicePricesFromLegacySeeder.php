@@ -4,8 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\LegacyServiceMapping;
 use App\Models\ServicePrice;
+use App\Models\InsuranceType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ServicePricesFromLegacySeeder extends Seeder
 {
@@ -24,10 +26,11 @@ class ServicePricesFromLegacySeeder extends Seeder
 
     public function run(): void
     {
-        echo "\n=== INICIANDO MIGRACIÓN DE PRECIOS DE SERVICIOS ===\n";
+        $this->command->info('');
+        $this->command->info('=== INICIANDO MIGRACIÓN DE PRECIOS DE SERVICIOS ===');
+        $this->command->info('');
 
         // Obtener todos los precios de productos en legacy
-        // PERO solo los de productos que fueron migrados
         $legacyPrices = DB::connection('legacy')
             ->table('producto_precios')
             ->where('activo', 'SI')
@@ -41,10 +44,16 @@ class ServicePricesFromLegacySeeder extends Seeder
         $procesados = 0;
         $errores = 0;
         $creados = 0;
-        $ignorados = 0; // Contadores para productos no migrados
+        $ignorados = 0;
 
-        echo "Total de precios en legacy: {$totalPrecios}\n";
-        echo "Servicios migrados en Aranto: " . count($migratedServiceIds) . "\n";
+        $this->command->line("Total de precios en legacy: {$totalPrecios}");
+        $this->command->line("Servicios migrados en Aranto: " . count($migratedServiceIds));
+        $this->command->info('');
+
+        if ($totalPrecios === 0) {
+            $this->command->warn('⚠️  No hay precios activos en legacy para migrar');
+            return;
+        }
 
         foreach ($legacyPrices as $precio) {
             $procesados++;
@@ -53,32 +62,36 @@ class ServicePricesFromLegacySeeder extends Seeder
                 // Validar que el producto fue migrado
                 if (!in_array($precio->idproducto, $migratedServiceIds)) {
                     $ignorados++;
-                    continue; // Saltar sin mostrar aviso (ya muy verbose)
+                    continue;
                 }
 
                 // Buscar el mapeo del producto legacy
                 $mapping = LegacyServiceMapping::where('legacy_product_id', $precio->idproducto)->first();
 
                 if (!$mapping) {
-                    echo "⚠️  Aviso: Producto legacy {$precio->idproducto} no tiene mapeo a Aranto (pero existe en migraciones)\n";
+                    $this->command->warn("⚠️  Producto legacy {$precio->idproducto} no tiene mapeo");
                     continue;
                 }
 
                 // Validar que el seguro exista en aranto
                 if (!isset($this->insuranceMappings[$precio->idseguro])) {
-                    echo "⚠️  Aviso: Seguro legacy {$precio->idseguro} no tiene mapeo a Aranto\n";
+                    $this->command->warn("⚠️  Seguro legacy {$precio->idseguro} no tiene mapeo a Aranto");
                     continue;
                 }
 
                 $arantoInsuranceId = $this->insuranceMappings[$precio->idseguro];
 
                 // Verificar que la insurance_type exista en aranto
-                $insuranceExists = DB::table('insurance_types')
-                    ->where('id', $arantoInsuranceId)
-                    ->exists();
+                $insurance = InsuranceType::find($arantoInsuranceId);
+                if (!$insurance) {
+                    $this->command->warn("⚠️  Insurance type {$arantoInsuranceId} no existe en Aranto");
+                    continue;
+                }
 
-                if (!$insuranceExists) {
-                    echo "⚠️  Aviso: Insurance type {$arantoInsuranceId} no existe en Aranto\n";
+                // Validar el precio
+                $price = (float) $precio->PrecioVenta;
+                if ($price <= 0) {
+                    $this->command->warn("⚠️  Precio inválido para producto {$precio->idproducto}: {$price}");
                     continue;
                 }
 
@@ -89,8 +102,8 @@ class ServicePricesFromLegacySeeder extends Seeder
                         'insurance_type_id' => $arantoInsuranceId,
                     ],
                     [
-                        'price' => $precio->PrecioVenta,
-                        'effective_from' => now(),
+                        'price' => $price,
+                        'effective_from' => now()->toDateString(),
                         'effective_until' => null,
                     ]
                 );
@@ -99,20 +112,23 @@ class ServicePricesFromLegacySeeder extends Seeder
 
                 // Mostrar progreso cada 50 registros
                 if ($procesados % 50 == 0) {
-                    echo "[{$procesados}/{$totalPrecios}] Procesados: {$creados} precios creados/actualizados\n";
+                    $this->command->line("[{$procesados}/{$totalPrecios}] Procesados: {$creados} precios creados/actualizados");
                 }
             } catch (\Exception $e) {
                 $errores++;
-                echo "❌ Error procesando precio legacy ID {$precio->idproducto}: {$e->getMessage()}\n";
+                $this->command->error("❌ Error procesando precio legacy ID {$precio->idproducto}: {$e->getMessage()}");
             }
         }
 
-        echo "\n=== RESUMEN DE MIGRACIÓN DE PRECIOS ===\n";
-        echo "Total precios en legacy: {$totalPrecios}\n";
-        echo "Precios de servicios migrados: " . ($procesados - $ignorados) . "\n";
-        echo "Creados/Actualizados: {$creados}\n";
-        echo "Ignorados (producto no migrado): {$ignorados}\n";
-        echo "Errores: {$errores}\n";
+        $this->command->info('');
+        $this->command->info('=== RESUMEN DE MIGRACIÓN DE PRECIOS ===');
+        $this->command->line("Total precios en legacy: {$totalPrecios}");
+        $this->command->line("Precios de servicios migrados: " . ($procesados - $ignorados));
+        $this->command->line("✓ Creados/Actualizados: {$creados}");
+        $this->command->line("⊘ Ignorados (producto no migrado): {$ignorados}");
+        if ($errores > 0) {
+            $this->command->warn("✗ Errores: {$errores}");
+        }
 
         // Mostrar estadísticas por seguro
         $pricesByInsurance = DB::table('service_prices')
@@ -120,17 +136,24 @@ class ServicePricesFromLegacySeeder extends Seeder
             ->groupBy('insurance_type_id')
             ->get();
 
-        echo "\n=== ESTADÍSTICAS POR SEGURO ===\n";
-        foreach ($pricesByInsurance as $stat) {
-            $insurance = DB::table('insurance_types')->find($stat->insurance_type_id);
-            echo sprintf(
-                "%s: %d precios (Min: %.0f, Max: %.0f, Promedio: %.2f)\n",
-                $insurance->name ?? "ID {$stat->insurance_type_id}",
-                $stat->total,
-                $stat->min,
-                $stat->max,
-                $stat->avg
-            );
+        if ($pricesByInsurance->count() > 0) {
+            $this->command->info('');
+            $this->command->info('=== ESTADÍSTICAS POR SEGURO ===');
+            foreach ($pricesByInsurance as $stat) {
+                $insurance = InsuranceType::find($stat->insurance_type_id);
+                $this->command->line(sprintf(
+                    "%s: %d precios (Min: ₲%.0f, Max: ₲%.0f, Promedio: ₲%.2f)",
+                    $insurance->name ?? "ID {$stat->insurance_type_id}",
+                    $stat->total,
+                    $stat->min,
+                    $stat->max,
+                    $stat->avg
+                ));
+            }
+        } else {
+            $this->command->warn('⚠️  No hay precios en la tabla service_prices');
         }
+
+        $this->command->info('');
     }
 }

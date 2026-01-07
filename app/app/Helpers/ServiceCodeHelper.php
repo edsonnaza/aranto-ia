@@ -114,23 +114,54 @@ class ServiceCodeHelper
 
     /**
      * Remueve acentos y caracteres especiales, incluyendo corrupción UTF-8
+     * Convierte ñ → n, á → a, é → e, etc.
+     * También maneja caracteres corruptos como ± → n, ³ → o, ¡ → a, ' → a
      *
      * @param string $string
      * @return string
      */
-    private static function removeAccents(string $string): string
+    public static function removeAccents(string $string): string
     {
+        // Primero, limpiar caracteres corruptos específicos que vienen del legacy
+        // Patrones de corrupción encontrados en datos legacy:
+        $corruptionPatterns = [
+            // ± representa una ñ corrupta → convertir a ñ correcta
+            '±' => 'ñ',
+            // ³ representa una o corrupta (ó) → convertir a ó
+            '³' => 'ó',
+            // ¡ representa una a corrupta (á) → convertir a á
+            '¡' => 'á',
+            // ' (apóstrofo raro) representa una a corrupta (á)
+            "'" => 'á',
+            // ¿ representa un carácter corrupto, típicamente se elimina
+            '¿' => '',
+            // ½ representa un carácter corrupto, típicamente se elimina
+            '½' => '',
+            // Variaciones de comillas y apóstrofos (usar unicode)
+            '\u{2018}' => 'á',  // Comilla izquierda
+            '\u{2019}' => 'á',  // Comilla derecha / apóstrofo
+            '`' => '',
+            '´' => '',
+        ];
+        
+        $cleaned = strtr($string, $corruptionPatterns);
+        
+        // Limpiar letras duplicadas consecutivas (aa→a, ee→e, etc.)
+        // Excepto ñ que puede ser válida
+        $cleaned = preg_replace('/([a-z])\1+(?!ñ)/i', '$1', $cleaned);
+        
+        // Ahora aplicar la sanitización de acentos normales (ñ se mantiene)
         $unwanted_array = [
             'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A',
             'Æ'=>'A', 'Ç'=>'C', 'È'=>'E', 'É'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Í'=>'I', 'Î'=>'I', 'Ï'=>'I',
             'Ñ'=>'N', 'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U',
             'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss', 'à'=>'a', 'á'=>'a', 'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a',
             'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'é'=>'e', 'ê'=>'e', 'ë'=>'e', 'ì'=>'i', 'í'=>'i', 'î'=>'i', 'ï'=>'i',
-            'ð'=>'o', 'ñ'=>'n', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'ú'=>'u',
+            'ð'=>'o', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'ú'=>'u',
             'û'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y'
         ];
         
-        return strtr($string, $unwanted_array);
+        return strtr($cleaned, $unwanted_array);
     }
 
     /**
