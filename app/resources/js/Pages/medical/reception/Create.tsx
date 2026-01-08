@@ -244,8 +244,8 @@ export default function ReceptionCreate({
       <div className="min-h-screen bg-gray-50">
         {/* Shopping Cart Style Header */}
         <div className="bg-white shadow-sm border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="py-4">
+          <div className="max-w-7xl  px-4 sm:px-6 lg:px-6">
+            <div className="py-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div>
@@ -280,11 +280,11 @@ export default function ReceptionCreate({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-2 py-3">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={handleSubmit} className="max-w-12xl mx-auto px-4 sm:px-6 lg:px-2 py-3">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
             {/* Main Cart Area - Left Side */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-3 space-y-6">
               
               {/* Patient Selection */}
               <div className="bg-white rounded-lg shadow-sm p-6">
@@ -430,17 +430,17 @@ export default function ReceptionCreate({
               <div className="sticky top-6 space-y-6">
                 
                 {/* Total Display LED */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white rounded-lg shadow-sm p-4 max-w-sm">
                   <TotalDisplay 
                     total={calculateGrandTotal()} 
                     currency="₲"
-                    size="md"
+                    size="sm"
                   />
                 </div>
 
                 {/* Order Summary */}
                 {services.length > 0 && (
-                  <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="bg-white rounded-lg shadow-sm p-6 max-w-sm">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen</h3>
                     <div className="space-y-3">
                       {services.map((service) => {
@@ -462,7 +462,7 @@ export default function ReceptionCreate({
                         )
                       })}
                       
-                      <div className="border-t pt-3">
+                      <div className="border-t pt-3 max-w-sm">
                         <div className="flex justify-between">
                           <span className="font-semibold text-gray-900">Total:</span>
                           <span className="font-bold text-lg text-indigo-600">
@@ -475,14 +475,14 @@ export default function ReceptionCreate({
                 )}
 
                 {/* Action Buttons */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white rounded-lg shadow-sm p-6 max-w-sm">
                   <div className="space-y-3">
                     <button
                       type="submit"
                       disabled={loading || !selectedPatient || services.length === 0}
                       className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {loading ? 'Procesando...' : 'Crear Solicitud'}
+                      {loading ? 'Procesando...' : 'Confimar Solicitud'}
                     </button>
                     
                     <button

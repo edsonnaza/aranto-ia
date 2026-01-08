@@ -59,30 +59,12 @@ export default function ServiceCartTable({
 }: ServiceCartTableProps) {
   const { searchProfessionals } = useSearch()
   const { getServicePrice } = useServicePricing()
-  const { format: formatCurrency, parse: parseCurrency, config: currencyConfig } = useCurrencyFormatter()
+  const { format: formatCurrency, parse: parseCurrency } = useCurrencyFormatter()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({})
   // Local state for discount inputs to show user input immediately
   const [localDiscountPercentage, setLocalDiscountPercentage] = useState<Record<string, string>>({})
   const [localDiscountAmount, setLocalDiscountAmount] = useState<Record<string, string>>({})
-
-  // Helper function to format number with thousand separators (no currency symbol)
-  const formatNumberDisplay = (value: number | string): string => {
-    const numValue = typeof value === 'string' ? parseFloat(value) : value
-    if (isNaN(numValue)) return ''
-    
-    const hasDecimals = numValue % 1 !== 0
-    const decimalPlaces = hasDecimals ? 2 : 0
-    const fixedAmount = numValue.toFixed(decimalPlaces)
-    const [integerPart, decimalPart] = fixedAmount.split('.')
-    
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousandsSeparator)
-    
-    if (hasDecimals && decimalPart) {
-      return formattedInteger + currencyConfig.decimalSeparator + decimalPart
-    }
-    return formattedInteger
-  }
 
   // Debounced discount handlers
   const handleDiscountPercentageChange = (serviceId: string, percentage: number, service: ServiceItem) => {
@@ -289,12 +271,12 @@ export default function ServiceCartTable({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-700">Servicio</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-700">Profesional</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-700">Seguro</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-700">Cant.</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">Precio Unit.</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">Descuento</th>
+              <th className="px-2 py-3 text-left font-medium text-gray-700">Servicio</th>
+              <th className="px-2 py-3 text-left font-medium text-gray-700">Profesional</th>
+              <th className="px-2 py-3 text-left font-medium text-gray-700">Seguro</th>
+              <th className="px-2 py-3 text-center font-medium text-gray-700">Cant.</th>
+              <th className="px-2 py-3 text-right font-medium text-gray-700">Precio Unit.</th>
+              <th className="px-2 py-3 text-right font-medium text-gray-700">Descuento</th>
               <th className="px-4 py-3 text-right font-medium text-gray-700">Total</th>
               <th className="px-4 py-3 text-center font-medium text-gray-700"></th>
             </tr>
@@ -303,7 +285,7 @@ export default function ServiceCartTable({
             {services.map((service) => (
               <tr key={service.id} className="hover:bg-gray-50 transition-colors">
                 {/* Service Name */}
-                <td className="px-4 py-4">
+                <td className="px-2 py-4">
                   <div className="w-96">
                     <SearchableInput
                       placeholder="Buscar servicio..."
@@ -317,7 +299,7 @@ export default function ServiceCartTable({
 
                 {/* Professional */}
                 <td className="px-4 py-4">
-                  <div className="w-48">
+                  <div className="w-45">
                     <SearchableInput
                       placeholder="Profesional..."
                       value={selectedProfessional(service.professional_id)?.label || ''}
@@ -408,7 +390,7 @@ export default function ServiceCartTable({
 
       {/* Discount Expansion Panel */}
       {expandedRow && (
-        <div className="border-t border-gray-200 bg-gray-50 p-4">
+        <div className="border-t border-gray-200 bg-gray-50 p-2">
           {services.map(service => {
             if (service.id !== expandedRow) return null
             
@@ -416,13 +398,13 @@ export default function ServiceCartTable({
             
             return (
               <div key={service.id} className="max-w-md">
-                <h4 className="font-medium text-gray-900 mb-4">
+                <h4 className="font-medium text-gray-900 mb-1">
                   Descuentos para: {serviceName}
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-1">
                   {/* Discount Percentage */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-0.5">
                       Descuento (%)
                     </label>
                     <input
@@ -435,18 +417,18 @@ export default function ServiceCartTable({
                         }
                       }}
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
 
                   {/* Discount Amount */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-0.5">
                       Descuento (₲)
                     </label>
                     <input
                       type="text"
-                      value={localDiscountAmount[service.id] !== undefined ? formatNumberDisplay(localDiscountAmount[service.id]) : (service.discount_amount ? formatNumberDisplay(service.discount_amount) : '')}
+                      value={localDiscountAmount[service.id] !== undefined ? localDiscountAmount[service.id] : (service.discount_amount ? service.discount_amount.toLocaleString('es-PY') : '')}
                       onChange={(e) => {
                         const val = parseCurrency(e.target.value)
                         if (!isNaN(val) && val >= 0) {
@@ -454,14 +436,14 @@ export default function ServiceCartTable({
                         }
                       }}
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
 
                 {/* Calculation Display */}
-                <div className="mt-4 p-3 bg-white rounded-md border border-gray-200">
-                  <div className="text-sm space-y-1 text-gray-600">
+                <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                  <div className="text-xs space-y-0.5 text-gray-600">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
                       <span className="font-medium">{formatCurrency(service.unit_price * service.quantity)}</span>
@@ -493,7 +475,7 @@ export default function ServiceCartTable({
                     })
                     setExpandedRow(null)
                   }}
-                  className="mt-4 w-full py-2 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium transition-colors"
+                  className="mt-1 w-full py-1 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm font-medium transition-colors"
                 >
                   Cerrar
                 </button>
