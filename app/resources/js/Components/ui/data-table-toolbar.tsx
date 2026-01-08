@@ -21,6 +21,10 @@ interface DataTableToolbarProps {
   status?: string
   statusOptions?: Array<{ value: string; label: string }>
   onStatusChange?: (val: string) => void
+  categoryFilterable?: boolean
+  category?: string
+  categoryOptions?: Array<{ id: number | string; name: string }>
+  onCategoryChange?: (val: string) => void
   insuranceFilterable: boolean
   insuranceType: string
   insuranceTypeOptions: Array<{ id: number; name: string }>
@@ -46,6 +50,10 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
   status = "",
   statusOptions = [],
   onStatusChange,
+  categoryFilterable = false,
+  category = "",
+  categoryOptions = [],
+  onCategoryChange,
   insuranceFilterable,
   insuranceType,
   insuranceTypeOptions,
@@ -108,6 +116,25 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
             <SelectItem value="all">Todos</SelectItem>
             {statusOptions.map(option => (
               <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )}
+    {categoryFilterable && (
+      <div className="flex items-center space-x-2 ml-4">
+        <Select
+          value={category}
+          onValueChange={onCategoryChange}
+          disabled={loading}
+        >
+          <SelectTrigger className="h-8 w-160px">
+            <SelectValue placeholder="Filtrar por categoría" />
+          </SelectTrigger>
+          <SelectContent side="top">
+            <SelectItem value="all">Todas las categorías</SelectItem>
+            {categoryOptions.map(option => (
+              <SelectItem key={option.id} value={String(option.id)}>{option.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

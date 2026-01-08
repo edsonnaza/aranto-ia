@@ -53,7 +53,8 @@ class CommissionService
             ->where('type', 'INCOME')
             ->where('category', 'SERVICE_PAYMENT')
             ->where('status', 'active')
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereDate('created_at', '>=', $startDate)
+            ->whereDate('created_at', '<=', $endDate)
             ->whereNotNull('service_request_id')
             ->whereNull('commission_liquidation_id') // Solo transacciones no liquidadas
             ->with(['serviceRequest.patient', 'serviceRequest.details.medicalService'])

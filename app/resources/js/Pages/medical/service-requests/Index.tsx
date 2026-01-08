@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
+import { getReceptionTypeLabel } from '@/hooks/medical/useReceptionTypeLabel'
 import type { ServiceRequestsIndexData, ServiceRequest } from '@/hooks/medical'
 
 interface ServiceRequestWithPayment extends ServiceRequest {
@@ -127,16 +128,6 @@ export default function ServiceRequestsIndex({
         {config.label}
       </span>
     )
-  }
-
-  const getReceptionTypeLabel = (type: string) => {
-    const typeConfig = {
-      scheduled: 'Programada',
-      walk_in: 'Walk-in',
-      emergency: 'Emergencia',
-      inpatient_discharge: 'Alta Hospitalaria'
-    }
-    return typeConfig[type as keyof typeof typeConfig] || type
   }
 
   const formatDate = (dateString: string) => {

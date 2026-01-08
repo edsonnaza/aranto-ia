@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class CashRegisterUsersSeeder extends Seeder
 {
@@ -20,6 +21,7 @@ class CashRegisterUsersSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role' => 'super-admin', // Coincide con NavigationPermissionsSeeder
+                'spatie_role' => 'super_admin', // Role de Spatie
             ],
             [
                 'name' => 'Dr. Juan Pérez',
@@ -27,6 +29,7 @@ class CashRegisterUsersSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role' => 'admin', // Coincide con NavigationPermissionsSeeder
+                'spatie_role' => 'admin', // Role de Spatie
             ],
             [
                 'name' => 'María González',
@@ -34,6 +37,7 @@ class CashRegisterUsersSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role' => 'cashier', // Coincide con NavigationPermissionsSeeder (cashier, no cajero)
+                'spatie_role' => 'cajero', // Role de Spatie
             ],
             [
                 'name' => 'Carlos Supervisor',
@@ -41,6 +45,7 @@ class CashRegisterUsersSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role' => 'accountant', // Cambiar a rol existente en NavigationPermissionsSeeder
+                'spatie_role' => 'supervisor', // Role de Spatie
             ],
             [
                 'name' => 'Ana Auditor',
@@ -48,12 +53,14 @@ class CashRegisterUsersSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role' => 'viewer', // Cambiar a rol existente en NavigationPermissionsSeeder
+                'spatie_role' => 'auditor', // Role de Spatie
             ],
         ];
 
         foreach ($users as $userData) {
             $role = $userData['role'];
-            unset($userData['role']);
+            $spatieRole = $userData['spatie_role'] ?? null;
+            unset($userData['role'], $userData['spatie_role']);
 
             $user = User::firstOrCreate(
                 ['email' => $userData['email']],
@@ -64,8 +71,17 @@ class CashRegisterUsersSeeder extends Seeder
             if (!$user->hasRole($role)) {
                 $user->assignRole($role);
             }
+
+            // Assign Spatie role for cash register permissions
+            if ($spatieRole && !$user->hasRole($spatieRole)) {
+                $spatieRoleObj = Role::firstOrCreate([
+                    'name' => $spatieRole,
+                    'guard_name' => 'web',
+                ]);
+                $user->assignRole($spatieRoleObj);
+            }
         }
 
-        $this->command->info('Cash register users created successfully.');
+        $this->command->info('Cash register users created successfully with Spatie roles.');
     }
 }

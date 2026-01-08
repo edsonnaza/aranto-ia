@@ -84,14 +84,14 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
   const isPartialPayment = paidAmount > 0;
   const paymentStatus = serviceRequest?.payment_status || 'pending';
 
-  // Inicializar el monto a cobrar con el restante por defecto
-  React.useEffect(() => {
-    if (serviceRequest && !isPartialPayment) {
-      setAmount(totalAmount);
-    } else if (serviceRequest && isPartialPayment) {
-      setAmount(remainingAmount);
-    }
-  }, [serviceRequest, totalAmount, remainingAmount, isPartialPayment]);
+  // No establecer monto automáticamente - obligar al cajero a ingresar el monto
+  // React.useEffect(() => {
+  //   if (serviceRequest && !isPartialPayment) {
+  //     setAmount(totalAmount);
+  //   } else if (serviceRequest && isPartialPayment) {
+  //     setAmount(remainingAmount);
+  //   }
+  // }, [serviceRequest, totalAmount, remainingAmount, isPartialPayment]);
    
 
   // Importar el hook para refrescar
@@ -376,7 +376,7 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                 className="min-w-120px"
               >
                 {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' : 
-                 amount === remainingAmount ? 'Completar Pago' : 'Pago Parcial'}
+                 amount === remainingAmount ? 'Pagar' : 'Pago Parcial'}
               </Button>
             </div>
           </div>

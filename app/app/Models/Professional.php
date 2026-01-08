@@ -75,6 +75,18 @@ class Professional extends Model
     ];
 
     /**
+     * Boot the model. Always eager load commissionSettings.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::addGlobalScope('with_commission_settings', function ($builder) {
+            $builder->with('commissionSettings');
+        });
+    }
+
+    /**
      * Get the specialties for this professional.
      */
     public function specialties(): BelongsToMany

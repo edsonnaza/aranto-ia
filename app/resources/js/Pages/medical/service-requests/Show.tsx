@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
+import { getReceptionTypeLabel } from '@/hooks/medical/useReceptionTypeLabel'
 
 // Simple SVG Icons
 const EditIcon = ({ className }: { className?: string }) => (
@@ -111,6 +112,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pending: { label: 'Pendiente', classes: 'bg-yellow-100 text-yellow-800' },
+      pending_confirmation: { label: 'Pendiente', classes: 'bg-yellow-100 text-yellow-800' },
       confirmed: { label: 'Confirmado', classes: 'bg-blue-100 text-blue-800' },
       in_progress: { label: 'En Progreso', classes: 'bg-indigo-100 text-indigo-800' },
       completed: { label: 'Completado', classes: 'bg-green-100 text-green-800' },
@@ -149,23 +151,15 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
     )
   }
 
-  const getReceptionTypeLabel = (type: string) => {
-    const typeConfig = {
-      scheduled: 'Programada',
-      walk_in: 'Walk-in',
-      emergency: 'Emergencia',
-      inpatient_discharge: 'Alta Hospitalaria'
-    }
-    return typeConfig[type as keyof typeof typeConfig] || type
-  }
-
-
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-ES', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'PYG'
     }).format(amount)
+  }
+
+  const handlePrint = () => {
+    window.print()
   }
 
   const calculateAge = (birthDate: string) => {
@@ -209,6 +203,14 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
               >
                 Volver a la Lista
+              </button>
+
+              <button
+                onClick={handlePrint}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                title="Imprimir solicitud"
+              >
+                🖨️ Imprimir
               </button>
               
               {serviceRequest.status === 'pending' && (
@@ -345,20 +347,20 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Subtotal:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {formatCurrency((serviceRequest.total_amount || 0) + (serviceRequest.service_details?.reduce((sum, service) => sum + service.discount_amount, 0) || 0))}
+                    {formatCurrency(serviceRequest.service_details?.reduce((sum, service) => sum + (service.subtotal || 0), 0) || 0)}
                   </span>
                 </div>
                 
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Descuentos:</span>
                   <span className="text-sm font-medium text-red-600">
-                    -{formatCurrency(serviceRequest.service_details?.reduce((sum, service) => sum + service.discount_amount, 0) || 0)}
+                    -{formatCurrency(serviceRequest.service_details?.reduce((sum, service) => sum + (service.discount_amount || 0), 0) || 0)}
                   </span>
                 </div>
                 
                 <div className="flex justify-between text-lg font-medium pt-3 border-t">
                   <span className="text-gray-900">Total:</span>
-                  <span className="text-gray-900">{formatCurrency(serviceRequest.total_amount || 0)}</span>
+                  <span className="text-gray-900">{formatCurrency(serviceRequest.service_details?.reduce((sum, service) => sum + (service.total || 0), 0) || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between">
@@ -488,6 +490,271 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
           )}
         </div>
       </div>
+
+      <style>{`
+        @media print {
+          * {
+            margin: 0;
+            padding: 0;
+          }
+
+          html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+          }
+
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+
+          /* Ocultar TODOS los botones y controles */
+          button,
+          button * {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            width: 0 !important;
+            overflow: hidden !important;
+          }
+
+          /* Ocultar los badges de estado y prioridad en impresión */
+          .flex.items-center.space-x-4 span {
+            display: none !important;
+            visibility: hidden !important;
+          }
+
+          /* Pero mostrar el h1 si está dentro */
+          .flex.items-center.space-x-4 h1 {
+            display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            margin-bottom: 8px !important;
+          }
+
+          /* Ajustar párrafo de fecha y tipo */
+          .flex.items-center.space-x-4 + p {
+            margin-top: 0 !important;
+          }
+
+          /* Forzar que el header se muestre en una columna */
+          .flex.flex-col.lg\:flex-row.lg\:items-center.lg\:justify-between.mb-6 > div:first-child {
+            width: 100% !important;
+            display: block !important;
+          }
+
+          /* Ocultar navegación y headers */
+          nav,
+          header,
+          footer,
+          a,
+          .breadcrumb,
+          [role="navigation"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+
+          /* Mostrar solo el contenedor principal */
+          .p-4,
+          .md\:p-6 {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
+          .max-w-6xl {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Asegurar que el header se muestre en impresión */
+          .flex.flex-col.lg\:flex-row.lg\:items-center.lg\:justify-between.mb-6 {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            margin-bottom: 15px !important;
+            visibility: visible !important;
+            page-break-inside: avoid !important;
+          }
+
+          /* Mostrar el contenedor del número y estado */
+          .flex.items-center.space-x-4 {
+            display: flex !important;
+            visibility: visible !important;
+            flex: 1;
+          }
+
+          /* Ocultar solo el div de botones a la derecha */
+          .mt-4.lg\:mt-0.flex.space-x-3 {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+
+          /* Header con título */
+          h1 {
+            font-size: 18px !important;
+            margin-bottom: 5px !important;
+            display: block !important;
+            visibility: visible !important;
+            color: black !important;
+            font-weight: bold !important;
+          }
+
+          h2 {
+            font-size: 13px !important;
+            margin: 10px 0 5px 0 !important;
+            font-weight: bold !important;
+          }
+
+          /* Grid layout para impresión */
+          .grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            gap: 10px !important;
+            margin-bottom: 15px !important;
+          }
+
+          /* Cards */
+          .bg-white.shadow {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+            page-break-inside: avoid !important;
+            padding: 8px !important;
+            margin: 0 !important;
+          }
+
+          /* Información general */
+          .space-y-3 > div {
+            margin-bottom: 4px !important;
+            font-size: 11px !important;
+          }
+
+          .space-y-4 > div {
+            margin-bottom: 5px !important;
+            font-size: 11px !important;
+          }
+
+          /* Tabla de servicios */
+          .mt-6 {
+            margin-top: 15px !important;
+            page-break-inside: avoid !important;
+          }
+
+          .overflow-x-auto {
+            overflow: visible !important;
+          }
+
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 10px !important;
+            margin-top: 5px !important;
+          }
+
+          thead {
+            background-color: #f5f5f5 !important;
+            display: table-header-group !important;
+          }
+
+          th {
+            border: 1px solid #999 !important;
+            padding: 3px 4px !important;
+            text-align: left !important;
+            font-weight: bold !important;
+            font-size: 9px !important;
+          }
+
+          td {
+            border: 1px solid #ddd !important;
+            padding: 3px 4px !important;
+          }
+
+          /* Notas */
+          .whitespace-pre-wrap {
+            font-size: 11px !important;
+          }
+
+          /* Badges y estados */
+          span {
+            background: transparent !important;
+            color: black !important;
+          }
+
+          /* Colores para impresión en escala de grises */
+          .text-gray-600,
+          .text-gray-500 {
+            color: #666 !important;
+          }
+
+          .text-red-600 {
+            color: #333 !important;
+          }
+
+          .text-green-600 {
+            color: #333 !important;
+          }
+
+          .text-orange-600 {
+            color: #333 !important;
+          }
+
+          /* Texto */
+          .text-sm {
+            font-size: 11px !important;
+          }
+
+          .text-xs {
+            font-size: 9px !important;
+          }
+
+          .text-lg {
+            font-size: 12px !important;
+          }
+
+          .text-2xl {
+            font-size: 14px !important;
+          }
+
+          /* Eliminar colores de fondo */
+          .bg-yellow-100,
+          .bg-blue-100,
+          .bg-indigo-100,
+          .bg-green-100,
+          .bg-red-100,
+          .bg-gray-100,
+          .bg-gray-50 {
+            background: transparent !important;
+          }
+
+          /* Separadores */
+          .border-t,
+          .border-b,
+          .border-gray-200 {
+            border-color: #999 !important;
+          }
+
+          /* Flex para impresión */
+          .flex.flex-col,
+          .flex.items-center {
+            display: block !important;
+          }
+
+          .flex-1,
+          .w-0 {
+            width: auto !important;
+          }
+
+          /* Ocultar iconos */
+          svg {
+            display: none !important;
+          }
+        }
+      `}</style>
     </AppLayout>
   )
 }

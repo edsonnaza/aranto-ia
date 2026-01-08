@@ -22,32 +22,60 @@ const XCircleIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-interface ServiceItem {
-  id: number
-  service_id: number
-  service_name: string
-  service_code: string
-  quantity: number
-  unit_price: number
-  total_price: number
-  insurance_type: string
-  professional_name?: string
-  notes?: string
-}
+// interface ServiceItem {
+//   id: number
+//   service_id: number
+//   service_name: string
+//   service_code: string
+//   quantity: number
+//   unit_price: number
+//   total_price: number
+//   insurance_type: string
+//   professional_name?: string
+//   notes?: string
+// }
 
 interface ServiceRequestDetail {
   id: number
   request_number: string
-  patient_name: string
-  patient_document: string
+  patient: {
+    id: number
+    name: string
+    last_name: string
+    document_type: string
+    document_number: string
+    phone?: string
+    email?: string
+    date_of_birth?: string
+  }
   status: string
   priority: string
   total_amount: number
   request_date: string
   request_time: string
   notes?: string
-  services: ServiceItem[]
+  service_details: Array<{
+    id: number
+    medical_service_name: string
+    professional_name: string
+    insurance_type_name: string
+    scheduled_date?: string
+    scheduled_time?: string
+    estimated_duration: number
+    unit_price: number
+    quantity: number
+    discount_percentage: number
+    discount_amount: number
+    subtotal: number
+    total: number
+    preparation_instructions?: string
+    notes?: string
+    status: string
+  }>
   payment_status: string
+  paid_amount: number
+  remaining_amount: number
+  created_by_name: string
 }
 
 interface ServiceRequestDetailsModalProps {
@@ -174,7 +202,7 @@ export default function ServiceRequestDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw]! max-w-900px! max-h-[95vh]! overflow-y-auto">
+      <DialogContent className="w-[78vw]! max-w-6xl! max-h-[95vh]! overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <EyeIcon className="h-5 w-5 text-gray-600" />
@@ -234,8 +262,8 @@ export default function ServiceRequestDetailsModal({
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                         Paciente
                       </span>
-                      <span className="text-lg font-semibold text-gray-900 truncate">
-                        {details.patient_name}
+                      <span className="text-md font-semibold text-gray-900 truncate">
+                        {details.patient?.name} {details.patient?.last_name}
                       </span>
                     </div>
                     
@@ -244,7 +272,7 @@ export default function ServiceRequestDetailsModal({
                         Documento
                       </span>
                       <span className="font-mono text-base text-gray-700">
-                        {details.patient_document}
+                        {details.patient?.document_type}: {details.patient?.document_number}
                       </span>
                     </div>
                     
@@ -279,7 +307,7 @@ export default function ServiceRequestDetailsModal({
                       <div className="text-right">
                         <span className="text-xs text-emerald-600 block">Servicios:</span>
                         <span className="font-semibold text-emerald-700">
-                          {details.services.length} item{details.services.length !== 1 ? 's' : ''}
+                          {details.service_details?.length || 0} item{(details.service_details?.length || 0) !== 1 ? 's' : ''}
                         </span>
                       </div>
                     </div>
@@ -306,7 +334,7 @@ export default function ServiceRequestDetailsModal({
               {/* Services List */}
               <div>
                 <h4 className="font-medium text-gray-900 mb-3">
-                  Servicios Solicitados ({details.services.length})
+                  Servicios Solicitados ({details.service_details?.length || 0})
                 </h4>
                 <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
                   <table className="min-w-full divide-y divide-gray-300">
@@ -333,12 +361,12 @@ export default function ServiceRequestDetailsModal({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {details.services.map((service, index) => (
+                      {(details.service_details || []).map((service, index) => (
                         <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="px-4 py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900">{service.service_name}</div>
-                              <div className="text-sm text-gray-500">{service.service_code}</div>
+                              <div className="text-sm font-medium text-gray-900">{service.medical_service_name}</div>
+                              <div className="text-xs text-gray-500">{service.estimated_duration} min</div>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900">
@@ -348,7 +376,7 @@ export default function ServiceRequestDetailsModal({
                             ₲ {Number(service.unit_price).toLocaleString('es-PY')}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900">
-                            {service.insurance_type}
+                            {service.insurance_type_name}
                           </td>
                           <td className="px-4 py-3">
                             <div className="text-sm text-gray-900">
@@ -356,7 +384,7 @@ export default function ServiceRequestDetailsModal({
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm font-mono font-medium text-gray-900">
-                            ₲ {Number(service.total_price).toLocaleString('es-PY')}
+                            ₲ {Number(service.total).toLocaleString('es-PY')}
                           </td>
                         </tr>
                       ))}

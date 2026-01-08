@@ -18,6 +18,7 @@ import { PaymentModal } from '@/components/cash-register/payment-modal';
 import ServiceRequestDetailsModal from '@/components/cash-register/service-request-details-modal';
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
+import { getReceptionTypeConfig } from '@/hooks/medical/useReceptionTypeLabel';
 import {  CreditCard, Eye } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
@@ -88,6 +89,7 @@ interface PendingServicesProps {
   summary: {
     pending_count: number;
     pending_total: number;
+    paid_total: number;
   };
 }
 
@@ -122,19 +124,8 @@ export default function PendingServices({
   };
 
   const getReceptionTypeBadge = (type: string) => {
-    const typeConfig = {
-      RECEPTION_SCHEDULED: { label: 'Agendado', variant: 'default' as const },
-      RECEPTION_WALK_IN: { label: 'Orden de llegada', variant: 'secondary' as const },
-      EMERGENCY: { label: 'Emergencia', variant: 'destructive' as const },
-      INPATIENT_DISCHARGE: { label: 'Alta Hospitalaria', variant: 'secondary' as const },
-    };
-    
-    const config = typeConfig[type as keyof typeof typeConfig] || { 
-      label: type, 
-      variant: 'secondary' as const 
-    };
-    
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const { label, variant } = getReceptionTypeConfig(type);
+    return <Badge variant={variant}>{label}</Badge>;
   };
 
   const handleProcessPayment = (serviceRequest: ServiceRequest) => {
@@ -386,18 +377,15 @@ export default function PendingServices({
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Promedio por Servicio</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Cobrado</CardTitle>
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {summary.pending_count > 0 
-                  ? formatCurrency(summary.pending_total / summary.pending_count)
-                  : formatCurrency(0)
-                }
+                {formatCurrency(summary.paid_total)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Monto promedio
+                Montos pagados en caja
               </p>
             </CardContent>
           </Card>

@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/app-layout'
 import { router } from '@inertiajs/react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+//import { useEffect } from 'react'
 
 // Icons
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
@@ -176,6 +177,15 @@ export default function ShowMedicalService({
             >
               <PencilIcon className="h-4 w-4 mr-2" />
               Editar
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4H7a2 2 0 01-2-2v-4a2 2 0 012-2h10a2 2 0 012 2v4a2 2 0 01-2 2zm2-6a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Imprimir
             </button>
           </div>
 
@@ -366,6 +376,104 @@ export default function ShowMedicalService({
           </div>
         </div>
       </div>
+
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+          body {
+            margin: 0;
+            padding: 0;
+          }
+          
+          @page {
+            size: A4;
+            margin: 0.5cm;
+          }
+          
+          /* Ocultar elementos no necesarios para impresión */
+          .print\\:hidden,
+          button,
+          .bg-white.shadow:first-child,
+          .flex.items-center.justify-between:first-of-type {
+            display: none !important;
+          }
+          
+          /* Estilos para impresión */
+          .print-container {
+            width: 14.8cm; /* Mitad de A4 ancho */
+            height: 10.5cm;
+            page-break-after: avoid;
+            border: 1px solid #000;
+            padding: 0.5cm;
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+          }
+          
+          .print-header {
+            text-align: center;
+            margin-bottom: 0.3cm;
+            font-weight: bold;
+            font-size: 13pt;
+            border-bottom: 2px solid #000;
+            padding-bottom: 0.2cm;
+          }
+          
+          .print-section {
+            margin-bottom: 0.3cm;
+            page-break-inside: avoid;
+          }
+          
+          .print-label {
+            font-weight: bold;
+            font-size: 10pt;
+            color: #333;
+          }
+          
+          .print-value {
+            font-size: 10pt;
+            color: #000;
+          }
+          
+          .print-row {
+            display: flex;
+            justify-content: space-between;
+            page-break-inside: avoid;
+            margin-bottom: 0.15cm;
+          }
+          
+          .print-row-label {
+            flex: 0 0 40%;
+            font-weight: 600;
+            font-size: 10pt;
+          }
+          
+          .print-row-value {
+            flex: 0 0 60%;
+            text-align: right;
+            font-size: 10pt;
+          }
+          
+          /* Mostrar solo lo necesario */
+          .lg\\:col-span-2 {
+            display: block !important;
+            width: 100%;
+            max-width: none;
+          }
+          
+          .grid {
+            display: block !important;
+          }
+          
+          .space-y-6 > * + * {
+            margin-top: 0 !important;
+          }
+          
+          /* Estilos generales para impresión */
+          * {
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </AppLayout>
   )
 }

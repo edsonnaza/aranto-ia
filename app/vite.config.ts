@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
     server: {
-        host: '0.0.0.0',
+        host: 'localhost',
         port: 5173,
         watch: {
             usePolling: true,
@@ -25,9 +25,9 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-        }),
+        // wayfinder({
+        //     formVariants: true,
+        // }),
     ],
     esbuild: {
         jsx: 'automatic',

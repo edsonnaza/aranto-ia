@@ -101,7 +101,8 @@ class CommissionController extends Controller
         };
 
         return Inertia::render('commission/Index', [
-            'professionals' => \App\Models\Professional::with('specialties')
+            'professionals' => \App\Models\Professional::where('status', 'active')
+                ->with('specialties')
                 ->select('id', 'first_name', 'last_name', 'commission_percentage')
                 ->orderBy('last_name')
                 ->get(),
@@ -122,8 +123,13 @@ class CommissionController extends Controller
     public function create(): Response
     {
         return Inertia::render('commission/Create', [
-            'professionals' => \App\Models\Professional::select('id', 'first_name', 'last_name', 'commission_percentage')
-                ->where('commission_percentage', '>', 0)
+            'professionals' => \App\Models\Professional::where('status', 'active')
+                ->where(function($q) {
+                    $q->where('commission_percentage', '>', 0)
+                      ->orWhereHas('commissionSettings', function($sq) {
+                          $sq->where('commission_percentage', '>', 0);
+                      });
+                })
                 ->orderBy('last_name')
                 ->get(),
         ]);

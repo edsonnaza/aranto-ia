@@ -9,7 +9,6 @@ use App\Models\CashRegisterSession;
 use App\Models\User;
 use App\Models\Professional;
 use App\Models\Transaction;
-use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\InsuranceType;
 use Illuminate\Http\Request;
@@ -146,44 +145,6 @@ class CashRegisterController extends Controller
     }
 
     /**
-     * Process a payment
-     */
-    public function processPayment(Request $request)
-    {
-        $request->validate([
-            'service_id' => 'required|exists:services,id',
-            'amount' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|in:CASH,CARD,TRANSFER',
-            'patient_name' => 'required|string|max:255',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        try {
-            $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
-            if (!$activeSession) {
-                throw new \Exception('No hay sesión de caja activa.');
-            }
-
-            $service = Service::findOrFail($request->service_id);
-            
-            $payment = $this->paymentService->processServicePayment(
-                $activeSession,
-                $service,
-                $request->amount,
-                [
-                    'payment_method' => $request->payment_method,
-                    'patient_name' => $request->patient_name,
-                    'notes' => $request->notes,
-                ]
-            );
-
-            return redirect()->route('cash-register.index')->with('success', 'Pago procesado exitosamente.');
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
-    }
-
-    /**
      * Register an income transaction
      */
     public function registerIncome(Request $request)
@@ -191,7 +152,6 @@ class CashRegisterController extends Controller
         $request->validate([
             'amount' => 'required|numeric|min:0.01',
             'description' => 'required|string|max:255',
-            'service_id' => 'nullable|integer|exists:services,id',
             'patient_name' => 'nullable|string|max:255',
         ]);
 
@@ -207,7 +167,6 @@ class CashRegisterController extends Controller
                 'category' => 'SERVICE_PAYMENT', // Default category for income
                 'amount' => $request->amount,
                 'concept' => $request->description, // Map description to concept
-                'patient_id' => $request->service_id, // Temporary mapping
                 'user_id' => Auth::id(),
             ]);
 
@@ -224,7 +183,7 @@ class CashRegisterController extends Controller
     {
         $user = Auth::user();
         
-        $transactions = Transaction::with(['user', 'service'])
+        $transactions = Transaction::with(['user'])
             ->when($request->date_from, function ($query, $date) {
                 return $query->whereDate('created_at', '>=', $date);
             })
@@ -248,9 +207,6 @@ class CashRegisterController extends Controller
                     'user' => [
                         'name' => $transaction->user->name,
                     ],
-                    'service' => $transaction->service ? [
-                        'name' => $transaction->service->name,
-                    ] : null,
                     'created_at' => $transaction->created_at,
                 ];
             });
@@ -258,18 +214,6 @@ class CashRegisterController extends Controller
         return Inertia::render('CashRegister/History', [
             'transactions' => $transactions,
             'filters' => $request->only(['date_from', 'date_to', 'type']),
-        ]);
-    }
-
-    /**
-     * Show services management
-     */
-    public function services(): Response
-    {
-        $services = Service::active()->orderBy('name')->get();
-
-        return Inertia::render('CashRegister/Services', [
-            'services' => $services,
         ]);
     }
 
@@ -401,14 +345,32 @@ class CashRegisterController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Calculate summary - including paid total from current cash session
+        $pendingCount = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->count();
+        $pendingTotal = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->sum('total_amount');
+        
+        // Get paid total from current active cash session
+        $activeSession = CashRegisterSession::where('user_id', Auth::id())
+            ->where('status', 'open')
+            ->latest()
+            ->first();
+        
+        $paidTotal = 0;
+        if ($activeSession) {
+            $paidTotal = Transaction::where('cash_register_session_id', $activeSession->id)
+                ->where('category', 'SERVICE_PAYMENT')
+                ->sum('amount');
+        }
+
         return Inertia::render('CashRegister/PendingServices', [
             'serviceRequests' => $serviceRequests,
             'professionals' => $professionals,
             'insuranceTypes' => $insuranceTypes,
             'filters' => $request->only(['payment_status', 'status', 'date_from', 'date_to', 'search', 'professional_id', 'insurance_type']),
             'summary' => [
-                'pending_count' => ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->count(),
-                'pending_total' => ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->sum('total_amount'),
+                'pending_count' => $pendingCount,
+                'pending_total' => $pendingTotal,
+                'paid_total' => $paidTotal,
             ]
         ]);
     }

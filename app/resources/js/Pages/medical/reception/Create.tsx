@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react'
 import { useState, useMemo, useCallback } from 'react'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests, useSearch, useServicePricing } from '@/hooks/medical'
+import { getReceptionTypeOptions } from '@/hooks/medical/useReceptionTypeLabel'
 import type { ReceptionCreateData } from '@/hooks/medical'
 import SearchableInput from '@/components/ui/SearchableInput'
 import TotalDisplay from '@/components/ui/TotalDisplay'
@@ -309,10 +310,11 @@ export default function ReceptionCreate({
                       onValueChange={setReceptionType}
                       required
                     >
-                      <option value="scheduled">Programada</option>
-                      <option value="walk_in">Walk-in</option>
-                      <option value="emergency">Emergencia</option>
-                      <option value="inpatient_discharge">Alta Hospitalaria</option>
+                      {getReceptionTypeOptions().map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </SelectItem>
                   </div>
 
