@@ -187,14 +187,17 @@ export default function ReceptionCreate({
   }, [services, flatServices, getServicePriceFromData])
 
   const calculateServiceTotal = (service: ServiceItem) => {
-    const subtotal = service.unit_price * service.quantity
-    const discountFromPercentage = (subtotal * service.discount_percentage) / 100
-    const totalDiscount = discountFromPercentage + service.discount_amount
+    const unitPrice = service.unit_price || 0
+    const quantity = service.quantity || 1
+    const subtotal = unitPrice * quantity
+    const discountFromPercentage = (subtotal * (service.discount_percentage || 0)) / 100
+    const totalDiscount = discountFromPercentage + (service.discount_amount || 0)
     return Math.max(0, subtotal - totalDiscount)
   }
 
   const calculateGrandTotal = () => {
-    return services.reduce((total, service) => total + calculateServiceTotal(service), 0)
+    const total = services.reduce((total, service) => total + calculateServiceTotal(service), 0)
+    return isNaN(total) ? 0 : total
   }
 
   const handleSubmit = (e: React.FormEvent) => {

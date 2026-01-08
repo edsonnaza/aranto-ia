@@ -218,7 +218,10 @@ export default function ServiceCartItem({
       <div className="flex justify-between items-center pt-3 border-t border-gray-200">
         <span className="text-sm font-medium text-gray-700">Subtotal:</span>
         <span className="text-lg font-bold text-indigo-600">
-          ₲ {calculateTotal(service).toLocaleString('es-PY')}
+          ₲ {(() => {
+            const total = calculateTotal(service)
+            return (isNaN(total) ? 0 : total).toLocaleString('es-PY')
+          })()}
         </span>
       </div>
     </div>

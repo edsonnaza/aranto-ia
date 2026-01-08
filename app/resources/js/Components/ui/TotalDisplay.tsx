@@ -19,10 +19,12 @@ export default function TotalDisplay({
   size = 'lg' 
 }: TotalDisplayProps) {
   const formatTotal = (amount: number) => {
+    // Ensure amount is a valid number, default to 0 if NaN
+    const validAmount = isNaN(amount) ? 0 : amount
     return new Intl.NumberFormat('es-PY', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount)
+    }).format(validAmount)
   }
 
   return (
