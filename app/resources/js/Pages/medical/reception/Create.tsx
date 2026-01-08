@@ -57,6 +57,10 @@ export default function ReceptionCreate({
   const [requestTime, setRequestTime] = useState('')
   const [notes, setNotes] = useState('')
   
+  // Expandible sections
+  const [expandedPatient, setExpandedPatient] = useState(true)
+  const [expandedInfo, setExpandedInfo] = useState(true)
+  
   // Services cart
   const [services, setServices] = useState<ServiceItem[]>([])
 
@@ -199,6 +203,25 @@ export default function ReceptionCreate({
     return Math.max(0, subtotal - totalDiscount)
   }
 
+  const calculateSubtotal = () => {
+    return services.reduce((total, service) => {
+      const unitPrice = service.unit_price || 0
+      const quantity = service.quantity || 1
+      return total + (unitPrice * quantity)
+    }, 0)
+  }
+
+  const calculateTotalDiscount = () => {
+    return services.reduce((total, service) => {
+      const unitPrice = service.unit_price || 0
+      const quantity = service.quantity || 1
+      const subtotal = unitPrice * quantity
+      const discountFromPercentage = (subtotal * (service.discount_percentage || 0)) / 100
+      const totalDiscount = discountFromPercentage + (service.discount_amount || 0)
+      return total + totalDiscount
+    }, 0)
+  }
+
   const calculateGrandTotal = () => {
     const total = services.reduce((total, service) => total + calculateServiceTotal(service), 0)
     return isNaN(total) ? 0 : total
@@ -265,7 +288,7 @@ export default function ReceptionCreate({
                 </div>
                 
                 {/* Quick Actions */}
-                <div className="flex items-center space-x-3">
+                <div className="flex items-right space-x-3">
                   <span className="text-sm text-gray-500">{services.length} servicio{services.length !== 1 ? 's' : ''}</span>
                   <button
                     type="button"
@@ -281,33 +304,58 @@ export default function ReceptionCreate({
         </div>
 
         <form onSubmit={handleSubmit} className="max-w-12xl mx-auto px-4 sm:px-6 lg:px-2 py-3">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             
             {/* Main Cart Area - Left Side */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="lg:col-span-4 space-y-6">
               
               {/* Patient Selection */}
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                  1. Seleccionar Paciente
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    1. Seleccionar Paciente
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPatient(!expandedPatient)}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    <svg className={`h-5 w-5 transform transition-transform ${expandedPatient ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                  </button>
+                </div>
                 
-                <SearchableInput
-                  placeholder="Buscar paciente por nombre, documento..."
-                  value={selectedPatient?.name || ''}
-                  onSelect={handlePatientSelect}
-                  onSearch={searchPatients}
-                  className="w-full"
-                />
+                {expandedPatient && (
+                  <SearchableInput
+                    placeholder="Buscar paciente por nombre, documento..."
+                    value={selectedPatient?.name || ''}
+                    onSelect={handlePatientSelect}
+                    onSearch={searchPatients}
+                    className="w-full"
+                  />
+                )}
               </div>
 
               {/* Basic Info */}
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                  2. Información de la Solicitud
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    2. Información de la Solicitud
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedInfo(!expandedInfo)}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    <svg className={`h-5 w-5 transform transition-transform ${expandedInfo ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                  </button>
+                </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {expandedInfo && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Tipo
@@ -366,6 +414,7 @@ export default function ReceptionCreate({
                     />
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Services Cart */}
@@ -430,52 +479,20 @@ export default function ReceptionCreate({
               <div className="sticky top-6 space-y-6">
                 
                 {/* Total Display LED */}
-                <div className="bg-white rounded-lg shadow-sm p-4 max-w-sm">
+                <div className="bg-white rounded-lg shadow-sm p-4 max-w-xs">
                   <TotalDisplay 
                     total={calculateGrandTotal()} 
+                    subtotal={calculateSubtotal()}
+                    discount={calculateTotalDiscount()}
                     currency="₲"
                     size="sm"
                   />
                 </div>
-
-                {/* Order Summary */}
-                {services.length > 0 && (
-                  <div className="bg-white rounded-lg shadow-sm p-6 max-w-sm">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen</h3>
-                    <div className="space-y-3">
-                      {services.map((service) => {
-                        const selectedService = flatServices.find(s => s.value === service.medical_service_id)
-                        return (
-                          <div key={service.id} className="flex justify-between text-sm">
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900">
-                                {selectedService?.label || 'Servicio no seleccionado'}
-                              </p>
-                              <p className="text-gray-500">Cantidad: {service.quantity}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium text-gray-900">
-                                ₲ {calculateServiceTotal(service).toLocaleString('es-PY')}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })}
-                      
-                      <div className="border-t pt-3 max-w-sm">
-                        <div className="flex justify-between">
-                          <span className="font-semibold text-gray-900">Total:</span>
-                          <span className="font-bold text-lg text-indigo-600">
-                            ₲ {calculateGrandTotal().toLocaleString('es-PY')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+ 
+                
 
                 {/* Action Buttons */}
-                <div className="bg-white rounded-lg shadow-sm p-6 max-w-sm">
+                <div className="bg-white rounded-lg shadow-sm p-6 max-w-xs">
                   <div className="space-y-3">
                     <button
                       type="submit"

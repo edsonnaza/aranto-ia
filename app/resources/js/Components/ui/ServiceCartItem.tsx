@@ -161,12 +161,12 @@ export default function ServiceCartItem({
             className="w-full"
           />
         </div>
-         <div>
+         <div className="md:col-span-1 max-w-1">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Seguro *
           </label>
           <SearchableInput
-            placeholder="Buscar seguro..."
+            placeholder="Seguro..."
             value={service.insurance_type_id > 0 ? insuranceTypes.find(i => (i.value || i.id) === service.insurance_type_id)?.label || '' : ''}
             onSelect={handleInsuranceSelection}
             onSearch={searchInsuranceTypes}

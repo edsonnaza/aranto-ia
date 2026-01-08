@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import React from 'react'
 import SearchableInput from '@/components/ui/SearchableInput'
 import { useSearch, useServicePricing } from '@/hooks/medical'
 import { useCurrencyFormatter } from '@/stores/currency'
@@ -39,11 +40,11 @@ interface ServiceCartTableProps {
   getServicePriceFromData?: (serviceData: any, insuranceTypeId: number) => number
 }
 
-const TrashIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-  </svg>
-)
+// const TrashIcon = ({ className }: { className?: string }) => (
+//   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+//   </svg>
+// )
 
 export default function ServiceCartTable({
   services,
@@ -54,24 +55,45 @@ export default function ServiceCartTable({
   onRemove,
   onServiceSelect,
   onSearchServices,
-  calculateTotal,
+  //calculateTotal,
   getServicePriceFromData
 }: ServiceCartTableProps) {
   const { searchProfessionals } = useSearch()
   const { getServicePrice } = useServicePricing()
-  const { format: formatCurrency, parse: parseCurrency } = useCurrencyFormatter()
+  const { format: formatCurrency, parse: parseCurrency, config: currencyConfig } = useCurrencyFormatter()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({})
   // Local state for discount inputs to show user input immediately
   const [localDiscountPercentage, setLocalDiscountPercentage] = useState<Record<string, string>>({})
   const [localDiscountAmount, setLocalDiscountAmount] = useState<Record<string, string>>({})
 
+  // Helper function to format number with thousand separators (no currency symbol)
+  const formatNumberDisplay = (value: number | string): string => {
+    const numValue = typeof value === 'string' ? parseFloat(value) : value
+    if (isNaN(numValue)) return ''
+    
+    const hasDecimals = numValue % 1 !== 0
+    const decimalPlaces = hasDecimals ? 2 : 0
+    const fixedAmount = numValue.toFixed(decimalPlaces)
+    const [integerPart, decimalPart] = fixedAmount.split('.')
+    
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousandsSeparator)
+    
+    if (hasDecimals && decimalPart) {
+      return formattedInteger + currencyConfig.decimalSeparator + decimalPart
+    }
+    return formattedInteger
+  }
+
   // Debounced discount handlers
   const handleDiscountPercentageChange = (serviceId: string, percentage: number, service: ServiceItem) => {
+    // Limit to 2 decimal places
+    const limitedPercentage = Math.min(parseFloat(percentage.toFixed(0)), 100)
+    
     // Update local state immediately for user feedback
     setLocalDiscountPercentage(prev => ({
       ...prev,
-      [serviceId]: percentage.toString()
+      [serviceId]: limitedPercentage.toString()
     }))
 
     // Clear existing timer for this service
@@ -81,10 +103,10 @@ export default function ServiceCartTable({
 
     // Set new timer for debounced update
     debounceTimersRef.current[`pct-${serviceId}`] = setTimeout(() => {
-      onUpdate(serviceId, 'discount_percentage', percentage)
+      onUpdate(serviceId, 'discount_percentage', limitedPercentage)
       // Auto-calculate discount amount
       const subtotal = service.unit_price * service.quantity
-      const amount = (subtotal * percentage) / 100
+      const amount = (subtotal * limitedPercentage) / 100
       onUpdate(serviceId, 'discount_amount', amount)
       // Clear local amount since we're updating it
       setLocalDiscountAmount(prev => ({
@@ -110,20 +132,32 @@ export default function ServiceCartTable({
     // Set new timer for debounced update
     debounceTimersRef.current[`amt-${serviceId}`] = setTimeout(() => {
       onUpdate(serviceId, 'discount_amount', amount)
-      // Auto-calculate percentage
+      // Auto-calculate percentage (limited to 2 decimals)
       const subtotal = service.unit_price * service.quantity
       const percentage = subtotal > 0 ? (amount / subtotal) * 100 : 0
-      onUpdate(serviceId, 'discount_percentage', Math.min(percentage, 100))
+      const limitedPercentage = Math.min(parseFloat(percentage.toFixed(2)), 100)
+      onUpdate(serviceId, 'discount_percentage', limitedPercentage)
       // Clear local percentage since we're updating it
       setLocalDiscountPercentage(prev => ({
         ...prev,
-        [serviceId]: Math.min(percentage, 100).toString()
+        [serviceId]: limitedPercentage.toString()
       }))
     }, 300)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleServiceSelection = (selectedService: any, serviceItemId: string) => {
+  // Helper function to calculate total with local discount values (for immediate feedback)
+  const calculateLocalTotal = (service: ServiceItem): number => {
+    const subtotal = service.unit_price * service.quantity
+    const discountAmount = localDiscountAmount[service.id] ? parseFloat(localDiscountAmount[service.id]) : (service.discount_amount || 0)
+    return subtotal - discountAmount
+  }
+  interface ServiceOption {
+    value: number
+    label: string
+    [key: string]: unknown
+  }
+
+  const handleServiceSelection = (selectedService: ServiceOption, serviceItemId: string) => {
     onServiceSelect(selectedService, serviceItemId)
   }
 
@@ -268,29 +302,48 @@ export default function ServiceCartTable({
   return (
     <div className="bg-white rounded-lg shadow-sm min-h-50 flex flex-col">
       <div className="overflow-x-auto flex-1">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-2 py-3 text-left font-medium text-gray-700">Servicio</th>
-              <th className="px-2 py-3 text-left font-medium text-gray-700">Profesional</th>
-              <th className="px-2 py-3 text-left font-medium text-gray-700">Seguro</th>
-              <th className="px-2 py-3 text-center font-medium text-gray-700">Cant.</th>
-              <th className="px-2 py-3 text-right font-medium text-gray-700">Precio Unit.</th>
-              <th className="px-2 py-3 text-right font-medium text-gray-700">Descuento</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-700">Total</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-700"></th>
+              <th className="px-1.5 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Servicio</th>
+              <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Prof.</th>
+              <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Seguro</th>
+              <th className="px-1 py-1.5 text-center font-medium text-gray-700 whitespace-nowrap">Cant.</th>
+              <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Precio</th>
+              <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Desc.</th>
+              <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Total</th>
+              <th className="px-1 py-1.5 text-center font-medium text-gray-700 whitespace-nowrap">Acc.</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {services.map((service) => (
               <tr key={service.id} className="hover:bg-gray-50 transition-colors">
                 {/* Service Name */}
-                <td className="px-2 py-4">
-                  <div className="w-96">
+                <td className="px-1.5 py-1.5">
+                  <div className="min-w-64">
                     <SearchableInput
-                      placeholder="Buscar servicio..."
+                      placeholder="Servicio..."
                       value={selectedService(service.medical_service_id)?.label || ''}
-                      onSelect={(s) => handleServiceSelection(s, service.id)}
+                      onSelect={(s) => {
+                        const extractLabel = (item: unknown): string => {
+                          if (typeof item === 'object' && item !== null) {
+                            if ('label' in item && typeof item.label === 'string') {
+                              return item.label
+                            }
+                            if ('name' in item && typeof item.name === 'string') {
+                              return item.name
+                            }
+                          }
+                          return ''
+                        }
+                        handleServiceSelection(
+                          {
+                            value: 'value' in s ? Number(s.value) : (typeof s.id === 'number' ? s.id : 0),
+                            label: extractLabel(s)
+                          },
+                          service.id
+                        )
+                      }}
                       onSearch={onSearchServices}
                       className="w-full"
                     />
@@ -298,10 +351,10 @@ export default function ServiceCartTable({
                 </td>
 
                 {/* Professional */}
-                <td className="px-4 py-4">
-                  <div className="w-45">
+                <td className="px-1 py-1.5">
+                  <div className="min-w-40">
                     <SearchableInput
-                      placeholder="Profesional..."
+                      placeholder="Prof."
                       value={selectedProfessional(service.professional_id)?.label || ''}
                       onSelect={(p) => handleProfessionalSelection(p, service.id)}
                       onSearch={searchProfessionals}
@@ -313,8 +366,8 @@ export default function ServiceCartTable({
                 </td>
 
                 {/* Insurance */}
-                <td className="px-4 py-4">
-                  <div className="w-40 relative z-50">
+                <td className="px-1 py-1.5">
+                  <div className="min-w-32 relative z-50">
                     <SearchableInput
                       placeholder="Seguro..."
                       value={selectedInsurance(service.insurance_type_id)?.label || ''}
@@ -323,64 +376,78 @@ export default function ServiceCartTable({
                       minSearchLength={1}
                       maxResults={20}
                       className="w-full"
+                     
                     />
                   </div>
                 </td>
 
                 {/* Quantity */}
-                <td className="px-4 py-4 text-center">
+                <td className="px-1 py-1.5 text-center">
                   <input
                     type="number"
                     min="1"
                     max="10"
                     value={service.quantity || 1}
                     onChange={(e) => onUpdate(service.id, 'quantity', Number(e.target.value))}
-                    className="w-16 px-2 py-2 border border-gray-300 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-12 px-1 py-0.5 border border-gray-300 rounded text-center text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </td>
 
                 {/* Unit Price */}
-                <td className="px-4 py-4 text-right">
-                  <div className="flex items-center justify-end">
-                    <input
-                      type="text"
-                      value={formatCurrency(service.unit_price || 0)}
-                      readOnly
-                      className="w-32 px-2 py-2 border border-gray-300 rounded-md text-right bg-gray-100 text-gray-600 cursor-not-allowed"
-                    />
+                <td className="px-1 py-1.5 text-right">
+                  <div className="text-xs font-medium text-gray-900">
+                    {formatCurrency(service.unit_price || 0)}
                   </div>
                 </td>
 
                 {/* Discount - Expandable */}
-                <td className="px-4 py-4 text-right">
+                <td className="px-1 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={() => setExpandedRow(expandedRow === service.id ? null : service.id)}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                    className={`text-xs font-medium px-2 py-1 rounded ${
+                      service.discount_percentage > 0 || service.discount_amount > 0
+                        ? 'text-orange-700 bg-orange-50 border border-orange-200'
+                        : 'text-indigo-600 bg-indigo-50 border border-indigo-200'
+                    }`}
                   >
                     {service.discount_percentage > 0 || service.discount_amount > 0
-                      ? formatCurrency(service.discount_amount || 0)
-                      : 'Agregar'}
+                      ? `${service.discount_percentage}%`
+                      : 'Sin desc.'}
                   </button>
                 </td>
 
                 {/* Total */}
-                <td className="px-4 py-4 text-right">
-                  <span className="font-bold text-indigo-600">
-                    {formatCurrency(calculateTotal(service))}
+                <td className="px-1 py-1.5 text-right">
+                  <span className="font-bold text-indigo-600 text-xs">
+                    {formatCurrency(calculateLocalTotal(service))}
                   </span>
                 </td>
 
-                {/* Delete Button */}
-                <td className="px-4 py-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => onRemove(service.id)}
-                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                    title="Eliminar servicio"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                {/* Actions */}
+                <td className="px-1 py-1.5 text-center">
+                  <div className="flex items-center justify-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedRow(expandedRow === service.id ? null : service.id)}
+                      className="p-1 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      title="Expandir detalles"
+                    >
+                      <svg className={`h-4 w-4 transform transition-transform ${expandedRow === service.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(service.id)}
+                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                      title="Eliminar"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -428,7 +495,7 @@ export default function ServiceCartTable({
                     </label>
                     <input
                       type="text"
-                      value={localDiscountAmount[service.id] !== undefined ? localDiscountAmount[service.id] : (service.discount_amount ? service.discount_amount.toLocaleString('es-PY') : '')}
+                      value={localDiscountAmount[service.id] !== undefined ? formatNumberDisplay(localDiscountAmount[service.id]) : (service.discount_amount ? formatNumberDisplay(service.discount_amount) : '')}
                       onChange={(e) => {
                         const val = parseCurrency(e.target.value)
                         if (!isNaN(val) && val >= 0) {
@@ -450,11 +517,11 @@ export default function ServiceCartTable({
                     </div>
                     <div className="flex justify-between text-red-600">
                       <span>Descuento:</span>
-                      <span className="font-medium">-{formatCurrency(service.discount_amount || 0)}</span>
+                      <span className="font-medium">-{formatCurrency(localDiscountAmount[service.id] ? parseFloat(localDiscountAmount[service.id]) : (service.discount_amount || 0))}</span>
                     </div>
                     <div className="border-t border-gray-200 pt-1 mt-1 flex justify-between font-bold text-indigo-600">
                       <span>Total:</span>
-                      <span>{formatCurrency(calculateTotal(service))}</span>
+                      <span>{formatCurrency(calculateLocalTotal(service))}</span>
                     </div>
                   </div>
                 </div>
