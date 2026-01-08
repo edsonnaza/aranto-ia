@@ -100,7 +100,9 @@ class ReceptionController extends Controller
                 ->get()
                 ->map(function ($professional) {
                     return [
+                        'value' => $professional->id,
                         'id' => $professional->id,
+                        'label' => $professional->full_name,
                         'first_name' => $professional->first_name,
                         'last_name' => $professional->last_name,
                         'full_name' => $professional->full_name,
@@ -130,7 +132,9 @@ class ReceptionController extends Controller
                         'category' => $category->name,
                         'services' => $category->services->map(function ($service) {
                             return [
+                                'value' => $service->id,
                                 'id' => $service->id,
+                                'label' => $service->name,
                                 'name' => $service->name,
                                 'code' => $service->code,
                                 'base_price' => $service->base_price ?? 0,
@@ -148,7 +152,16 @@ class ReceptionController extends Controller
             $insuranceTypes = InsuranceType::where('status', 'active')
                 ->orderBy('name')
                 ->get()
-                ->toArray();
+                ->map(function ($insurance) {
+                    return [
+                        'value' => $insurance->id,
+                        'id' => $insurance->id,
+                        'label' => $insurance->name,
+                        'name' => $insurance->name,
+                        'description' => $insurance->description,
+                        'coverage_percentage' => $insurance->coverage_percentage,
+                    ];
+                })->toArray();
         } catch (\Exception $e) {
             \Log::error('Error loading insurance types in ReceptionController: ' . $e->getMessage());
         }
@@ -238,24 +251,26 @@ class ReceptionController extends Controller
 
         $service = MedicalService::find($validated['service_id']);
         
-        // Buscar precio específico para el seguro
+        // Buscar precio específico para el seguro en service_prices
+        // currentPrices() now includes fallback to most recent price if no valid date range
         $servicePrice = $service->currentPrices()
             ->where('insurance_type_id', $validated['insurance_type_id'])
+            ->orderByDesc('effective_from')
             ->first();
 
-        if ($servicePrice) {
+        if ($servicePrice && $servicePrice->price > 0) {
             return response()->json([
-                'price' => $servicePrice->price,
+                'price' => (float) $servicePrice->price,
                 'found' => true,
                 'source' => 'insurance_specific'
             ]);
         }
 
-        // Si no hay precio específico, retornar null (no hay fallback a base_price)
+        // Fallback al precio base del servicio si no hay precio específico
         return response()->json([
-            'price' => null,
-            'found' => false,
-            'source' => 'not_found'
+            'price' => (float) ($service->base_price ?? 0),
+            'found' => true,
+            'source' => 'base_price'
         ]);
     }
 }

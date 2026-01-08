@@ -53,7 +53,15 @@ export default function SearchableInput({
   const debouncedSearch = useCallback(
     (query: string) => {
       const searchFn = debounce(async (q: string) => {
-        if (q.length < minSearchLength) {
+        // Allow empty search if minSearchLength is 0 or less
+        if (q.length === 0 && minSearchLength > 0) {
+          setResults([])
+          setIsLoading(false)
+          return
+        }
+
+        // Require minimum search length for non-empty queries
+        if (q.length > 0 && q.length < minSearchLength) {
           setResults([])
           setIsLoading(false)
           return
@@ -101,7 +109,10 @@ export default function SearchableInput({
 
   // Handle focus
   const handleFocus = () => {
-    if (results.length > 0) {
+    // When focused, search with empty query to show all results
+    if (inputValue === '' && minSearchLength <= 0) {
+      debouncedSearch('')
+    } else if (results.length > 0) {
       setShowDropdown(true)
     }
   }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\ServiceCategory;
 use App\Models\ServicePrice;
@@ -101,16 +102,31 @@ class MedicalService extends Model
 
     /**
      * Get current active prices for this service.
+     * First tries to get prices within valid date range.
+     * If none found, returns the most recent price (ordered by effective_from DESC).
      */
     public function currentPrices(): HasMany
     {
         $today = Carbon::now()->toDateString();
         
         return $this->servicePrices()
-            ->where('effective_from', '<=', $today)
             ->where(function ($query) use ($today) {
-                $query->whereNull('effective_until')
-                      ->orWhere('effective_until', '>=', $today);
+                // First priority: prices within valid date range
+                $query->where('effective_from', '<=', $today)
+                      ->where(function ($subquery) use ($today) {
+                          $subquery->whereNull('effective_until')
+                                   ->orWhere('effective_until', '>=', $today);
+                      });
+            })
+            ->orWhere(function ($query) use ($today) {
+                // Fallback: if no valid date range, get the most recent price
+                // (This allows prices set for future dates to be used)
+                $query->whereIn('id', function ($subquery) use ($today) {
+                    $subquery->select(DB::raw('MAX(id)'))
+                             ->from('service_prices')
+                             ->where('service_id', $this->id)
+                             ->groupBy('insurance_type_id');
+                });
             });
     }
 

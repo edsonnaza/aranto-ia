@@ -1,6 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useEffect } from 'react'
 import SearchableInput from '@/components/ui/SearchableInput'
-import SelectItem from '@/components/ui/SelectItem'
 import { useSearch } from '@/hooks/medical'
 import { useServicePricing } from '@/hooks/medical'
 
@@ -20,21 +19,26 @@ interface ServiceItem {
   notes: string
 }
 
-interface SelectOption {
-  value: string | number
-  label: string
-}
+// interface SelectOption {
+//   value: string | number
+//   label: string
+// }
 
 interface ServiceCartItemProps {
   service: ServiceItem
   index: number
-  flatServices: SelectOption[]
-  professionals: SelectOption[]
-  insuranceTypes: SelectOption[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  flatServices: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  professionals: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  insuranceTypes: any[]
   onUpdate: (id: string, field: keyof ServiceItem, value: string | number) => void
   onRemove: (id: string) => void
-  onServiceSelect: (service: SelectOption, serviceItemId: string) => void
-  onSearchServices: (query: string) => Promise<SelectOption[]>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onServiceSelect: (service: any, serviceItemId: string) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSearchServices: (query: string) => Promise<any[]>
   calculateTotal: (service: ServiceItem) => number
 }
 
@@ -58,24 +62,20 @@ export default function ServiceCartItem({
 }: ServiceCartItemProps) {
   const { searchProfessionals } = useSearch()
   const { getServicePrice } = useServicePricing()
-  const [selectedServiceName, setSelectedServiceName] = useState('')
-  const [selectedProfessionalName, setSelectedProfessionalName] = useState('')
-  const [selectedInsuranceName, setSelectedInsuranceName] = useState('')
-  const [isLoadingPrice, setIsLoadingPrice] = useState(false)
-
-  const handleServiceSelection = (selectedService: SelectOption) => {
-    setSelectedServiceName(selectedService.label)
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleServiceSelection = (selectedService: any) => {
     onServiceSelect(selectedService, service.id)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleProfessionalSelection = (selectedProfessional: any) => {
-    setSelectedProfessionalName(selectedProfessional.label)
-    onUpdate(service.id, 'professional_id', selectedProfessional.id)
+    onUpdate(service.id, 'professional_id', selectedProfessional.value || selectedProfessional.id)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInsuranceSelection = (selectedInsurance: any) => {
-    setSelectedInsuranceName(selectedInsurance.label)
-    onUpdate(service.id, 'insurance_type_id', selectedInsurance.id)
+    onUpdate(service.id, 'insurance_type_id', selectedInsurance.value || selectedInsurance.id)
   }
 
   // Effect to fetch price when service or insurance changes
@@ -83,15 +83,12 @@ export default function ServiceCartItem({
     if (service.medical_service_id > 0 && service.insurance_type_id > 0) {
       const fetchPrice = async () => {
         try {
-          setIsLoadingPrice(true)
           const price = await getServicePrice(service.medical_service_id, service.insurance_type_id)
           if (price !== null && price !== undefined && price > 0) {
             onUpdate(service.id, 'unit_price', price)
           }
         } catch (error) {
           console.error('Error fetching service price:', error)
-        } finally {
-          setIsLoadingPrice(false)
         }
       }
 
@@ -101,12 +98,27 @@ export default function ServiceCartItem({
 
   // Local search for insurance types
   const searchInsuranceTypes = async (query: string) => {
-    if (!Array.isArray(insuranceTypes)) return []
+    if (!Array.isArray(insuranceTypes) || insuranceTypes.length === 0) {
+      return []
+    }
+    
+    // If query is empty, return all insurance types
+    if (!query || query.trim() === '') {
+      return insuranceTypes.map(i => ({
+        id: i.value || i.id,
+        label: i.label || i.name || '',
+      }))
+    }
+    
+    // Filter by query
     return insuranceTypes
-      .filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
+      .filter(i => {
+        const label = (i.label || i.name || '').toLowerCase()
+        return label.includes(query.toLowerCase())
+      })
       .map(i => ({
-        id: i.value,
-        label: i.label,
+        id: i.value || i.id,
+        label: i.label || i.name || '',
       }))
   }
 
@@ -136,16 +148,30 @@ export default function ServiceCartItem({
       </div>
 
       {/* Service Selection Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div className="md:col-span-2">
+      <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-4">
+        <div className="md:col-span-1">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Servicio Médico *
           </label>
           <SearchableInput
             placeholder="Buscar servicio por nombre..."
-            value={selectedServiceName || selectedService?.label || ''}
+            value={selectedService?.label || ''}
             onSelect={handleServiceSelection}
             onSearch={onSearchServices}
+            className="w-full"
+          />
+        </div>
+         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Seguro *
+          </label>
+          <SearchableInput
+            placeholder="Buscar seguro..."
+            value={service.insurance_type_id > 0 ? insuranceTypes.find(i => (i.value || i.id) === service.insurance_type_id)?.label || '' : ''}
+            onSelect={handleInsuranceSelection}
+            onSearch={searchInsuranceTypes}
+            minSearchLength={1}
+            maxResults={10}
             className="w-full"
           />
         </div>
@@ -159,7 +185,7 @@ export default function ServiceCartItem({
           </label>
           <SearchableInput
             placeholder="Buscar profesional..."
-            value={selectedProfessionalName || ''}
+            value={service.professional_id > 0 ? professionals.find(p => (p.value || p.id) === service.professional_id)?.label || '' : ''}
             onSelect={handleProfessionalSelection}
             onSearch={searchProfessionals}
             minSearchLength={1}
@@ -168,20 +194,7 @@ export default function ServiceCartItem({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Seguro *
-          </label>
-          <SearchableInput
-            placeholder="Buscar seguro..."
-            value={selectedInsuranceName || ''}
-            onSelect={handleInsuranceSelection}
-            onSearch={searchInsuranceTypes}
-            minSearchLength={1}
-            maxResults={10}
-            className="w-full"
-          />
-        </div>
+       
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -207,8 +220,8 @@ export default function ServiceCartItem({
               type="number"
               min="0"
               value={service.unit_price || 0}
-              onChange={(e) => onUpdate(service.id, 'unit_price', Number(e.target.value))}
-              className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              readOnly
+              className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
             />
           </div>
         </div>

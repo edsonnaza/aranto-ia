@@ -6,7 +6,7 @@ import { getReceptionTypeOptions } from '@/hooks/medical/useReceptionTypeLabel'
 import type { ReceptionCreateData } from '@/hooks/medical'
 import SearchableInput from '@/components/ui/SearchableInput'
 import TotalDisplay from '@/components/ui/TotalDisplay'
-import ServiceCartItem from '@/components/ui/ServiceCartItem'
+import ServiceCartTable from '@/components/ui/ServiceCartTable'
 import SelectItem from '../../../components/ui/SelectItem'
 
 // Simple SVG Icons
@@ -19,6 +19,7 @@ const PlusIcon = ({ className }: { className?: string }) => (
 interface ServiceItem {
   id: string
   medical_service_id: number
+  service_name?: string
   professional_id: number
   insurance_type_id: number
   scheduled_date: string
@@ -60,7 +61,8 @@ export default function ReceptionCreate({
   const [services, setServices] = useState<ServiceItem[]>([])
 
   // Flatten services for select options
-  const flatServices = useMemo(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const flatServices = useMemo((): any[] => {
     if (!medicalServices || !Array.isArray(medicalServices) || medicalServices.length === 0) {
       return []
     }
@@ -71,9 +73,8 @@ export default function ReceptionCreate({
       }
       
       return category.services.map(service => ({
-        id: service.id,
-        value: service.id,
-        label: `${service.name} (${service.code || 'N/A'})`,
+        value: service.value,
+        label: service.label,
         name: service.name,
         code: service.code,
         base_price: service.base_price || 0,
@@ -87,8 +88,8 @@ export default function ReceptionCreate({
   const professionalOptions = useMemo(() => {
     if (!professionals || !Array.isArray(professionals)) return []
     return professionals.map(prof => ({
-      value: prof.id,
-      label: prof.full_name || `${prof.first_name} ${prof.last_name}`
+      value: prof.value,
+      label: prof.label
     }))
   }, [professionals])
 
@@ -96,8 +97,8 @@ export default function ReceptionCreate({
   const insuranceOptions = useMemo(() => {
     if (!insuranceTypes || !Array.isArray(insuranceTypes)) return []
     return insuranceTypes.map(insurance => ({
-      value: insurance.id,
-      label: insurance.name
+      value: insurance.value,
+      label: insurance.label
     }))
   }, [insuranceTypes])
 
@@ -116,15 +117,17 @@ export default function ReceptionCreate({
   }
 
   // Handle service selection
-  const handleServiceSelect = (service: { id: number; base_price: number; estimated_duration: number }, serviceItemId: string) => {
+  const handleServiceSelect = (service: { value: number; base_price: number; label?: string; estimated_duration?: number }, serviceItemId: string) => {
     setServices(services.map(item => {
       if (item.id === serviceItemId) {
-        return {
+        const updated = {
           ...item,
-          medical_service_id: service.id,
-          unit_price: service.base_price,
+          medical_service_id: service.value || 0,
+          service_name: service.label || 'Servicio',
+          unit_price: service.base_price || 0,
           estimated_duration: service.estimated_duration || 30
         }
+        return updated
       }
       return item
     }))
@@ -134,6 +137,7 @@ export default function ReceptionCreate({
     const newService: ServiceItem = {
       id: Date.now().toString(),
       medical_service_id: 0,
+      service_name: undefined,
       professional_id: 0,
       insurance_type_id: 0,
       scheduled_date: requestDate,
@@ -235,7 +239,7 @@ export default function ReceptionCreate({
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Nueva Solicitud de Servicio" />
+      <Head title="Recepcion - Solicitud de Servicio" />
       
       <div className="min-h-screen bg-gray-50">
         {/* Shopping Cart Style Header */}
@@ -245,7 +249,7 @@ export default function ReceptionCreate({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Nueva Solicitud</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Recepción - Servicios Médicos</h1>
                     <p className="text-sm text-gray-500">Agregar servicios al carrito</p>
                   </div>
                   
@@ -276,7 +280,7 @@ export default function ReceptionCreate({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <form onSubmit={handleSubmit} className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-2 py-3">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Main Cart Area - Left Side */}
@@ -365,7 +369,7 @@ export default function ReceptionCreate({
               </div>
 
               {/* Services Cart */}
-              <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="bg-white rounded-lg shadow-sm p-6 relative z-0">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">
                     3. Servicios Solicitados
@@ -389,23 +393,18 @@ export default function ReceptionCreate({
                     <p className="text-sm">Agrega servicios para comenzar</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {services.map((service, index) => (
-                      <ServiceCartItem
-                        key={service.id}
-                        service={service}
-                        index={index}
-                        flatServices={flatServices}
-                        professionals={professionalOptions}
-                        insuranceTypes={insuranceOptions}
-                        onUpdate={updateService}
-                        onRemove={removeServiceFromCart}
-                        onServiceSelect={handleServiceSelect}
-                        onSearchServices={searchServices}
-                        calculateTotal={calculateServiceTotal}
-                      />
-                    ))}
-                  </div>
+                  <ServiceCartTable
+                    services={services}
+                    flatServices={flatServices}
+                    professionals={professionalOptions}
+                    insuranceTypes={insuranceOptions}
+                    onUpdate={updateService}
+                    onRemove={removeServiceFromCart}
+                    onServiceSelect={handleServiceSelect}
+                    onSearchServices={searchServices}
+                    calculateTotal={calculateServiceTotal}
+                    getServicePriceFromData={getServicePriceFromData}
+                  />
                 )}
               </div>
 

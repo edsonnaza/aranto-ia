@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property float $commission_percentage
  * @property string $commission_calculation_method
  * @property string $status
+ * @property bool $is_active
  * @property \Illuminate\Support\Carbon $hire_date
  * @property \Illuminate\Support\Carbon|null $termination_date
  * @property \Illuminate\Support\Carbon|null $created_at

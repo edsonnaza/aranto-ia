@@ -90,7 +90,7 @@ class ProfessionalController extends Controller
             // Get commission from commissionSettings, fallback to commission_percentage field
             $commission = $professional->commissionSettings?->commission_percentage 
                 ?? $professional->commission_percentage 
-                ?? null;
+                ?? null; 
             
             return [
                 'id' => $professional->id,

@@ -113,6 +113,7 @@ export const useSearch = (): UseSearchReturn => {
       const data = await response.json()
       
       return data.map((service: ServiceSearchResult) => ({
+        value: service.id, // Add value field for compatibility
         id: service.id,
         label: service.label,
         subtitle: service.subtitle,
