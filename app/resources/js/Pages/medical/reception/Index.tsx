@@ -1,12 +1,16 @@
-import { Head } from '@inertiajs/react'
+import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
-import { useReception } from '@/hooks/medical'
+import { useReception, useReceptionStats } from '@/hooks/medical'
 import type { ReceptionStats } from '@/hooks/medical'
+import { useDateFormat } from '@/hooks/useDateFormat'
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
+import { Badge } from '@/components/ui/badge'
 import { ColumnDef } from '@tanstack/react-table'
 import { Link } from '@inertiajs/react'
 import { useState } from 'react'
 import ServiceRequestDetailsModal from '@/components/medical/ServiceRequestDetailsModal'
+import {  getPaymentStatusBadgeConfig, getReceptionTypeBadgeConfig } from '@/utils/formatters'
+//import { useCurrencyFormatter } from '@/stores/currency'
 
 // interface ReceptionStats {
 //   pending_requests: number
@@ -107,17 +111,17 @@ const ClockIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-const CalendarIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-)
+// const CalendarIcon = ({ className }: { className?: string }) => (
+//   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+//   </svg>
+// )
 
-const UserGroupIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-  </svg>
-)
+// const UserGroupIcon = ({ className }: { className?: string }) => (
+//   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+//   </svg>
+// )
 
 const DocumentTextIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -148,6 +152,10 @@ interface ReceptionIndexProps {
   stats: ReceptionStats
   // paginated server-side data
   requests: PaginatedRequests
+  filters?: {
+    date_from?: string
+    date_to?: string
+  }
 }
 
 type RequestRow = {
@@ -157,10 +165,15 @@ type RequestRow = {
   patient_document: string
   status: string
   priority: string
+  reception_type: string
   services_count: number
   total_amount: number
+  paid_amount?: number
   request_date: string
   created_at: string
+  insurance_type_name?: string
+  payment_status?: string
+  professional_names?: string
 }
 
 interface PaginatedRequests {
@@ -174,17 +187,67 @@ interface PaginatedRequests {
   links: Array<{ url: string | null; label: string; active: boolean }>
 }
 
-export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps) {
+export default function ReceptionIndex({  requests, filters }: ReceptionIndexProps) {
   const { 
     loading, 
     error, 
     navigateToCreateServiceRequest, 
     refreshCurrentPage 
   } = useReception()
+  
+  const { toBackend, toFrontend } = useDateFormat()
+
+  // Date filters state - initialize from props (backend format) or URL params
+  const [dateFrom, setDateFrom] = useState(() => {
+    if (filters?.date_from) {
+      return toFrontend(filters.date_from)
+    }
+    const params = new URLSearchParams(window.location.search)
+    const fromParam = params.get('date_from')
+    if (fromParam) return toFrontend(fromParam)
+    // Default to today in frontend format
+    const today = new Date()
+    return toFrontend(today.toISOString().split('T')[0])
+  })
+  
+  const [dateTo, setDateTo] = useState(() => {
+    if (filters?.date_to) {
+      return toFrontend(filters.date_to)
+    }
+    const params = new URLSearchParams(window.location.search)
+    const toParam = params.get('date_to')
+    if (toParam) return toFrontend(toParam)
+    // Default to today in frontend format
+    const today = new Date()
+    return toFrontend(today.toISOString().split('T')[0])
+  })
+
+  // Fetch dynamic stats from API with date filters
+  // Convert frontend format (dd-mm-yyyy) to backend format (yyyy-mm-dd) for API
+  const { stats: dynamicStats, loading: statsLoading } = useReceptionStats(
+    dateFrom ? toBackend(dateFrom) : undefined, 
+    dateTo ? toBackend(dateTo) : undefined
+  )
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null)
+
+  const handleDateRangeChange = ({ from, to }: { from: string | null; to: string | null }) => {
+    // Update local state for stats to respond immediately
+    if (from) setDateFrom(from)
+    if (to) setDateTo(to)
+    
+    // Update URL for server-side filtering
+    const params = new URLSearchParams(window.location.search)
+    if (from) params.set('date_from', toBackend(from))
+    else params.delete('date_from')
+    if (to) params.set('date_to', toBackend(to))
+    else params.delete('date_to')
+    params.set('page', '1')
+    const url = window.location.pathname + '?' + params.toString()
+    router.get(url, {}, { preserveState: true, replace: true })
+  }
 
   const handleViewDetails = (requestId: number) => {
     setSelectedRequestId(requestId)
@@ -230,14 +293,21 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
       ),
     },
     {
-      accessorKey: 'status',
-      header: 'Estado',
-      cell: ({ row }) => getStatusBadge(row.getValue('status')),
+      accessorKey: 'professional_names',
+      header: 'Profesional',
+      cell: ({ row }) => (
+        <span className="text-sm">
+          {row.getValue('professional_names') || 'No asignado'}
+        </span>
+      ),
     },
     {
-      accessorKey: 'priority',
-      header: 'Prioridad',
-      cell: ({ row }) => getPriorityBadge(row.getValue('priority')),
+      accessorKey: 'reception_type',
+      header: 'Tipo de Servicio',
+      cell: ({ row }) => {
+        const config = getReceptionTypeBadgeConfig(row.getValue('reception_type') as string)
+        return <Badge variant={config.variant}>{config.label}</Badge>
+      },
     },
     {
       accessorKey: 'services_count',
@@ -249,15 +319,23 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
       ),
     },
     {
-      accessorKey: 'total_amount',
+      accessorKey: 'insurance_type_name',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Total" />
+        <DataTableColumnHeader column={column} title="Seguro" />
       ),
       cell: ({ row }) => (
-        <span className="font-mono">
-          ₲ {Number(row.getValue('total_amount')).toLocaleString('es-PY')}
+        <span className="text-sm">
+          {row.getValue('insurance_type_name') || 'Sin seguro'}
         </span>
       ),
+    },
+    {
+      accessorKey: 'payment_status',
+      header: 'Estado Pago',
+      cell: ({ row }) => {
+        const config = getPaymentStatusBadgeConfig(row.getValue('payment_status') as string || 'pending')
+        return <Badge variant={config.variant}>₲ {config.label}</Badge>
+      },
     },
     {
       accessorKey: 'created_at',
@@ -297,76 +375,33 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
     { href: '/medical/reception', title: 'Recepción', current: true }
   ]
 
+  // Stats cards with dynamic data
   const statsCards = [
     {
-      title: 'Pendientes Confirmación',
-      value: stats.pending_requests,
-      icon: ClockIcon,
-      color: 'bg-yellow-500',
-      textColor: 'text-yellow-700',
-      bgColor: 'bg-yellow-50'
-    },
-    {
-      title: 'Confirmadas',
-      value: stats.confirmed_requests,
-      icon: CalendarIcon,
+      title: 'Total Solicitudes',
+      value: dynamicStats?.total_requests ?? 0,
+      icon: DocumentTextIcon,
       color: 'bg-blue-500',
       textColor: 'text-blue-700',
       bgColor: 'bg-blue-50'
     },
     {
-      title: 'En Proceso',
-      value: stats.in_progress_requests,
-      icon: UserGroupIcon,
+      title: 'Sin Pagar',
+      value: dynamicStats?.total_pending_count ?? 0,
+      icon: ClockIcon,
       color: 'bg-orange-500',
       textColor: 'text-orange-700',
       bgColor: 'bg-orange-50'
     },
     {
-      title: 'Completadas Hoy',
-      value: stats.completed_requests,
+      title: 'Pagadas',
+      value: dynamicStats?.total_paid_count ?? 0,
       icon: DocumentTextIcon,
       color: 'bg-green-500',
       textColor: 'text-green-700',
       bgColor: 'bg-green-50'
     }
   ]
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending_confirmation: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
-      confirmed: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800' },
-      in_progress: { label: 'En Proceso', className: 'bg-orange-100 text-orange-800' },
-      pending_payment: { label: 'Pend. Pago', className: 'bg-purple-100 text-purple-800' },
-      paid: { label: 'Pagado', className: 'bg-green-100 text-green-800' },
-      cancelled: { label: 'Cancelado', className: 'bg-red-100 text-red-800' }
-    }
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending_confirmation
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-        {config.label}
-      </span>
-    )
-  }
-
-  const getPriorityBadge = (priority: string) => {
-    const priorityConfig = {
-      low: { label: 'Baja', className: 'bg-gray-100 text-gray-800' },
-      normal: { label: 'Normal', className: 'bg-blue-100 text-blue-800' },
-      high: { label: 'Alta', className: 'bg-yellow-100 text-yellow-800' },
-      urgent: { label: 'Urgente', className: 'bg-red-100 text-red-800' }
-    }
-    
-    const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.normal
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-        {config.label}
-      </span>
-    )
-  }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -385,16 +420,16 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
           <div className="flex space-x-3 mt-4 sm:mt-0">
             <button
               onClick={refreshCurrentPage}
-              disabled={loading}
+              disabled={loading || statsLoading}
               className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
-              <RefreshIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshIcon className={`h-4 w-4 mr-2 ${loading || statsLoading ? 'animate-spin' : ''}`} />
               Actualizar
             </button>
             
             <button
               onClick={navigateToCreateServiceRequest}
-              disabled={loading}
+              disabled={loading || statsLoading}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               <PlusIcon className="h-4 w-4 mr-2" />
@@ -418,7 +453,7 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {statsCards.map((stat, index) => {
             const Icon = stat.icon
             return (
@@ -466,6 +501,10 @@ export default function ReceptionIndex({ stats, requests }: ReceptionIndexProps)
               searchPlaceholder="Buscar por número, paciente o documento..."
               emptyMessage="No hay solicitudes registradas hoy."
               loading={loading}
+              dateRangeFilterable={true}
+              initialDateFrom={dateFrom}
+              initialDateTo={dateTo}
+              onDateRangeChange={handleDateRangeChange}
             />
           </div>
         </div>

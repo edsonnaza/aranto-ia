@@ -28,6 +28,10 @@ export type {
   UseReceptionReturn 
 } from './useReception'
 
+// Reception Stats Hook
+export { useReceptionStats } from './useReceptionStats'
+export type { ReceptionStatsData, UseReceptionStatsReturn } from './useReceptionStats'
+
 // Professionals Hook
 export { useProfessionals } from './useProfessionals'
 export type { Professional, UseProfessionalsReturn } from './useProfessionals'

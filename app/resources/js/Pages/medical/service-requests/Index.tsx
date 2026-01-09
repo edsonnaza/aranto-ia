@@ -3,9 +3,10 @@ import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
 import { getReceptionTypeLabel } from '@/hooks/medical/useReceptionTypeLabel'
 import type { ServiceRequestsIndexData, ServiceRequest } from '@/hooks/medical'
+import { getStatusBadgeConfig, getPaymentStatusBadgeConfig } from '@/utils/formatters'
 
-interface ServiceRequestWithPayment extends ServiceRequest {
-  payment_status?: string
+type ServiceRequestWithPayment = ServiceRequest & {
+  payment_status?: string | undefined
 }
 
 // Simple SVG Icons
@@ -74,21 +75,9 @@ export default function ServiceRequestsIndex({
   ]
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { label: 'Pendiente', classes: 'bg-yellow-100 text-yellow-800' },
-      confirmed: { label: 'Confirmado', classes: 'bg-blue-100 text-blue-800' },
-      in_progress: { label: 'En Progreso', classes: 'bg-indigo-100 text-indigo-800' },
-      completed: { label: 'Completado', classes: 'bg-green-100 text-green-800' },
-      cancelled: { label: 'Cancelado', classes: 'bg-red-100 text-red-800' }
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || { 
-      label: status, 
-      classes: 'bg-gray-100 text-gray-800' 
-    }
-
+    const config = getStatusBadgeConfig(status)
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.classes}`}>
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.className}`}>
         {config.label}
       </span>
     )
@@ -115,16 +104,9 @@ export default function ServiceRequestsIndex({
   }
 
   const getPaymentStatusBadge = (paymentStatus: string) => {
-    const statusConfig = {
-      pending: { label: 'Pendiente', classes: 'bg-red-50 text-red-700' },
-      partial: { label: 'Parcial', classes: 'bg-yellow-50 text-yellow-700' },
-      paid: { label: 'Pagado', classes: 'bg-green-50 text-green-700' },
-    }
-
-    const config = statusConfig[paymentStatus as keyof typeof statusConfig] || { label: paymentStatus, classes: 'bg-gray-50 text-gray-700' }
-
+    const config = getPaymentStatusBadgeConfig(paymentStatus)
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.classes}`}>
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.className}`}>
         {config.label}
       </span>
     )

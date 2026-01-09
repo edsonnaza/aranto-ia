@@ -133,6 +133,14 @@ class ServiceRequest extends Model
     }
 
     /**
+     * Get all transactions for this service request.
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    /**
      * Generate a unique request number.
      */
     public static function generateRequestNumber(): string

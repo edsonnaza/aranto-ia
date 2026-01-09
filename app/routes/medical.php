@@ -154,6 +154,10 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         Route::get('/', [ReceptionController::class, 'index'])
             ->name('index');
         
+        // Reception Statistics (API endpoint for frontend hook)
+        Route::get('/stats', [ReceptionController::class, 'stats'])
+            ->name('stats');
+        
         // New Service Request (Cart Interface)
         Route::get('/create', [ReceptionController::class, 'create'])
             ->name('create');

@@ -366,7 +366,15 @@ class CashRegisterController extends Controller
             'serviceRequests' => $serviceRequests,
             'professionals' => $professionals,
             'insuranceTypes' => $insuranceTypes,
-            'filters' => $request->only(['payment_status', 'status', 'date_from', 'date_to', 'search', 'professional_id', 'insurance_type']),
+            'filters' => [
+                'payment_status' => $request->get('payment_status', 'pending'),
+                'status' => $request->get('status', ''),
+                'date_from' => $request->get('date_from', now()->format('Y-m-d')),
+                'date_to' => $request->get('date_to', now()->format('Y-m-d')),
+                'search' => $request->get('search', ''),
+                'professional_id' => $request->get('professional_id', ''),
+                'insurance_type' => $request->get('insurance_type', ''),
+            ],
             'summary' => [
                 'pending_count' => $pendingCount,
                 'pending_total' => $pendingTotal,

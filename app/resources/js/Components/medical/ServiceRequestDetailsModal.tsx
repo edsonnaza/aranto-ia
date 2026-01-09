@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { getPaymentMethodLabel } from '@/utils/formatters'
 
 // Icons
 const EyeIcon = ({ className }: { className?: string }) => (
@@ -51,6 +52,8 @@ interface ServiceRequestDetail {
   status: string
   priority: string
   total_amount: number
+  paid_amount: number
+  remaining_amount: number
   request_date: string
   request_time: string
   notes?: string
@@ -73,9 +76,18 @@ interface ServiceRequestDetail {
     status: string
   }>
   payment_status: string
-  paid_amount: number
-  remaining_amount: number
   created_by_name: string
+  transactions: Array<{
+    id: number
+    amount: number
+    type: string
+    method: string
+    status: string
+    date: string
+    time: string
+    reference?: string
+    notes?: string
+  }>
 }
 
 interface ServiceRequestDetailsModalProps {
@@ -161,42 +173,6 @@ export default function ServiceRequestDetailsModal({
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending_confirmation: { label: 'Pendiente Confirmación', className: 'bg-yellow-100 text-yellow-800' },
-      confirmed: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800' },
-      in_progress: { label: 'En Proceso', className: 'bg-orange-100 text-orange-800' },
-      pending_payment: { label: 'Pendiente Pago', className: 'bg-purple-100 text-purple-800' },
-      paid: { label: 'Pagado', className: 'bg-green-100 text-green-800' },
-      cancelled: { label: 'Cancelado', className: 'bg-red-100 text-red-800' }
-    }
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending_confirmation
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-        {config.label}
-      </span>
-    )
-  }
-
-  const getPriorityBadge = (priority: string) => {
-    const priorityConfig = {
-      low: { label: 'Baja', className: 'bg-gray-100 text-gray-800' },
-      normal: { label: 'Normal', className: 'bg-blue-100 text-blue-800' },
-      high: { label: 'Alta', className: 'bg-yellow-100 text-yellow-800' },
-      urgent: { label: 'Urgente', className: 'bg-red-100 text-red-800' }
-    }
-    
-    const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.normal
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-        {config.label}
-      </span>
-    )
-  }
-
   // Only allow cancellation if status is pending_payment
   const canCancel = details?.payment_status === 'pending'
 
@@ -238,160 +214,187 @@ export default function ServiceRequestDetailsModal({
                       <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                       <h3 className="text-lg font-bold text-gray-900">Solicitud de Servicio</h3>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {getStatusBadge(details.status)}
-                      {getPriorityBadge(details.priority)}
-                    </div>
                   </div>
                 </div>
 
                 {/* Información Principal en dos filas */}
-                <div className="p-6">
+                <div className="p-2">
                   {/* Fila 1: Datos básicos */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                         Número de Solicitud
                       </span>
-                      <span className="font-mono text-sm font-semibold text-blue-700 bg-blue-50 px-3 py-1 rounded-md border">
+                      <span className="font-mono text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded text-center">
                         {details.request_number}
                       </span>
                     </div>
                     
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                         Paciente
                       </span>
-                      <span className="text-md font-semibold text-gray-900 truncate">
+                      <span className="text-sm font-semibold text-gray-900 truncate">
                         {details.patient?.name} {details.patient?.last_name}
                       </span>
                     </div>
                     
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                         Documento
                       </span>
-                      <span className="font-mono text-base text-gray-700">
+                      <span className="font-mono text-sm text-gray-700">
                         {details.patient?.document_type}: {details.patient?.document_number}
                       </span>
                     </div>
                     
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                         Fecha y Hora
                       </span>
-                      <span className="text-base text-gray-900">
-                        {details.request_date}
-                      </span>
-                      <span className="text-sm text-gray-600">
-                        {details.request_time}
+                      <span className="text-sm text-gray-900">
+                        {details.request_date} {details.request_time}
                       </span>
                     </div>
                   </div>
 
                   {/* Fila 2: Total destacado */}
-                  <div className="bg-linear-to-r rounded-lg p-4 border border-emerald-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-right gap-3">
-                         
-                        <div>
-                          <span className="text-xs font-medium text-emerald-700 uppercase tracking-wide block">
-                            Total de la Solicitud
-                          </span>
-                          <span className="font-mono text-2xl font-bold text-emerald-800">
-                            ₲ {Number(details.total_amount).toLocaleString('es-PY')}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <span className="text-xs text-emerald-600 block">Servicios:</span>
-                        <span className="font-semibold text-emerald-700">
-                          {details.service_details?.length || 0} item{(details.service_details?.length || 0) !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                 
                 </div>
                 
                 {details.notes && (
-                  <div className=" border-t border-amber-200-200 px-6 py-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-5 h-5  mt-0.5">
+                  <div className="border-t border-amber-200 px-4 py-2">
+                    <div className="flex items-start gap-2">
+                      <div className="w-4 h-4 mt-0.5 shrink-0">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </div>
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-1">Notas Adicionales</h4>
-                        <p className="text-gray-700 text-sm italic">"{details.notes}"</p>
+                      <div className="min-w-0">
+                        <h4 className="font-medium text-gray-800 text-sm">Notas</h4>
+                        <p className="text-gray-700 text-xs italic">{details.notes}</p>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Services List */}
+              {/* Services List - Tabla Compacta */}
               <div>
                 <h4 className="font-medium text-gray-900 mb-3">
                   Servicios Solicitados ({details.service_details?.length || 0})
                 </h4>
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Servicio
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Cantidad
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Precio Unit.
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Seguro
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Profesional
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Subtotal
-                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-900">Servicio</th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-900">Profesional</th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-900">Seguro</th>
+                        <th className="px-4 py-3 text-center font-semibold text-gray-900">Cant.</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-900">Precio Unit.</th>
+                        <th className="px-4 py-3 text-center font-semibold text-gray-900">Desc.</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-900">Total</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="divide-y divide-gray-200">
                       {(details.service_details || []).map((service, index) => (
-                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-4 py-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{service.medical_service_name}</div>
-                              <div className="text-xs text-gray-500">{service.estimated_duration} min</div>
-                            </div>
+                        <tr key={index} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{service.medical_service_name}</td>
+                          <td className="px-4 py-3 text-gray-700">{service.professional_name}</td>
+                          <td className="px-4 py-3 text-gray-700">{service.insurance_type_name}</td>
+                          <td className="px-4 py-3 text-center text-gray-700">{service.quantity}</td>
+                          <td className="px-4 py-3 text-right text-gray-700">₲ {Number(service.unit_price).toLocaleString('es-PY')}</td>
+                          <td className="px-4 py-3 text-center text-gray-700">
+                            {service.discount_percentage > 0 ? `${service.discount_percentage}%` : '-'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {service.quantity}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono text-gray-900">
-                            ₲ {Number(service.unit_price).toLocaleString('es-PY')}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {service.insurance_type_name}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900">
-                              {service.professional_name || 'No asignado'}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono font-medium text-gray-900">
-                            ₲ {Number(service.total).toLocaleString('es-PY')}
-                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-900">₲ {Number(service.total).toLocaleString('es-PY')}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
+
+              {/* Resumen Final de Costos */}
+              <div className="bg-linear-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-900 mb-2 text-sm">Resumen Final</h4>
+                <div className="space-y-1">
+                  {/* Precio Original */}
+                  <div className="flex items-center justify-between py-1.5">
+                    <div className="text-xs text-gray-600">Precio Original</div>
+                    <div className="text-sm font-semibold text-gray-700">₲ {Number(details.service_details?.reduce((sum, s) => sum + (Number(s.unit_price) * Number(s.quantity)), 0) || 0).toLocaleString('es-PY')}</div>
+                  </div>
+
+                  {/* Total Descuentos */}
+                  {(details.service_details?.reduce((sum, s) => sum + Number(s.discount_amount), 0) || 0) > 0 && (
+                    <div className="flex items-center justify-between py-1.5 border-y border-blue-100">
+                      <div className="text-xs text-gray-600">Descuentos</div>
+                      <div className="text-sm font-semibold text-red-600">- ₲ {Number(details.service_details?.reduce((sum, s) => sum + Number(s.discount_amount), 0) || 0).toLocaleString('es-PY')}</div>
+                    </div>
+                  )}
+
+                  {/* Precio Final */}
+                  <div className="flex items-center justify-between py-2 bg-white rounded px-2">
+                    <div className="text-sm font-semibold text-gray-900">Precio Final</div>
+                    <div className="text-lg font-bold text-blue-700">₲ {Number(details.total_amount).toLocaleString('es-PY')}</div>
+                  </div>
+
+                  {/* Saldo Pendiente */}
+                  <div className="flex items-center justify-between py-2 bg-white rounded px-2">
+                    <div className="text-sm font-semibold text-gray-900">Saldo Pendiente</div>
+                    <div className={`font-bold text-sm ${
+                      details.remaining_amount <= 0
+                        ? 'text-green-700'
+                        : 'text-orange-700'
+                    }`}>
+                      {details.remaining_amount <= 0 ? (
+                        <span>✓ Pagado</span>
+                      ) : (
+                        <span>₲ {Number(details.remaining_amount).toLocaleString('es-PY')}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment History */}
+              {details.transactions && details.transactions.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">
+                    Historial de Transacciones ({details.transactions.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {details.transactions.map((transaction, index) => (
+                      <div key={transaction.id || index} className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:shadow-md transition-shadow">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${transaction.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {transaction.type === 'payment' ? 'Pago' : 'Reembolso'} - {getPaymentMethodLabel(transaction.method)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {transaction.date} a las {transaction.time}
+                                {transaction.reference && ` • Ref: ${transaction.reference}`}
+                              </div>
+                              {transaction.notes && (
+                                <div className="text-xs text-gray-600 italic mt-1">{transaction.notes}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <div className={`text-sm font-bold ${transaction.type === 'payment' ? 'text-green-700' : 'text-red-700'}`}>
+                            {transaction.type === 'payment' ? '+' : '-'} ₲ {Number(transaction.amount).toLocaleString('es-PY')}
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">{transaction.status}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

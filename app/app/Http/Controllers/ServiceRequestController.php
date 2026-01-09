@@ -227,6 +227,9 @@ class ServiceRequestController extends Controller
             'details.medicalService.category',
             'details.professional',
             'details.insuranceType',
+            'transactions' => function($query) {
+                $query->orderBy('created_at', 'desc');
+            }
         ]);
 
         $serviceRequestData = [
@@ -276,6 +279,19 @@ class ServiceRequestController extends Controller
             'created_by_name' => $serviceRequest->createdBy->name,
             'updated_by_name' => null,
             'updated_at' => $serviceRequest->updated_at?->format('Y-m-d H:i:s'),
+            'transactions' => $serviceRequest->transactions->map(function ($transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'amount' => $transaction->amount,
+                    'type' => $transaction->type,
+                    'method' => $transaction->payment_method,
+                    'status' => $transaction->status,
+                    'date' => $transaction->created_at->format('d/m/Y'),
+                    'time' => $transaction->created_at->format('H:i:s'),
+                    'reference' => $transaction->reference_number,
+                    'notes' => $transaction->notes,
+                ];
+            })->toArray(),
         ];
 
         // If JSON request (for modal), return JSON

@@ -16,6 +16,62 @@ use Carbon\Carbon;
 class ReceptionController extends Controller
 {
     /**
+     * Get reception statistics for dashboard cards.
+     * API endpoint that returns JSON data for the frontend hook.
+     */
+    public function stats(Request $request)
+    {
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        
+        // Total requests
+        $totalRequestsQuery = ServiceRequest::query();
+        if ($dateFrom) {
+            $totalRequestsQuery->whereDate('request_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $totalRequestsQuery->whereDate('request_date', '<=', $dateTo);
+        }
+        $totalRequests = $totalRequestsQuery->count();
+        
+        // Count of pending payment requests (remaining_amount > 0)
+        $totalPendingCountQuery = ServiceRequest::query();
+        if ($dateFrom) {
+            $totalPendingCountQuery->whereDate('request_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $totalPendingCountQuery->whereDate('request_date', '<=', $dateTo);
+        }
+        $totalPendingCount = $totalPendingCountQuery->whereRaw('(total_amount - paid_amount) > 0')->count();
+        
+        // Count of paid requests (fully paid)
+        $totalPaidCountQuery = ServiceRequest::query();
+        if ($dateFrom) {
+            $totalPaidCountQuery->whereDate('request_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $totalPaidCountQuery->whereDate('request_date', '<=', $dateTo);
+        }
+        $totalPaidCount = $totalPaidCountQuery->whereRaw('(total_amount - paid_amount) <= 0')->count();
+
+        $stats = [
+            'total_requests' => $totalRequests,
+            'total_pending_count' => $totalPendingCount,
+            'total_paid_count' => $totalPaidCount,
+        ];
+
+        // If it's an AJAX request, return JSON
+        if ($request->wantsJson() || $request->isXmlHttpRequest()) {
+            return response()->json(['stats' => $stats]);
+        }
+
+        // Otherwise return Inertia response
+        return Inertia::render('DummyComponent', [
+            'stats' => $stats
+        ]);
+    }
+
+    /**
      * Show the reception dashboard.
      */
     public function index(Request $request): Response
@@ -37,13 +93,21 @@ class ReceptionController extends Controller
                 ->count(),
         ];
 
-        // Server-side paginated table for requests (last 7 days by default, supports ?page & ?per_page & ?search)
+        // Server-side paginated table for requests
         $perPage = (int) $request->get('per_page', 10);
         $search = $request->get('search');
-        $dateFrom = $request->get('date_from', Carbon::today()->subDays(6)->toDateString());
-        $dateTo = $request->get('date_to', Carbon::today()->toDateString());
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
 
-        $requestsQuery = ServiceRequest::with(['patient', 'details'])
+        // If no date filters provided, default to today
+        if (!$dateFrom) {
+            $dateFrom = Carbon::today()->toDateString();
+        }
+        if (!$dateTo) {
+            $dateTo = Carbon::today()->toDateString();
+        }
+
+        $requestsQuery = ServiceRequest::with(['patient.insuranceType', 'details.professional', 'details.insuranceType'])
             ->whereBetween('request_date', [$dateFrom, $dateTo]);
 
         if ($search) {
@@ -62,6 +126,20 @@ class ReceptionController extends Controller
             ->paginate($perPage)
             ->withQueryString()
             ->through(function ($request) {
+                // Get unique professional names from details
+                $professionalNames = $request->details
+                    ->pluck('professional.full_name')
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
+
+                // Get unique insurance types from service details
+                $insuranceNames = $request->details
+                    ->pluck('insuranceType.name')
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
+
                 return [
                     'id' => $request->id,
                     'request_number' => $request->request_number,
@@ -69,16 +147,25 @@ class ReceptionController extends Controller
                     'patient_document' => $request->patient->formatted_document,
                     'status' => $request->status,
                     'priority' => $request->priority,
+                    'reception_type' => $request->reception_type,
                     'services_count' => $request->details->count(),
                     'total_amount' => $request->total_amount,
+                    'paid_amount' => $request->paid_amount,
                     'request_date' => $request->request_date->format('d/m/Y'),
                     'created_at' => $request->created_at->format('H:i'),
+                    'insurance_type_name' => $insuranceNames ?: 'Sin seguro',
+                    'payment_status' => $request->payment_status ?? 'pending',
+                    'professional_names' => $professionalNames ?: 'No asignado',
                 ];
             });
 
         return Inertia::render('medical/reception/Index', [
             'stats' => $stats,
             'requests' => $requests,
+            'filters' => [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
         ]);
     }
 
