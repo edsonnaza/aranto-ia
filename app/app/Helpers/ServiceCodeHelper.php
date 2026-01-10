@@ -295,12 +295,14 @@ class ServiceCodeHelper
         $repaired = str_replace("i" . $diaeresisCorrruptPattern . "m", 'ímica', $repaired);
         $repaired = str_replace("u" . $diaeresisCorrruptPattern . "m", 'uím', $repaired);  // u+ï¿½+m → uím
         $repaired = str_replace("o" . $diaeresisCorrruptPattern . "o", 'ño', $repaired);
+        $repaired = str_replace($diaeresisCorrruptPattern . "a", 'ía', $repaired);  // ï¿½+a → ía (Ecografía)
         
         $repaired = str_replace("I" . $diaeresisCorrruptPattern . "N", 'IÓN', $repaired);
         $repaired = str_replace("A" . $diaeresisCorrruptPattern . "O", 'AÑO', $repaired);
         $repaired = str_replace("I" . $diaeresisCorrruptPattern . "M", 'ÍMICA', $repaired);
         $repaired = str_replace("U" . $diaeresisCorrruptPattern . "M", 'UÍM', $repaired);  // U+ï¿½+M → UÍM
         $repaired = str_replace("O" . $diaeresisCorrruptPattern . "O", 'ÑO', $repaired);
+        $repaired = str_replace($diaeresisCorrruptPattern . "A", 'ÍA', $repaired);  // ï¿½+A → ÍA (mayúscula)
         
         // Reemplazos simples (solo vocal + ï¿½)
         // IMPORTANTE: u + ï¿½ → ú (no í), para preservar "QUÍMICA"
