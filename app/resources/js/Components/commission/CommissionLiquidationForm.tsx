@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/ui/data-table'
 import { cn } from '@/lib/utils'
 import ProfessionalSelector from './ProfessionalSelector'
+import { TopProfessionalsQuickSelect } from './TopProfessionalsQuickSelect'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { Professional, CommissionData } from '@/types'
 
@@ -81,6 +82,23 @@ export default function CommissionLiquidationForm({
     p => p.id === form.watch('professional_id')
   )
 
+  // Calculate actual date range from services
+  const actualDateRange = useMemo(() => {
+    if (!commissionData || commissionData.services.length === 0) {
+      return null
+    }
+
+    const dates = commissionData.services.map(s => new Date(s.service_date + 'T00:00:00').getTime())
+    const minDate = new Date(Math.min(...dates))
+    const maxDate = new Date(Math.max(...dates))
+
+    return {
+      min: format(minDate, 'yyyy-MM-dd'),
+      max: format(maxDate, 'yyyy-MM-dd'),
+      minDisplay: format(minDate, 'dd/MM/yyyy', { locale: es }),
+      maxDisplay: format(maxDate, 'dd/MM/yyyy', { locale: es })
+    }
+  }, [commissionData])
 
   // Calculate totals based on selected services
   const selectedTotals = useMemo(() => {
@@ -276,6 +294,36 @@ export default function CommissionLiquidationForm({
 
   return (
     <div className="space-y-6">
+      {/* Top Professionals Quick Select */}
+      <TopProfessionalsQuickSelect
+        limit={10}
+        onSelectProfessional={(professionalId, startDate, endDate) => {
+          form.setValue('professional_id', professionalId)
+          
+          // Set dates if provided from top professional
+          if (startDate) {
+            form.setValue('period_start', startDate)
+          }
+          if (endDate) {
+            form.setValue('period_end', endDate)
+          }
+          
+          // Trigger commission calculation
+          const finalStartDate = startDate || form.getValues('period_start')
+          const finalEndDate = endDate || form.getValues('period_end')
+          if (finalStartDate && finalEndDate) {
+            setCalculating(true)
+            getCommissionData(professionalId, finalStartDate, finalEndDate)
+              .then(data => {
+                setCommissionData(data)
+                setSelectedServices(data?.services.map(s => s.service_request_id) || [])
+              })
+              .finally(() => setCalculating(false))
+          }
+        }}
+        loading={calculating}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -401,9 +449,21 @@ export default function CommissionLiquidationForm({
               {commissionData && (
                 <Card className="border-blue-200 bg-blue-50/50">
                   <CardHeader>
-                    <CardTitle className="text-lg text-blue-900">
-                      Vista Previa de la Liquidación
-                    </CardTitle>
+                    <div className="flex flex-col gap-2">
+                      <CardTitle className="text-lg text-blue-900">
+                        Vista Previa de la Liquidación
+                      </CardTitle>
+                      {actualDateRange && (
+                        <div className="text-sm text-blue-700">
+                          <span className="font-semibold">Período de servicios:</span> {actualDateRange.minDisplay} al {actualDateRange.maxDisplay}
+                          {(form.getValues('period_start') !== actualDateRange.min || form.getValues('period_end') !== actualDateRange.max) && (
+                            <div className="mt-1 text-xs text-blue-600 bg-white rounded px-2 py-1 inline-block ml-2">
+                              (Selector: {form.getValues('period_start') ? format(new Date(form.getValues('period_start') + 'T00:00:00'), 'dd/MM/yyyy', { locale: es }) : 'N/A'} - {form.getValues('period_end') ? format(new Date(form.getValues('period_end') + 'T00:00:00'), 'dd/MM/yyyy', { locale: es }) : 'N/A'})
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

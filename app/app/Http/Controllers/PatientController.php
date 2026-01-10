@@ -104,7 +104,7 @@ class PatientController extends Controller
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'birth_date' => ['required', 'date', 'before:today'],
-            'gender' => ['nullable', 'in:M,F,OTHER'],
+            'gender' => ['nullable', 'in:M,F,OTHER,male,female,other'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:100'],
             'address' => ['nullable', 'string', 'max:200'],
@@ -121,6 +121,16 @@ class PatientController extends Controller
             'primary_insurance_valid_until' => ['nullable', 'date', 'after:today'],
             'primary_insurance_coverage_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
+
+        // Normalize gender values
+        if ($validated['gender']) {
+            $validated['gender'] = match($validated['gender']) {
+                'male' => 'M',
+                'female' => 'F',
+                'other' => 'OTHER',
+                default => strtoupper($validated['gender'])
+            };
+        }
 
         // Create patient (this will auto-assign Particular insurance via model boot)
         $patient = Patient::create(collect($validated)->except([
@@ -213,7 +223,7 @@ class PatientController extends Controller
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'birth_date' => ['required', 'date', 'before:today'],
-            'gender' => ['nullable', 'in:male,female,other'],
+            'gender' => ['nullable', 'in:M,F,OTHER,male,female,other'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:100'],
             'address' => ['nullable', 'string', 'max:200'],
@@ -229,6 +239,16 @@ class PatientController extends Controller
             'status' => ['required', 'in:active,inactive'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // Normalize gender values
+        if ($validated['gender']) {
+            $validated['gender'] = match($validated['gender']) {
+                'male' => 'M',
+                'female' => 'F',
+                'other' => 'OTHER',
+                default => strtoupper($validated['gender'])
+            };
+        }
 
         $patient->update($validated);
 

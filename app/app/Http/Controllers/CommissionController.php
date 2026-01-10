@@ -114,6 +114,108 @@ class CommissionController extends Controller
                 'date_from' => $formatDate($dateFrom),
                 'date_to' => $formatDate($dateTo),
             ],
+            'professionalsWithPendingCommissions' => $this->getProfessionalsWithPendingCommissions(),
+        ]);
+    }
+
+    /**
+     * Get professionals with pending commissions to display in dashboard
+     */
+    private function getProfessionalsWithPendingCommissions(): array
+    {
+        $professionals = \App\Models\Professional::where('status', 'active')
+            ->with('specialties')
+            ->get()
+            ->map(function ($professional) {
+                // Get transaction movements that have not been liquidated yet
+                $pendingMovements = \App\Models\Transaction::where('professional_id', $professional->id)
+                    ->where('type', 'INCOME')
+                    ->where('category', 'SERVICE_PAYMENT')
+                    ->where('status', 'active')
+                    ->whereNull('commission_liquidation_id')
+                    ->get();
+
+                $pendingCount = $pendingMovements->count();
+                $pendingAmount = $pendingMovements->sum('amount');
+
+                return [
+                    'id' => $professional->id,
+                    'full_name' => $professional->full_name,
+                    'first_name' => $professional->first_name,
+                    'last_name' => $professional->last_name,
+                    'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
+                    'commission_percentage' => $professional->commission_percentage,
+                    'pending_services_count' => $pendingCount,
+                    'pending_amount' => $pendingAmount,
+                    'commission_amount' => round(($pendingAmount * $professional->commission_percentage) / 100, 2),
+                ];
+            })
+            ->filter(function ($professional) {
+                return $professional['pending_services_count'] > 0;
+            })
+            ->sortByDesc('pending_amount')
+            ->values()
+            ->toArray();
+
+        return $professionals;
+    }
+
+    /**
+     * Get top professionals with fully paid services pending commission liquidation
+     * Only includes services where 100% has been paid
+     */
+    public function getTopProfessionalsWithCommissions(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $limit = (int)$request->query('limit', 10);
+
+        $professionals = \App\Models\Professional::where('status', 'active')
+            ->with('specialties')
+            ->get()
+            ->map(function ($professional) {
+                // Get transaction movements that have not been liquidated yet
+                $pendingMovements = \App\Models\Transaction::where('professional_id', $professional->id)
+                    ->where('type', 'INCOME')
+                    ->where('category', 'SERVICE_PAYMENT')
+                    ->where('status', 'active')
+                    ->whereNull('commission_liquidation_id')
+                    ->get();
+
+                if ($pendingMovements->isEmpty()) {
+                    return null;
+                }
+
+                $pendingCount = $pendingMovements->count();
+                $pendingAmount = $pendingMovements->sum('amount');
+                
+                // Calculate date range from transactions
+                $dates = $pendingMovements->pluck('created_at')->map(function ($date) {
+                    return \Carbon\Carbon::parse($date);
+                });
+                
+                $periodStart = $dates->min()?->toDateString();
+                $periodEnd = $dates->max()?->toDateString();
+
+                return [
+                    'id' => $professional->id,
+                    'full_name' => $professional->full_name,
+                    'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
+                    'commission_percentage' => $professional->commission_percentage,
+                    'pending_services_count' => $pendingCount,
+                    'pending_amount' => $pendingAmount,
+                    'commission_amount' => round(($pendingAmount * $professional->commission_percentage) / 100, 2),
+                    'period_start' => $periodStart,
+                    'period_end' => $periodEnd,
+                ];
+            })
+            ->filter(fn($p) => $p !== null)
+            ->sortByDesc('commission_amount')
+            ->take($limit)
+            ->values()
+            ->toArray();
+
+        return response()->json([
+            'professionals' => $professionals,
+            'count' => count($professionals)
         ]);
     }
 
@@ -389,21 +491,23 @@ class CommissionController extends Controller
      */
     public function getCommissionData(Request $request): \Illuminate\Http\JsonResponse
     {
-        $request->validate([
-            'professional_id' => 'required|exists:professionals,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-        ]);
-
         try {
+            $validated = $request->validate([
+                'professional_id' => 'required|integer|exists:professionals,id',
+                'start_date' => 'required|date_format:Y-m-d',
+                'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+            ]);
+
             $data = $this->commissionService->getProfessionalCommissionData(
-                $request->professional_id,
-                $request->start_date,
-                $request->end_date
+                $validated['professional_id'],
+                $validated['start_date'],
+                $validated['end_date']
             );
 
             return response()->json($data);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['error' => 'Validation failed', 'errors' => $e->errors()], 400);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 400);
         }

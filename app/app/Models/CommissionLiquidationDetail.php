@@ -29,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read \App\Models\CommissionLiquidation $liquidation
  * @property-read \App\Models\ServiceRequest $serviceRequest
  * @property-read \App\Models\Patient $patient
- * @property-read \App\Models\Service $service
+ * @property-read \App\Models\MedicalService $service
  * @property-read \App\Models\Transaction $paymentMovement
  */
 class CommissionLiquidationDetail extends Model
@@ -96,7 +96,7 @@ class CommissionLiquidationDetail extends Model
      */
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(MedicalService::class, 'service_id');
     }
 
     /**

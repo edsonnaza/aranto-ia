@@ -15,6 +15,16 @@ import {
 } from '@/components/commission'
 import type { Professional, CommissionLiquidation } from '@/types'
 
+interface ProfessionalWithCommission {
+  id: number
+  full_name: string
+  specialty: string
+  commission_percentage: number
+  pending_services_count: number
+  pending_amount: number
+  commission_amount: number
+}
+
 interface CommissionIndexProps {
   professionals: Professional[]
   liquidations?: {
@@ -36,6 +46,7 @@ interface CommissionIndexProps {
     date_from?: string
     date_to?: string
   }
+  professionalsWithPendingCommissions?: ProfessionalWithCommission[]
 }
 
 export default function CommissionIndex({ 
@@ -43,7 +54,8 @@ export default function CommissionIndex({
   liquidations, 
   pendingApprovals, 
   defaultCommission = 10,
-  filters = {}
+  filters = {},
+  professionalsWithPendingCommissions = []
 }: CommissionIndexProps) {
   // const { props } = usePage()
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -83,7 +95,7 @@ export default function CommissionIndex({
             </TabsList>
 
             <TabsContent value="dashboard">
-              <CommissionDashboard />
+              <CommissionDashboard professionalsWithPendingCommissions={professionalsWithPendingCommissions} />
             </TabsContent>
 
             <TabsContent value="create">

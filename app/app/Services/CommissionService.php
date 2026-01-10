@@ -7,6 +7,7 @@ use App\Models\CommissionLiquidationDetail;
 use App\Models\Professional;
 use App\Models\User;
 use App\Models\ProfessionalCommission;
+use App\Models\MedicalService;
 use App\Models\ServiceRequest;
 use App\Models\Transaction;
 use App\Models\CashRegisterSession;
@@ -76,14 +77,33 @@ class CommissionService
             
             // Get service name from service_request_details
             $serviceDetail = $movement->serviceRequest?->details?->first();
-            $serviceName = $serviceDetail?->medicalService?->name ?? 'Servicio no especificado';
+            
+            // Service detail must exist
+            if (!$serviceDetail) {
+                throw new \Exception("ServiceRequest #{$movement->service_request_id} no tiene detalles de servicio asociados.");
+            }
+            
+            $serviceId = $serviceDetail->medical_service_id;
+            
+            // Service ID must exist
+            if (!$serviceId) {
+                throw new \Exception("Detalle de servicio para ServiceRequest #{$movement->service_request_id} no tiene medical_service_id.");
+            }
+            
+            // Validate that service_id exists in medical_services table
+            $service = MedicalService::find($serviceId);
+            if (!$service) {
+                throw new \Exception("El servicio médico con ID {$serviceId} no existe en el sistema. (ServiceRequest #{$movement->service_request_id})");
+            }
+            
+            $serviceName = $service->name;
 
             $services[] = [
                 'movement_id' => $movement->id,
                 'service_request_id' => $movement->service_request_id,
                 'patient_id' => $movement->serviceRequest?->patient_id,
                 'patient_name' => $patientName,
-                'service_id' => $serviceDetail?->medical_service_id ?? null,
+                'service_id' => $serviceId,
                 'service_name' => $serviceName,
                 'service_date' => $movement->created_at->format('Y-m-d'),
                 'payment_date' => $movement->created_at->format('Y-m-d'),

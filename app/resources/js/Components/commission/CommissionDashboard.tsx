@@ -20,9 +20,21 @@ import type { CommissionDashboardData } from '@/hooks/medical/useCommissionDashb
 
 interface CommissionDashboardProps {
   className?: string
+  professionalsWithPendingCommissions?: Array<{
+    id: number
+    full_name: string
+    specialty: string
+    commission_percentage: number
+    pending_services_count: number
+    pending_amount: number
+    commission_amount: number
+  }>
 }
 
-export default function CommissionDashboard({ className }: CommissionDashboardProps) {
+export default function CommissionDashboard({ 
+  className, 
+  professionalsWithPendingCommissions = [] 
+}: CommissionDashboardProps) {
   const { data: dashboardData, loading, error, refetch } = useCommissionDashboard()
 
   const formatCurrency = (amount: number) => {
@@ -257,6 +269,67 @@ export default function CommissionDashboard({ className }: CommissionDashboardPr
           </div>
         </CardContent>
       </Card>
+
+      {/* Profesionales con Comisiones Pendientes */}
+      {professionalsWithPendingCommissions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-indigo-600" />
+              Profesionales con Comisiones Pendientes
+              <Badge className="ml-2 bg-indigo-100 text-indigo-700">
+                {professionalsWithPendingCommissions.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {professionalsWithPendingCommissions.map((professional) => (
+                <Card key={professional.id} className="border-l-4 border-l-indigo-500">
+                  <CardContent className="pt-6">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{professional.full_name}</h4>
+                        <p className="text-sm text-gray-500">{professional.specialty}</p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* Servicios pendientes */}
+                        <div className="bg-orange-50 rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-orange-600">
+                            {professional.pending_services_count}
+                          </div>
+                          <p className="text-xs text-orange-700 mt-1">Servicios</p>
+                        </div>
+
+                        {/* Monto pendiente */}
+                        <div className="bg-red-50 rounded-lg p-3 text-center">
+                          <div className="text-sm font-bold text-red-600 truncate">
+                            ₲{(professional.pending_amount / 1000).toFixed(0)}k
+                          </div>
+                          <p className="text-xs text-red-700 mt-1">Pendiente</p>
+                        </div>
+
+                        {/* Comisión a cobrar */}
+                        <div className="bg-green-50 rounded-lg p-3 text-center">
+                          <div className="text-sm font-bold text-green-600 truncate">
+                            ₲{(professional.commission_amount / 1000).toFixed(0)}k
+                          </div>
+                          <p className="text-xs text-green-700 mt-1">Comisión</p>
+                        </div>
+                      </div>
+
+                      <Badge className="w-full justify-center bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
+                        {professional.commission_percentage}% Comisión
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

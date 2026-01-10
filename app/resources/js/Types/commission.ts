@@ -95,7 +95,7 @@ export interface CommissionData {
     service_request_id: number
     patient_id: number
     patient_name?: string
-    service_id?: number
+    service_id: number
     service_name?: string
     service_date: string
     payment_date: string

@@ -275,6 +275,21 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
       setLoading(true)
       setError(null)
 
+      // Convert dates from dd-mm-yyyy to yyyy-mm-dd if needed
+      const convertDate = (dateStr: string): string => {
+        if (!dateStr) return dateStr
+        // If already in yyyy-mm-dd format, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          return dateStr
+        }
+        // If in dd-mm-yyyy format, convert to yyyy-mm-dd
+        if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+          const [day, month, year] = dateStr.split('-')
+          return `${year}-${month}-${day}`
+        }
+        return dateStr
+      }
+
       const response = await fetch(commissionRoutes.data, {
         method: 'POST',
         credentials: 'include',
@@ -285,8 +300,8 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         },
         body: JSON.stringify({
           professional_id: professionalId,
-          start_date: startDate,
-          end_date: endDate,
+          start_date: convertDate(startDate),
+          end_date: convertDate(endDate),
         }),
       })
 
@@ -296,7 +311,21 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
           return null
         }
         const errorData = await response.json().catch(() => ({ error: 'Error al obtener los datos de comisión' }))
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
+        
+        // Mostrar errores de validación específicos si existen
+        let errorMessage = errorData.error || `Error ${response.status}: ${response.statusText}`
+        if (errorData.errors) {
+          const errorList = Object.entries(errorData.errors)
+            .map(([field, messages]: [string, any]) => {
+              const msgArray = Array.isArray(messages) ? messages : [messages]
+              return `${field}: ${msgArray.join(', ')}`
+            })
+            .join('\n')
+          errorMessage = `Errores de validación:\n${errorList}`
+        }
+        
+        console.error('Commission data error:', errorData)
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
