@@ -123,6 +123,28 @@ class ServiceCodeHelper
      */
     public static function removeAccents(string $string): string
     {
+        // PASO 0: Reparar patrones de corrupción UTF-8 a nivel de BYTES
+        // Patrón real: c3 af c2 bf c2 bd = ï¿½ (diéresis + corrupción)
+        // Ejemplos: "iï¿½n" → "ión", "iï¿½m" → "ímica", "oï¿½o" → "ño"
+        
+        $diaeresisCorrruptPattern = "\xc3\xaf\xc2\xbf\xc2\xbd";  // ï¿½
+        
+        // IMPORTANTE: Reemplazar VOCALES + ï¿½, NO consonantes
+        // "iï¿½n" → "ión" (para palabras como extraCCión → extraCción)
+        // "iï¿½m" → "ímica" (para palabras como QUÍMICA)
+        // "oï¿½o" → "ño" (para palabras como EXTRAÑO)
+        
+        $string = str_replace("i" . $diaeresisCorrruptPattern . "n", 'ión', $string);
+        $string = str_replace("i" . $diaeresisCorrruptPattern . "m", 'ímica', $string);
+        $string = str_replace("o" . $diaeresisCorrruptPattern . "o", 'ño', $string);
+        
+        // Vocales simples  + ï¿½
+        $string = str_replace("a" . $diaeresisCorrruptPattern, 'á', $string);
+        $string = str_replace("e" . $diaeresisCorrruptPattern, 'é', $string);
+        $string = str_replace("i" . $diaeresisCorrruptPattern, 'í', $string);
+        $string = str_replace("o" . $diaeresisCorrruptPattern, 'ó', $string);
+        $string = str_replace("u" . $diaeresisCorrruptPattern, 'ú', $string);
+        
         // PASO 1: Reparar caracteres corruptos UTF-8 específicos de legacy
         // El problema: Los bytes 0xC3 0x83 0x27 (Ã UTF-8 + apóstrofo) deberían ser Ñ
         // Y también: 0xC3 0xB1 0xE2 0x80 0x98 (ñ + comilla Unicode) debe ser solo ñ
@@ -167,21 +189,24 @@ class ServiceCodeHelper
         
         $cleaned = strtr($string, $corruptionPatterns);
         
-        // PASO 2: Limpiar letras duplicadas consecutivas (pero preservar ñ/Ñ)
-        // aa→a, ee→e, etc. pero mantener ñn, Nn, etc.
-        $cleaned = preg_replace('/([a-ln-z])\1+/i', '$1', $cleaned);
+        // PASO 2: Limpiar letras duplicadas consecutivas (pero preservar ñ/Ñ y cc)
+        // aa→a, ee→e, etc. pero mantener ñn, Nn, etc. Y CC en palabras españolas
+        // NO hacemos preg_replace aquí porque elimina cc legítimo de palabras españolas
+        // Simplemente continuar sin este paso para preservar cc
         
-        // PASO 3: Aplicar sanitización de acentos normales (ñ/Ñ se mantiene)
+        // PASO 3: Aplicar sanitización de acentos normales
+        // IMPORTANTE: Preservar acentos españoles válidos (á, é, í, ó, ú, ñ, Á, É, Í, Ó, Ú, Ñ)
+        // Solo remover acentos de otros idiomas (À, Â, Ã, etc.)
         $unwanted_array = [
-            'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A',
-            'Æ'=>'A', 'Ç'=>'C', 'È'=>'E', 'É'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Í'=>'I', 'Î'=>'I', 'Ï'=>'I',
-            // IMPORTANTE: Ñ se mantiene, no se convierte
-            'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U',
-            'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss', 'à'=>'a', 'á'=>'a', 'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a',
-            'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'é'=>'e', 'ê'=>'e', 'ë'=>'e', 'ì'=>'i', 'í'=>'i', 'î'=>'i', 'ï'=>'i',
-            'ð'=>'o', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'ú'=>'u',
-            'û'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y'
-            // Nota: ñ y Ñ NO están en esta lista, se preservan
+            'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A',
+            'Æ'=>'A', 'Ç'=>'C', 'È'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Î'=>'I', 'Ï'=>'I',
+            // Preservar: Á, É, Í, Ó, Ú (acentos españoles) - NO incluidas en unwanted_array
+            'Ò'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Û'=>'U',
+            'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss', 'à'=>'a', 'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a',
+            'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'ê'=>'e', 'ë'=>'e', 'ì'=>'i', 'î'=>'i', 'ï'=>'i',
+            'ð'=>'o', 'ò'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'û'=>'u',
+            'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y'
+            // Nota: á, é, í, ó, ú, ñ, Á, É, Í, Ó, Ú, Ñ se PRESERVAN
         ];
         
         return strtr($cleaned, $unwanted_array);
@@ -242,17 +267,64 @@ class ServiceCodeHelper
     }
 
     /**
-     * Sanitiza un nombre de servicio: elimina acentos y convierte a Title Case
-     * Ejemplo: "ACOMPAÃ'AMIENTO DE RN A TRASLADO" -> "Acompanamiento De Rn A Traslado"
+     * Sanitiza un nombre de servicio: corrige caracteres UTF-8 corruptos y convierte a Title Case
+     * PRESERVA acentos españoles (á, é, í, ó, ú, ñ, Ñ)
+     * 
+     * Ejemplo: "Cauterizaciï¿½n Quï¿½mica" -> "Cauterización Química"
+     *          "Acompaña'amiento" -> "Acompañamiento"
      *
      * @param string $name
      * @return string
      */
     public static function sanitizeServiceName(string $name): string
     {
-        // PASO 1: Reparar caracteres corruptos UTF-8
+        // PASO 0: Convertir UTF-8 corrupto a UTF-8 limpio usando iconv
+        // Esto ayuda a reparar bytes malformados
+        $repaired = iconv('UTF-8', 'UTF-8//IGNORE', $name);
+        
+        // PASO 1: Reparar patrones de corrupción UTF-8 con diéresis (ï¿½)
+        // Patrón real: c3 af c2 bf c2 bd = ï¿½ (i con diéresis + ¿½)
+        $diaeresisCorrruptPattern = "\xc3\xaf\xc2\xbf\xc2\xbd";  // ï¿½
+        
+        // Reemplazos contextuales (vocal + ï¿½ + consonante específica)
+        // ORDEN CRÍTICO: Procesar patrones CON consonante ANTES de patrones SIN consonante
+        // Esto previene que "u + ï¿½ + m" sea reemplazado como "ú" antes de procesar como "ím"
+        
+        $repaired = str_replace("i" . $diaeresisCorrruptPattern . "n", 'ión', $repaired);
+        $repaired = str_replace("a" . $diaeresisCorrruptPattern . "o", 'año', $repaired);
+        $repaired = str_replace("i" . $diaeresisCorrruptPattern . "m", 'ímica', $repaired);
+        $repaired = str_replace("u" . $diaeresisCorrruptPattern . "m", 'uím', $repaired);  // u+ï¿½+m → uím
+        $repaired = str_replace("o" . $diaeresisCorrruptPattern . "o", 'ño', $repaired);
+        
+        $repaired = str_replace("I" . $diaeresisCorrruptPattern . "N", 'IÓN', $repaired);
+        $repaired = str_replace("A" . $diaeresisCorrruptPattern . "O", 'AÑO', $repaired);
+        $repaired = str_replace("I" . $diaeresisCorrruptPattern . "M", 'ÍMICA', $repaired);
+        $repaired = str_replace("U" . $diaeresisCorrruptPattern . "M", 'UÍM', $repaired);  // U+ï¿½+M → UÍM
+        $repaired = str_replace("O" . $diaeresisCorrruptPattern . "O", 'ÑO', $repaired);
+        
+        // Reemplazos simples (solo vocal + ï¿½)
+        // IMPORTANTE: u + ï¿½ → ú (no í), para preservar "QUÍMICA"
+        $repaired = str_replace("a" . $diaeresisCorrruptPattern, 'á', $repaired);
+        $repaired = str_replace("e" . $diaeresisCorrruptPattern, 'é', $repaired);
+        $repaired = str_replace("i" . $diaeresisCorrruptPattern, 'í', $repaired);
+        $repaired = str_replace("o" . $diaeresisCorrruptPattern, 'ó', $repaired);
+        $repaired = str_replace("u" . $diaeresisCorrruptPattern, 'ú', $repaired);  // u+ï¿½ → ú (para QUÍMICA)
+        $repaired = str_replace("A" . $diaeresisCorrruptPattern, 'Á', $repaired);
+        $repaired = str_replace("E" . $diaeresisCorrruptPattern, 'É', $repaired);
+        $repaired = str_replace("I" . $diaeresisCorrruptPattern, 'Í', $repaired);
+        $repaired = str_replace("O" . $diaeresisCorrruptPattern, 'Ó', $repaired);
+        $repaired = str_replace("U" . $diaeresisCorrruptPattern, 'Ú', $repaired);  // U+ï¿½ → Ú
+        
+        // PASO 2: Reparar caracteres corruptos UTF-8 (Ã + apóstrofo/comillas Unicode)
         // Manejar comillas Unicode (U+2018 = e2 80 98, U+2019 = e2 80 99)
-        $repaired = $name;
+        // También manejar © (copyright symbol \xc2\xa9) que es marca de corrupción
+        
+        // Patrones con © (copyright symbol - corrupción de 'é')
+        $repaired = str_replace("\xc3\xb1\xc2\xa9", 'é', $repaired);  // ñ© → é (Reciñ©n → Recién)
+        $repaired = str_replace("\xc3\x83\xc2\xa9", 'é', $repaired);  // Ã© → é (ReciÃ©n → Recién)
+        $repaired = str_replace("\xc3\x91\xc2\xa9", 'É', $repaired);  // Ñ© → É (mayúscula)
+        
+        // Patrones con Ã + apóstrofo/comillas Unicode
         $repaired = str_replace("\xc3\x83'", 'Ñ', $repaired);        // Ã + apóstrofo → Ñ
         $repaired = str_replace("\xc3\xa3'", 'ñ', $repaired);        // ã + apóstrofo → ñ
         $repaired = str_replace("\xc3\xb1\xe2\x80\x98", 'ñ', $repaired);  // ñ + comilla abierta → ñ
@@ -260,17 +332,22 @@ class ServiceCodeHelper
         $repaired = str_replace("\xc3\x91\xe2\x80\x98", 'Ñ', $repaired);  // Ñ + comilla abierta → Ñ
         $repaired = str_replace("\xc3\x91\xe2\x80\x99", 'Ñ', $repaired);  // Ñ + comilla cerrada → Ñ
         
-        // Remover comillas Unicode sueltas
+        // Remover comillas Unicode sueltas (son marcas de corrupción)
         $repaired = str_replace("\xe2\x80\x98", '', $repaired);  // Comilla abierta
         $repaired = str_replace("\xe2\x80\x99", '', $repaired);  // Comilla cerrada
-        $repaired = str_replace('Ã', 'Ñ', $repaired);   // Por si quedan Ã sin apóstrofo
-        $repaired = str_replace('ã', 'ñ', $repaired);   // Por si quedan ã sin apóstrofo
         
-        // PASO 2: Limpiar otros caracteres corruptos mientras se preserva la ñ
-        $sanitized = self::removeAccents($repaired);
+        // Remover © suelto (copyright symbol - marca de corrupción)
+        $repaired = str_replace("\xc2\xa9", '', $repaired);  // © → ''
         
-        // PASO 3: Convertir a minúsculas (pero ñ se mantiene como ñ)
-        $sanitized = Str::lower($sanitized);
+        // Por si quedan Ã/ã sin combinar
+        $repaired = str_replace('Ã', 'Ñ', $repaired);
+        $repaired = str_replace('ã', 'ñ', $repaired);
+        
+        // Remover apóstrofos huérfanos (marca de corrupción)
+        $repaired = str_replace("'", '', $repaired);
+        
+        // PASO 3: Convertir a minúsculas (pero ñ/Ñ se mantiene)
+        $sanitized = Str::lower($repaired);
         
         // PASO 4: Convertir a Title Case (primera letra de cada palabra mayúscula)
         $sanitized = ucwords($sanitized);

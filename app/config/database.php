@@ -85,7 +85,7 @@ return [
 
         'legacy' => [
             'driver' => 'mysql',
-            'host' => env('DB_HOST', '127.0.0.1'),
+            'host' => env('DB_HOST', 'mysql'),
             'port' => env('DB_PORT', '3306'),
             'database' => 'db_legacy_infomed',
             'username' => env('DB_USERNAME', 'root'),
@@ -96,6 +96,9 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
         ],
 
         'pgsql' => [
