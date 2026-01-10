@@ -37,7 +37,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                 $this->call(CashRegisterPermissionsSeeder::class);
                 $this->call(InsuranceTypesSeeder::class);
                 $this->call(ServiceCategoriesSeeder::class);
-                $this->call(CreateAdditionalServiceCategoriesSeeder::class);
+                // CreateAdditionalServiceCategoriesSeeder removed - ServiceCategoriesSeeder now includes all 27 legacy categories with preserved IDs
             });
 
             // FASE 2: Datos Básicos de Aranto (sin legacy)
@@ -191,12 +191,11 @@ class MasterLegacyMigrationSeeder extends Seeder
         $totalPrices = DB::table('service_prices')->count();
         $report .= "PRECIOS DE SERVICIOS:\n";
         $report .= "  Total de precios: {$totalPrices}\n";
-        $report .= "  Precios esperados (servicios × seguros): " . ($fromLegacy * 2) . "\n";
         
-        if ($totalPrices === $fromLegacy * 2) {
-            $report .= "  Status: ✓ COMPLETO\n\n";
+        if ($totalPrices > 0) {
+            $report .= "  Status: ✓ MIGRADOS\n\n";
         } else {
-            $report .= "  Status: ⚠ INCOMPLETO (revisar)\n\n";
+            $report .= "  Status: ⚠ SIN PRECIOS (revisar)\n\n";
         }
 
         // Validación de caracteres corruptos

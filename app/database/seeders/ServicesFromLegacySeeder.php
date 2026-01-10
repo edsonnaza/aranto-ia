@@ -19,51 +19,38 @@ class ServicesFromLegacySeeder extends Seeder
     {
         $this->command->info('Iniciando migración de servicios desde legacy...');
 
-        // Map legacy category IDs to aranto service_categories IDs (COMPLETE)
-        $categoryMapping = [
-            22 => 7,   // Legacy 22 (Servicios Sanatoriales) -> Aranto 7
-            23 => 8,   // Legacy 23 (Consultas Consultorios) -> Aranto 8
-            24 => 10,  // Legacy 24 (Servicios Cardiologia) -> Aranto 10
-            25 => 9,   // Legacy 25 (Servicios Otorrinonaringologia) -> Aranto 9
-            26 => 11,  // Legacy 26 (Servicios Radiologia IMAP) -> Aranto 11
-            27 => 12,  // Legacy 27 (Servicios Ecografias) -> Aranto 12
-            28 => 13,  // Legacy 28 (Alquileres) -> Aranto 13
-            29 => 14,  // Legacy 29 (Servicios de Urgencia) -> Aranto 14
-            30 => 15,  // Legacy 30 (Servicios de Analisis) -> Aranto 15
-            31 => 16,  // Legacy 31 (Consulta en Urgencia) -> Aranto 16
-            32 => 17,  // Legacy 32 (Odontologia) -> Aranto 17
-            33 => 18,  // Legacy 33 (IMAP S.A) -> Aranto 18
-            34 => 19,  // Legacy 34 (Servicios de RX) -> Aranto 19
-            35 => 20,  // Legacy 35 (Mamografia) -> Aranto 20
-            36 => 21,  // Legacy 36 (Ecografias de Urgencias) -> Aranto 21
-            37 => 22,  // Legacy 37 (Procedimientos Generales) -> Aranto 22
-            40 => 23,  // Legacy 40 (MASTOLOGIA) -> Aranto 23
-            41 => 24,  // Legacy 41 (MASTOLOGIA Especial) -> Aranto 24
-            45 => 25,  // Legacy 45 (Honorario Medico Particular) -> Aranto 25
-            46 => 26,  // Legacy 46 (Honorario Medico Unimed) -> Aranto 26
-            47 => 27,  // Legacy 47 (Sala Internacion) -> Aranto 27
-            48 => 28,  // Legacy 48 (Tes De Marcha) -> Aranto 28
-        ];
+        // Mapeo DIRECTO: legacy_id = aranto_id (sin conversión)
+        // Solo se migran categorías de SERVICIOS MÉDICOS
+        // EXCLUIDAS: 38 (Cocina), 42 (Medicamentos), 43 (Descartables), 44 (Otros Farmacia)
+        $categoriesAllowed = [22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 39, 40, 41, 45, 46, 47, 48];
+        $categoriesExcluded = [38, 42, 43, 44]; // Cocina, Medicamentos, Descartables, Otros Farmacia
 
         // Verify categories exist
-        $this->command->info('Verificando categorías...');
+        $this->command->info('Verificando categorías de servicios médicos...');
         $categoriesMap = [];
         
-        foreach ($categoryMapping as $legacyId => $arantoId) {
-            $category = ServiceCategory::find($arantoId);
+        foreach ($categoriesAllowed as $categoryId) {
+            $category = ServiceCategory::find($categoryId);
             if ($category) {
-                $categoriesMap[$legacyId] = $arantoId;
-                $this->command->line("  ✓ Categoría {$legacyId} -> {$arantoId}: {$category->name}");
+                $categoriesMap[$categoryId] = $categoryId; // Mapeo 1:1
+                $this->command->line("  ✓ Categoría {$categoryId}: {$category->name}");
             } else {
-                $this->command->warn("  ⊘ Categoría {$arantoId} no existe en aranto");
+                $this->command->warn("  ⊘ Categoría {$categoryId} no existe en aranto");
             }
         }
 
-        // Get products from legacy
+        $this->command->info('');
+        $this->command->warn('Categorías EXCLUIDAS de la migración:');
+        foreach ($categoriesExcluded as $catId) {
+            $this->command->line("  ✗ ID {$catId}");
+        }
+        $this->command->info('');
+
+        // Get products from legacy - SOLO de categorías permitidas
         $this->command->info('Obteniendo productos de legacy...');
         $legacyProducts = DB::connection('legacy')
             ->table('producto')
-            ->whereIn('IdCategoria', array_keys($categoryMapping))
+            ->whereIn('IdCategoria', $categoriesAllowed)
             ->where('Estado', 'ACTIVO')
             ->get();
 

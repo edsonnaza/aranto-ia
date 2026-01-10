@@ -30,11 +30,21 @@ class ServicePricesFromLegacySeeder extends Seeder
         $this->command->info('=== INICIANDO MIGRACIÓN DE PRECIOS DE SERVICIOS ===');
         $this->command->info('');
 
-        // Obtener todos los precios de productos en legacy
+        // Categorías EXCLUIDAS (no son servicios médicos)
+        // 38: SERVICIOS DE COCINA
+        // 42: Medicamentos
+        // 43: Descartables
+        // 44: Otros Farmacia
+        $categoriesExcluded = [38, 42, 43, 44];
+
+        // Obtener todos los precios de productos en legacy (EXCLUYENDO categorías no médicas)
         $legacyPrices = DB::connection('legacy')
             ->table('producto_precios')
-            ->where('activo', 'SI')
-            ->where('eliminado', 'NO')
+            ->join('producto', 'producto_precios.idproducto', '=', 'producto.IdProducto')
+            ->whereNotIn('producto.IdCategoria', $categoriesExcluded)
+            ->where('producto_precios.activo', 'SI')
+            ->where('producto_precios.eliminado', 'NO')
+            ->select('producto_precios.*')
             ->get();
 
         $totalPrecios = $legacyPrices->count();
@@ -44,7 +54,8 @@ class ServicePricesFromLegacySeeder extends Seeder
         $ignorados = 0;
         $noMapeado = 0;
 
-        $this->command->line("Total de precios en legacy: {$totalPrecios}");
+        $this->command->line("Total de precios en legacy (excluyendo categorías no médicas): {$totalPrecios}");
+        $this->command->warn('Categorías excluidas: 38 (Cocina), 42 (Medicamentos), 43 (Descartables), 44 (Otros Farmacia)');
         $this->command->line("Buscando mapeos de servicios...");
         
         // Pre-cargar todos los mapeos en memoria
