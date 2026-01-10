@@ -124,12 +124,27 @@ class ServiceCodeHelper
     public static function removeAccents(string $string): string
     {
         // PASO 1: Reparar caracteres corruptos UTF-8 específicos de legacy
-        // El problema: Ã' (bytes corruptos) debería ser Ñ
+        // El problema: Los bytes 0xC3 0x83 0x27 (Ã UTF-8 + apóstrofo) deberían ser Ñ
+        // Y también: 0xC3 0xB1 0xE2 0x80 0x98 (ñ + comilla Unicode) debe ser solo ñ
+        
+        // Reemplazar secuencias exactas de bytes UTF-8
+        $string = str_replace("\xc3\x83'", 'Ñ', $string);        // Ã + apóstrofo regular → Ñ
+        $string = str_replace("\xc3\xa3'", 'ñ', $string);        // ã + apóstrofo regular → ñ
+        $string = str_replace("\xc3\xb1\xe2\x80\x98", 'ñ', $string);  // ñ + comilla abierta → ñ
+        $string = str_replace("\xc3\xb1\xe2\x80\x99", 'ñ', $string);  // ñ + comilla cerrada → ñ
+        $string = str_replace("\xc3\x91\xe2\x80\x98", 'Ñ', $string);  // Ñ + comilla abierta → Ñ
+        $string = str_replace("\xc3\x91\xe2\x80\x99", 'Ñ', $string);  // Ñ + comilla cerrada → Ñ
+        
+        // Remover comillas Unicode sueltas (marca de corrupción)
+        $string = str_replace("\xe2\x80\x98", '', $string);  // Comilla abierta
+        $string = str_replace("\xe2\x80\x99", '', $string);  // Comilla cerrada
         
         $corruptionPatterns = [
-            // Patrones de ñ/Ñ corrupta (Ã' es muy común)
-            'ã' => 'ñ',      // ã corrupta → ñ
-            'Ã' => 'Ñ',      // Ã corrupta → Ñ
+            // Patrones de ñ/Ñ corrupta - fallbacks para otros casos
+            "Ã'" => 'Ñ',      // Por si acaso
+            "ã'" => 'ñ',      // Por si acaso
+            'ã' => 'ñ',       // ã corrupta → ñ
+            'Ã' => 'Ñ',       // Ã corrupta → Ñ
             
             // ± representa una ñ corrupta → convertir a ñ correcta
             '±' => 'ñ',
@@ -235,10 +250,21 @@ class ServiceCodeHelper
      */
     public static function sanitizeServiceName(string $name): string
     {
-        // PASO 1: Reparar caracteres corruptos UTF-8 (especialmente Ã → Ñ)
+        // PASO 1: Reparar caracteres corruptos UTF-8
+        // Manejar comillas Unicode (U+2018 = e2 80 98, U+2019 = e2 80 99)
         $repaired = $name;
-        $repaired = str_replace('Ã', 'Ñ', $repaired);
-        $repaired = str_replace('ã', 'ñ', $repaired);
+        $repaired = str_replace("\xc3\x83'", 'Ñ', $repaired);        // Ã + apóstrofo → Ñ
+        $repaired = str_replace("\xc3\xa3'", 'ñ', $repaired);        // ã + apóstrofo → ñ
+        $repaired = str_replace("\xc3\xb1\xe2\x80\x98", 'ñ', $repaired);  // ñ + comilla abierta → ñ
+        $repaired = str_replace("\xc3\xb1\xe2\x80\x99", 'ñ', $repaired);  // ñ + comilla cerrada → ñ
+        $repaired = str_replace("\xc3\x91\xe2\x80\x98", 'Ñ', $repaired);  // Ñ + comilla abierta → Ñ
+        $repaired = str_replace("\xc3\x91\xe2\x80\x99", 'Ñ', $repaired);  // Ñ + comilla cerrada → Ñ
+        
+        // Remover comillas Unicode sueltas
+        $repaired = str_replace("\xe2\x80\x98", '', $repaired);  // Comilla abierta
+        $repaired = str_replace("\xe2\x80\x99", '', $repaired);  // Comilla cerrada
+        $repaired = str_replace('Ã', 'Ñ', $repaired);   // Por si quedan Ã sin apóstrofo
+        $repaired = str_replace('ã', 'ñ', $repaired);   // Por si quedan ã sin apóstrofo
         
         // PASO 2: Limpiar otros caracteres corruptos mientras se preserva la ñ
         $sanitized = self::removeAccents($repaired);
