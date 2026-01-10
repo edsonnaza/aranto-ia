@@ -317,7 +317,11 @@ class ServiceCodeHelper
         
         // PASO 2: Reparar caracteres corruptos UTF-8 (Ã + apóstrofo/comillas Unicode)
         // Manejar comillas Unicode (U+2018 = e2 80 98, U+2019 = e2 80 99)
-        // También manejar © (copyright symbol \xc2\xa9) que es marca de corrupción
+        // También manejar © (copyright symbol \xc2\xa9) y º (ordinal \xc2\xba) que son marcas de corrupción
+        
+        // Patrones con º (ordinal masculine - corrupción de 'ú')
+        $repaired = str_replace("\xc3\x83\xc2\xba", 'ú', $repaired);  // Ãº → ú (QuirÃºrgica → Quirúrgica)
+        $repaired = str_replace("\xc3\x81\xc2\xba", 'Ú', $repaired);  // Áº → Ú (mayúscula)
         
         // Patrones con © (copyright symbol - corrupción de 'é')
         $repaired = str_replace("\xc3\xb1\xc2\xa9", 'é', $repaired);  // ñ© → é (Reciñ©n → Recién)
@@ -338,6 +342,9 @@ class ServiceCodeHelper
         
         // Remover © suelto (copyright symbol - marca de corrupción)
         $repaired = str_replace("\xc2\xa9", '', $repaired);  // © → ''
+        
+        // Remover º suelto (ordinal masculine - marca de corrupción)
+        $repaired = str_replace("\xc2\xba", '', $repaired);  // º → ''
         
         // Por si quedan Ã/ã sin combinar
         $repaired = str_replace('Ã', 'Ñ', $repaired);
