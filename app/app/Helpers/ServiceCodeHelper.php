@@ -325,6 +325,10 @@ class ServiceCodeHelper
         $repaired = str_replace("\xc3\x83\xc2\xba", 'ú', $repaired);  // Ãº → ú (QuirÃºrgica → Quirúrgica)
         $repaired = str_replace("\xc3\x81\xc2\xba", 'Ú', $repaired);  // Áº → Ú (mayúscula)
         
+        // Patrones con ¡ (inverted exclamation - corrupción de 'á')
+        $repaired = str_replace("\xc3\xb1\xc2\xa1", 'á', $repaired);  // ñ¡ → á (Linfñ¡tico → Linfático)
+        $repaired = str_replace("\xc3\x91\xc2\xa1", 'Á', $repaired);  // Ñ¡ → Á (mayúscula)
+        
         // Patrones con © (copyright symbol - corrupción de 'é')
         $repaired = str_replace("\xc3\xb1\xc2\xa9", 'é', $repaired);  // ñ© → é (Reciñ©n → Recién)
         $repaired = str_replace("\xc3\x83\xc2\xa9", 'é', $repaired);  // Ã© → é (ReciÃ©n → Recién)
