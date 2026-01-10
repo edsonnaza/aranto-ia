@@ -114,51 +114,59 @@ class ServiceCodeHelper
 
     /**
      * Remueve acentos y caracteres especiales, incluyendo corrupción UTF-8
-     * Convierte ñ → n, á → a, é → e, etc.
-     * También maneja caracteres corruptos como ± → n, ³ → o, ¡ → a, ' → a
+     * IMPORTANTE: Preserva la 'ñ' y 'Ñ' correctamente
+     * Convierte ã' → ñ, á → a, é → e, etc.
+     * También maneja caracteres corruptos como ± → ñ, ³ → ó, etc.
      *
      * @param string $string
      * @return string
      */
     public static function removeAccents(string $string): string
     {
-        // Primero, limpiar caracteres corruptos específicos que vienen del legacy
-        // Patrones de corrupción encontrados en datos legacy:
+        // PASO 1: Reparar caracteres corruptos UTF-8 específicos de legacy
+        // El problema: Ã' (bytes corruptos) debería ser Ñ
+        
         $corruptionPatterns = [
+            // Patrones de ñ/Ñ corrupta (Ã' es muy común)
+            'ã' => 'ñ',      // ã corrupta → ñ
+            'Ã' => 'Ñ',      // Ã corrupta → Ñ
+            
             // ± representa una ñ corrupta → convertir a ñ correcta
             '±' => 'ñ',
             // ³ representa una o corrupta (ó) → convertir a ó
             '³' => 'ó',
             // ¡ representa una a corrupta (á) → convertir a á
             '¡' => 'á',
-            // ' (apóstrofo raro) representa una a corrupta (á)
-            "'" => 'á',
+            // ' (apóstrofo - mark de corrupción UTF-8)
+            "'" => '',  // Simplemente remover
             // ¿ representa un carácter corrupto, típicamente se elimina
             '¿' => '',
             // ½ representa un carácter corrupto, típicamente se elimina
             '½' => '',
             // Variaciones de comillas y apóstrofos (usar unicode)
-            '\u{2018}' => 'á',  // Comilla izquierda
-            '\u{2019}' => 'á',  // Comilla derecha / apóstrofo
+            '\u{2018}' => '',  // Comilla izquierda
+            '\u{2019}' => '',  // Comilla derecha / apóstrofo
             '`' => '',
             '´' => '',
         ];
         
         $cleaned = strtr($string, $corruptionPatterns);
         
-        // Limpiar letras duplicadas consecutivas (aa→a, ee→e, etc.)
-        // Excepto ñ que puede ser válida
-        $cleaned = preg_replace('/([a-z])\1+(?!ñ)/i', '$1', $cleaned);
+        // PASO 2: Limpiar letras duplicadas consecutivas (pero preservar ñ/Ñ)
+        // aa→a, ee→e, etc. pero mantener ñn, Nn, etc.
+        $cleaned = preg_replace('/([a-ln-z])\1+/i', '$1', $cleaned);
         
-        // Ahora aplicar la sanitización de acentos normales (ñ se mantiene)
+        // PASO 3: Aplicar sanitización de acentos normales (ñ/Ñ se mantiene)
         $unwanted_array = [
             'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A',
             'Æ'=>'A', 'Ç'=>'C', 'È'=>'E', 'É'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Í'=>'I', 'Î'=>'I', 'Ï'=>'I',
-            'Ñ'=>'N', 'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U',
+            // IMPORTANTE: Ñ se mantiene, no se convierte
+            'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U',
             'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss', 'à'=>'a', 'á'=>'a', 'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a',
             'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'é'=>'e', 'ê'=>'e', 'ë'=>'e', 'ì'=>'i', 'í'=>'i', 'î'=>'i', 'ï'=>'i',
             'ð'=>'o', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'ú'=>'u',
             'û'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y'
+            // Nota: ñ y Ñ NO están en esta lista, se preservan
         ];
         
         return strtr($cleaned, $unwanted_array);
@@ -227,16 +235,21 @@ class ServiceCodeHelper
      */
     public static function sanitizeServiceName(string $name): string
     {
-        // Primero, remover acentos y caracteres corruptos
-        $sanitized = self::removeAccents($name);
+        // PASO 1: Reparar caracteres corruptos UTF-8 (especialmente Ã → Ñ)
+        $repaired = $name;
+        $repaired = str_replace('Ã', 'Ñ', $repaired);
+        $repaired = str_replace('ã', 'ñ', $repaired);
         
-        // Convertir a minúsculas primero
+        // PASO 2: Limpiar otros caracteres corruptos mientras se preserva la ñ
+        $sanitized = self::removeAccents($repaired);
+        
+        // PASO 3: Convertir a minúsculas (pero ñ se mantiene como ñ)
         $sanitized = Str::lower($sanitized);
         
-        // Convertir a Title Case (primera letra mayúscula de cada palabra)
+        // PASO 4: Convertir a Title Case (primera letra de cada palabra mayúscula)
         $sanitized = ucwords($sanitized);
         
-        // Limpiar espacios múltiples
+        // PASO 5: Limpiar espacios múltiples
         $sanitized = preg_replace('/\s+/', ' ', trim($sanitized));
         
         return $sanitized;
