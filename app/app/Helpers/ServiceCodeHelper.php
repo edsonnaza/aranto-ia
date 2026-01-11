@@ -351,6 +351,15 @@ class ServiceCodeHelper
         $repaired = str_replace("\xc3\x82\xc2\xb0", '°', $repaired);  // Â° → °
         $repaired = str_replace("\xc3\xa2\xc2\xb0", '°', $repaired);  // â° → °
         
+        // Patrones con ñ³, ñ±, ñ" (corrupción de ó/o)
+        $repaired = str_replace("\xc3\xb1\xc2\xb3", 'ó', $repaired);  // ñ³ → ó (Nutriciñ³n → Nutrición)
+        $repaired = str_replace("\xc3\xb1\xc2\xb1", 'ñ', $repaired);  // ñ± → ñ (Muñ±ecas → Muñecas)
+        $repaired = str_replace("\xc3\xb1\"", 'ó', $repaired);        // ñ" → ó (Presiñ"n → Presión)
+        
+        // Mayúsculas
+        $repaired = str_replace("\xc3\x91\xc2\xb3", 'Ó', $repaired);  // Ñ³ → Ó
+        $repaired = str_replace("\xc3\x91\xc2\xb1", 'Ñ', $repaired);  // Ñ± → Ñ
+        
         // Remover © suelto (copyright symbol - marca de corrupción)
         $repaired = str_replace("\xc2\xa9", '', $repaired);  // © → ''
         
@@ -358,6 +367,19 @@ class ServiceCodeHelper
         $repaired = str_replace("\xc2\xba", '', $repaired);  // º → ''
         
         // Remover ¡ suelto (inverted exclamation - marca de corrupción)
+        $repaired = str_replace("\xc2\xa1", '', $repaired);  // ¡ → ''
+        
+        // Corregir "Dr," → "Dr. " (comilla reemplazada por coma)
+        $repaired = str_replace('Dr,', 'Dr. ', $repaired);
+        
+        // Limpiar "Dr. ." → "Dr. " (puntos duplicados)
+        $repaired = str_replace('Dr. .', 'Dr. ', $repaired);
+        
+        // Remover superscript 3 suelto (corrupción)
+        $repaired = str_replace("\xc2\xb3", '', $repaired);  // ³ → ''
+        
+        // Remover ± suelto (corrupción)
+        $repaired = str_replace("\xc2\xb1", '', $repaired);  // ± → ''
         $repaired = str_replace("\xc2\xa1", '', $repaired);  // ¡ → ''
         
         // Por si quedan Ã/ã sin combinar
@@ -432,6 +454,7 @@ class ServiceCodeHelper
      * Capitaliza correctamente nombres de profesionales
      * Ejemplo: "Dr.fernando Gutierrez" → "Dr. Fernando Gutierrez"
      * También maneja: "Dra.", "Lic.", "Prof.", etc.
+     * Y casos con coma: "Dr,nery Nunez" → "Dr. Nery Nunez"
      *
      * @param string $name
      * @return string
@@ -442,13 +465,22 @@ class ServiceCodeHelper
         $name = trim($name);
         
         // Patrones de títulos profesionales que necesitan espacio después del punto
+        // También manejar variantes con coma (caso de corrupción)
         $patterns = [
+            // Con punto
             'dr\.' => 'Dr. ',
             'dra\.' => 'Dra. ',
             'lic\.' => 'Lic. ',
             'prof\.' => 'Prof. ',
             'ing\.' => 'Ing. ',
             'arq\.' => 'Arq. ',
+            // Con coma (corrupción de punto)
+            'dr,' => 'Dr. ',
+            'dra,' => 'Dra. ',
+            'lic,' => 'Lic. ',
+            'prof,' => 'Prof. ',
+            'ing,' => 'Ing. ',
+            'arq,' => 'Arq. ',
         ];
         
         foreach ($patterns as $pattern => $replacement) {
