@@ -351,14 +351,16 @@ class ServiceCodeHelper
         $repaired = str_replace("\xc3\x82\xc2\xb0", '°', $repaired);  // Â° → °
         $repaired = str_replace("\xc3\xa2\xc2\xb0", '°', $repaired);  // â° → °
         
-        // Patrones con ñ³, ñ±, ñ" (corrupción de ó/o)
-        $repaired = str_replace("\xc3\xb1\xc2\xb3", 'ó', $repaired);  // ñ³ → ó (Nutriciñ³n → Nutrición)
-        $repaired = str_replace("\xc3\xb1\xc2\xb1", 'ñ', $repaired);  // ñ± → ñ (Muñ±ecas → Muñecas)
-        $repaired = str_replace("\xc3\xb1\"", 'ó', $repaired);        // ñ" → ó (Presiñ"n → Presión)
+        // Patrones con Ã + símbolo (corrupción UTF-8 de acentos)
+        // Ã¡ → á, Ã³ → ó, Ãº → ú, etc.
+        $repaired = str_replace("\xc3\x83\xc2\xa1", 'á', $repaired);  // Ã¡ → á (LinfÃ¡tico → Linfático)
+        $repaired = str_replace("\xc3\x83\xc2\xb3", 'ó', $repaired);  // Ã³ → ó (sesiÃ³n → sesión)
+        $repaired = str_replace("\xc3\x83\xc2\xba", 'ú', $repaired);  // Ãº → ú (quirÃºrgico → quirúrgico)
         
         // Mayúsculas
-        $repaired = str_replace("\xc3\x91\xc2\xb3", 'Ó', $repaired);  // Ñ³ → Ó
-        $repaired = str_replace("\xc3\x91\xc2\xb1", 'Ñ', $repaired);  // Ñ± → Ñ
+        $repaired = str_replace("\xc3\x83\xc2\x81", 'Á', $repaired);  // Á mayúscula
+        $repaired = str_replace("\xc3\x83\xc2\x93", 'Ó', $repaired);  // Ó mayúscula
+        $repaired = str_replace("\xc3\x83\xc2\x9a", 'Ú', $repaired);  // Ú mayúscula
         
         // Remover © suelto (copyright symbol - marca de corrupción)
         $repaired = str_replace("\xc2\xa9", '', $repaired);  // © → ''
