@@ -346,11 +346,19 @@ class ServiceCodeHelper
         $repaired = str_replace("\xe2\x80\x98", '', $repaired);  // Comilla abierta
         $repaired = str_replace("\xe2\x80\x99", '', $repaired);  // Comilla cerrada
         
+        // Patrones con Â° y â° (corrupción de ordinal masculine)
+        // "1Â°" → "1°", "2°" → "2°", etc. (desde utf8mb3_general_ci)
+        $repaired = str_replace("\xc3\x82\xc2\xb0", '°', $repaired);  // Â° → °
+        $repaired = str_replace("\xc3\xa2\xc2\xb0", '°', $repaired);  // â° → °
+        
         // Remover © suelto (copyright symbol - marca de corrupción)
         $repaired = str_replace("\xc2\xa9", '', $repaired);  // © → ''
         
         // Remover º suelto (ordinal masculine - marca de corrupción)
         $repaired = str_replace("\xc2\xba", '', $repaired);  // º → ''
+        
+        // Remover ¡ suelto (inverted exclamation - marca de corrupción)
+        $repaired = str_replace("\xc2\xa1", '', $repaired);  // ¡ → ''
         
         // Por si quedan Ã/ã sin combinar
         $repaired = str_replace('Ã', 'Ñ', $repaired);
@@ -418,5 +426,39 @@ class ServiceCodeHelper
         }
         
         return $stats;
+    }
+
+    /**
+     * Capitaliza correctamente nombres de profesionales
+     * Ejemplo: "Dr.fernando Gutierrez" → "Dr. Fernando Gutierrez"
+     * También maneja: "Dra.", "Lic.", "Prof.", etc.
+     *
+     * @param string $name
+     * @return string
+     */
+    public static function capitalizeProfileName(string $name): string
+    {
+        // Trimear espacios
+        $name = trim($name);
+        
+        // Patrones de títulos profesionales que necesitan espacio después del punto
+        $patterns = [
+            'dr\.' => 'Dr. ',
+            'dra\.' => 'Dra. ',
+            'lic\.' => 'Lic. ',
+            'prof\.' => 'Prof. ',
+            'ing\.' => 'Ing. ',
+            'arq\.' => 'Arq. ',
+        ];
+        
+        foreach ($patterns as $pattern => $replacement) {
+            // Usar preg_replace para manejar case-insensitive
+            $name = preg_replace('/' . $pattern . '\s*/i', $replacement, $name);
+        }
+        
+        // Capitalizar cada palabra
+        $name = ucwords($name);
+        
+        return $name;
     }
 }

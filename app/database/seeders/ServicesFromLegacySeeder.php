@@ -66,6 +66,9 @@ class ServicesFromLegacySeeder extends Seeder
                 // Sanitize service name: remove accents and convert to Title Case
                 $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
                 
+                // Capitalize professional names (Dr., Dra., Lic., etc.)
+                $sanitizedName = ServiceCodeHelper::capitalizeProfileName($sanitizedName);
+                
                 // Check if service already exists by code or name
                 $existingService = MedicalService::where('code', $this->generateCode($sanitizedName))
                     ->orWhere('name', $sanitizedName)
@@ -89,6 +92,9 @@ class ServicesFromLegacySeeder extends Seeder
 
                 // Sanitize service name: remove accents and convert to Title Case
                 $sanitizedName = ServiceCodeHelper::sanitizeServiceName(trim($product->Nombre));
+                
+                // Capitalize professional names (Dr., Dra., Lic., etc.)
+                $sanitizedName = ServiceCodeHelper::capitalizeProfileName($sanitizedName);
                 
                 // Create medical service
                 $service = MedicalService::create([
