@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,8 @@ use App\Models\InsuranceType;
  */
 class MedicalService extends Model
 {
+    /** @use HasFactory<\Database\Factories\MedicalServiceFactory> */
+    use HasFactory;
     /**
      * The attributes that are mass assignable.
      *
