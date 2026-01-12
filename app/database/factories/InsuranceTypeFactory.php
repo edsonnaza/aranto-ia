@@ -25,7 +25,7 @@ class InsuranceTypeFactory extends Factory
             'description' => $this->faker->sentence(),
             'coverage_percentage' => $this->faker->randomFloat(2, 50, 100),
             'deductible_amount' => $this->faker->randomFloat(2, 0, 50000),
-            'active' => true,
+            'status' => 'active',
         ];
     }
 
@@ -35,7 +35,17 @@ class InsuranceTypeFactory extends Factory
     public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [
-            'active' => false,
+            'status' => 'inactive',
+        ]);
+    }
+
+    /**
+     * Indica un tipo de seguro activo.
+     */
+    public function active(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'active',
         ]);
     }
 

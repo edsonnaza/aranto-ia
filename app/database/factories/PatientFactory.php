@@ -55,6 +55,16 @@ class PatientFactory extends Factory
     }
 
     /**
+     * Paciente activo.
+     */
+    public function active(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'active',
+        ]);
+    }
+
+    /**
      * Paciente sin seguro.
      */
     public function withoutInsurance(): static
