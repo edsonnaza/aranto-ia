@@ -20,27 +20,32 @@ class PatientFactory extends Factory
      */
     public function definition(): array
     {
+        $firstNames = ['Juan', 'María', 'Carlos', 'Ana', 'Pedro', 'Rosa', 'Luis', 'Isabel', 'Miguel', 'Carmen'];
+        $lastNames = ['García', 'Rodríguez', 'Martínez', 'Hernández', 'López', 'González', 'Pérez', 'Sánchez', 'Ramírez', 'Torres'];
+        $cities = ['Asunción', 'Encarnación', 'Ciudad del Este', 'Villarrica', 'Coronel Oviedo', 'Caaguazú', 'Salto del Guairá', 'Concepción', 'Pedro Juan Caballero', 'Caazapá'];
+        $states = ['Alto Paraná', 'Amambay', 'Caaguazú', 'Caazapá', 'Canindeyú', 'Central', 'Concepción', 'Corrientes', 'Guairá', 'Itapúa'];
+
         return [
-            'document_type' => $this->faker->randomElement(['CI', 'PASSPORT', 'OTHER']),
-            'document_number' => $this->faker->unique()->numerify('##########'),
-            'first_name' => $this->faker->firstName(),
-            'last_name' => $this->faker->lastName(),
-            'birth_date' => $this->faker->dateTimeBetween('-80 years', '-18 years'),
-            'gender' => $this->faker->randomElement(['M', 'F']),
-            'phone' => $this->faker->phoneNumber(),
-            'email' => $this->faker->unique()->safeEmail(),
-            'address' => $this->faker->address(),
-            'city' => $this->faker->city(),
-            'state' => $this->faker->state(),
-            'postal_code' => $this->faker->postcode(),
-            'emergency_contact_name' => $this->faker->name(),
-            'emergency_contact_phone' => $this->faker->phoneNumber(),
+            'document_type' => collect(['CI', 'PASSPORT', 'OTHER'])->random(),
+            'document_number' => (string) mt_rand(1000000000, 9999999999),
+            'first_name' => $firstNames[array_rand($firstNames)],
+            'last_name' => $lastNames[array_rand($lastNames)],
+            'birth_date' => fake()->dateTimeBetween('-80 years', '-18 years'),
+            'gender' => collect(['M', 'F'])->random(),
+            'phone' => '+595 ' . mt_rand(900, 999) . ' ' . mt_rand(100000, 999999),
+            'email' => strtolower($firstNames[array_rand($firstNames)] . '.' . $lastNames[array_rand($lastNames)] . '@example.com'),
+            'address' => 'Calle ' . mt_rand(1, 100) . ' Nro. ' . mt_rand(100, 9999),
+            'city' => $cities[array_rand($cities)],
+            'state' => $states[array_rand($states)],
+            'postal_code' => str_pad((string) mt_rand(0, 99999), 5, '0', STR_PAD_LEFT),
+            'emergency_contact_name' => $firstNames[array_rand($firstNames)] . ' ' . $lastNames[array_rand($lastNames)],
+            'emergency_contact_phone' => '+595 ' . mt_rand(900, 999) . ' ' . mt_rand(100000, 999999),
             'insurance_type_id' => InsuranceType::factory(),
-            'insurance_number' => $this->faker->bothify('INS-######'),
-            'insurance_valid_until' => $this->faker->dateTimeBetween('now', '+3 years'),
-            'insurance_coverage_percentage' => $this->faker->randomFloat(2, 50, 100),
+            'insurance_number' => 'INS-' . str_pad((string) mt_rand(0, 999999), 6, '0', STR_PAD_LEFT),
+            'insurance_valid_until' => fake()->dateTimeBetween('now', '+3 years'),
+            'insurance_coverage_percentage' => fake()->randomFloat(2, 50, 100),
             'status' => 'active',
-            'notes' => $this->faker->optional()->paragraph(),
+            'notes' => null,
         ];
     }
 

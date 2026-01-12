@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\App\Financial;
 
 use App\Models\CashRegisterSession;
 use App\Models\Transaction;

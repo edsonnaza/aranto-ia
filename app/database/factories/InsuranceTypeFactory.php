@@ -20,11 +20,11 @@ class InsuranceTypeFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => $this->faker->company(),
-            'code' => $this->faker->unique()->bothify('INS-###'),
-            'description' => $this->faker->sentence(),
-            'coverage_percentage' => $this->faker->randomFloat(2, 50, 100),
-            'deductible_amount' => $this->faker->randomFloat(2, 0, 50000),
+            'name' => 'Insurance Type ' . mt_rand(1000, 9999),
+            'code' => 'INS-' . str_pad((string) mt_rand(0, 999), 3, '0', STR_PAD_LEFT),
+            'description' => 'Description for insurance type ' . mt_rand(1, 999),
+            'coverage_percentage' => fake()->randomFloat(2, 50, 100),
+            'deductible_amount' => fake()->randomFloat(2, 0, 50000),
             'status' => 'active',
         ];
     }

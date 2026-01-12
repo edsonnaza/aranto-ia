@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\App\Medical;
 
 use App\Models\Patient;
 use App\Models\InsuranceType;
