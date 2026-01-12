@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -33,6 +34,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Patient extends Model
 {
+    /** @use HasFactory<\Database\Factories\PatientFactory> */
+    use HasFactory;
     /**
      * The attributes that are mass assignable.
      *
@@ -150,10 +153,10 @@ class Patient extends Model
      */
     public function getAgeAttribute(): int
     {
-        if (!$this->date_of_birth) {
+        if (!$this->birth_date) {
             return 0;
         }
-        return $this->date_of_birth->age;
+        return $this->birth_date->age;
     }
 
     /**
