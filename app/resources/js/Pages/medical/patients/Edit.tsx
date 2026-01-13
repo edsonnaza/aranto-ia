@@ -98,6 +98,27 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
     return insurances
   }
 
+  // Función para normalizar la fecha de BD al formato que espera input type="date"
+  const formatDateForInput = (dateString: string | null | undefined): string => {
+    if (!dateString) return ''
+    // Si la fecha viene con timestamp (YYYY-MM-DD HH:MM:SS), extraer solo la parte de fecha
+    return dateString.split('T')[0] || dateString.split(' ')[0] || ''
+  }
+
+  // Función para normalizar género de BD al formato del Select
+  const normalizeGenderForForm = (gender: string | null | undefined): string => {
+    if (!gender) return ''
+    const genderMap: { [key: string]: string } = {
+      'M': 'male',
+      'F': 'female',
+      'OTHER': 'other',
+      'male': 'male',
+      'female': 'female',
+      'other': 'other'
+    }
+    return genderMap[gender] || ''
+  }
+
   const { data, setData, processing, errors } = useForm({
     document_type: patient.document_type || 'CI',
     document_number: patient.document_number || '',
@@ -105,8 +126,8 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
     last_name: patient.last_name || '',
     email: patient.email || '',
     phone: patient.phone || '',
-    birth_date: patient.birth_date || '',
-    gender: patient.gender || '',
+    birth_date: formatDateForInput(patient.birth_date),
+    gender: normalizeGenderForForm(patient.gender),
     address: patient.address || '',
     city: patient.city || '',
     state: patient.state || '',

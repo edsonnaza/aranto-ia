@@ -35,29 +35,38 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
 
   const getAge = (birthDate: string) => {
     if (!birthDate) return 'No especificada'
-    const today = new Date()
-    const birth = new Date(birthDate)
-    let age = today.getFullYear() - birth.getFullYear()
-    const monthDiff = today.getMonth() - birth.getMonth()
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--
+    try {
+      // Manejar tanto fecha como timestamp
+      const today = new Date()
+      const birth = new Date(birthDate)
+      
+      if (isNaN(birth.getTime())) {
+        return 'Fecha inválida'
+      }
+      
+      let age = today.getFullYear() - birth.getFullYear()
+      const monthDiff = today.getMonth() - birth.getMonth()
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--
+      }
+      
+      return `${age} años`
+    } catch {
+      return 'Error al calcular'
     }
-    
-    return `${age} años`
   }
 
   const getGenderLabel = (gender: string) => {
-    switch (gender) {
-      case 'male':
-        return 'Masculino'
-      case 'female':
-        return 'Femenino'
-      case 'other':
-        return 'Otro'
-      default:
-        return 'No especificado'
+    const genderMap: { [key: string]: string } = {
+      'M': 'Masculino',
+      'F': 'Femenino',
+      'OTHER': 'Otro',
+      'male': 'Masculino',
+      'female': 'Femenino',
+      'other': 'Otro',
     }
+    return genderMap[gender] || 'No especificado'
   }
 
   return (
@@ -127,7 +136,11 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
                   <p className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     {patient.birth_date 
-                      ? new Date(patient.birth_date).toLocaleDateString() 
+                      ? new Date(patient.birth_date).toLocaleDateString('es-PY', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
                       : 'No especificada'
                     }
                   </p>
