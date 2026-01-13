@@ -21,6 +21,7 @@ class NavigationPermissionsSeeder extends Seeder
             'access-reports' => 'Acceso al módulo de Reportes',
             'access-settings' => 'Acceso al módulo de Configuración',
             'access-user-management' => 'Acceso a la gestión de usuarios',
+            'access-audit-logs' => 'Acceso a los registros de auditoría',
         ];
 
         foreach ($navigationPermissions as $name => $description) {
@@ -42,6 +43,7 @@ class NavigationPermissionsSeeder extends Seeder
                     'access-reports',
                     'access-settings',
                     'access-user-management',
+                    'access-audit-logs',
                 ],
             ],
             'admin' => [
@@ -52,6 +54,7 @@ class NavigationPermissionsSeeder extends Seeder
                     'access-commissions',
                     'access-medical-system',
                     'access-reports',
+                    'access-audit-logs',
                 ],
             ],
             'cashier' => [
@@ -88,6 +91,7 @@ class NavigationPermissionsSeeder extends Seeder
                 'permissions' => [
                     'access-commissions',
                     'access-reports',
+                    'access-audit-logs',
                 ],
             ],
         ];

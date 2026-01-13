@@ -10,6 +10,7 @@ import {
   Settings,
   Users,
   Percent,
+  Clock,
 } from 'lucide-react'
 
 // Definición de permisos por módulo
@@ -21,6 +22,7 @@ export const MODULE_PERMISSIONS = {
   REPORTS: 'access-reports',
   SETTINGS: 'access-settings',
   USERS: 'access-user-management',
+  AUDIT: 'access-audit-logs',
 } as const
 
 // Todos los items de navegación disponibles
@@ -66,6 +68,12 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
     href: { url: '/settings', method: 'get' },
     icon: Settings,
     permission: MODULE_PERMISSIONS.SETTINGS,
+  },
+  {
+    title: 'Auditoría',
+    href: { url: '/settings/audit', method: 'get' },
+    icon: Clock,
+    permission: MODULE_PERMISSIONS.AUDIT,
   },
 ]
 
