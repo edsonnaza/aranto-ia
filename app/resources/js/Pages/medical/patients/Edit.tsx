@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { Patient, InsuranceType } from '@/types/medical'
 import { type BreadcrumbItem } from '@/types'
 import MultipleInsuranceSelector, { PatientInsurance } from '@/components/medical/MultipleInsuranceSelector'
+import { formatDateForInput } from '@/utils/date-utils'
 
 interface PatientsEditProps {
   patient: Patient
@@ -96,13 +97,6 @@ export default function PatientsEdit({ patient, insuranceTypes }: PatientsEditPr
     }
     
     return insurances
-  }
-
-  // Función para normalizar la fecha de BD al formato que espera input type="date"
-  const formatDateForInput = (dateString: string | null | undefined): string => {
-    if (!dateString) return ''
-    // Si la fecha viene con timestamp (YYYY-MM-DD HH:MM:SS), extraer solo la parte de fecha
-    return dateString.split('T')[0] || dateString.split(' ')[0] || ''
   }
 
   // Función para normalizar género de BD al formato del Select
