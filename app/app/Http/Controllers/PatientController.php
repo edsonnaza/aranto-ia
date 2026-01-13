@@ -166,9 +166,17 @@ class PatientController extends Controller
     public function show(Patient $patient): Response
     {
         $patient->load(['insuranceType', 'insurances']);
+        
+        // Transformar el patient para asegurar que los datos están en el formato correcto
+        $patientData = $patient->toArray();
+        
+        // Normalizar la fecha de nacimiento al formato YYYY-MM-DD
+        if ($patientData['birth_date']) {
+            $patientData['birth_date'] = substr($patientData['birth_date'], 0, 10);
+        }
 
         return Inertia::render('medical/patients/Show', [
-            'patient' => $patient,
+            'patient' => $patientData,
             'primaryInsurance' => $patient->getPrimaryInsuranceInfo(),
             'allInsurances' => $patient->insurances->map(function ($insurance) {
                 return [
@@ -194,11 +202,32 @@ class PatientController extends Controller
      */
     public function edit(Patient $patient): Response
     {
-        $patient->load('insuranceType');
+        $patient->load(['insuranceType', 'insurances']);
         $insuranceTypes = InsuranceType::active()->orderBy('name')->get();
         
+        // Transformar el patient para asegurar que los datos están en el formato correcto
+        $patientData = $patient->toArray();
+        
+        // Normalizar la fecha de nacimiento al formato YYYY-MM-DD
+        if ($patientData['birth_date']) {
+            $patientData['birth_date'] = substr($patientData['birth_date'], 0, 10);
+        }
+        
+        // Normalizar el género
+        $genderMap = [
+            'M' => 'M',
+            'F' => 'F',
+            'OTHER' => 'OTHER',
+            'male' => 'M',
+            'female' => 'F',
+            'other' => 'OTHER',
+        ];
+        if ($patientData['gender']) {
+            $patientData['gender'] = $genderMap[$patientData['gender']] ?? $patientData['gender'];
+        }
+        
         return Inertia::render('medical/patients/Edit', [
-            'patient' => $patient,
+            'patient' => $patientData,
             'insuranceTypes' => $insuranceTypes,
             'documentTypes' => [
                 ['value' => 'CI', 'label' => 'Cédula de Identidad'],

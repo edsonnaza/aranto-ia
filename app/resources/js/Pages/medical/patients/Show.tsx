@@ -33,12 +33,23 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
     },
   ]
 
+  // Helper para parsear fecha sin UTC
+  const parseDateWithoutUTC = (dateStr: string): Date => {
+    if (!dateStr) return new Date()
+    // Extraer solo la parte YYYY-MM-DD
+    const datePart = dateStr.split('T')[0] || dateStr.split(' ')[0]
+    if (!datePart) return new Date()
+    
+    const [year, month, day] = datePart.split('-')
+    // Crear fecha local sin interpretar como UTC
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+  }
+
   const getAge = (birthDate: string) => {
     if (!birthDate) return 'No especificada'
     try {
-      // Manejar tanto fecha como timestamp
       const today = new Date()
-      const birth = new Date(birthDate)
+      const birth = parseDateWithoutUTC(birthDate)
       
       if (isNaN(birth.getTime())) {
         return 'Fecha inválida'
@@ -136,7 +147,7 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
                   <p className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     {patient.birth_date 
-                      ? new Date(patient.birth_date).toLocaleDateString('es-PY', {
+                      ? parseDateWithoutUTC(patient.birth_date).toLocaleDateString('es-PY', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric'

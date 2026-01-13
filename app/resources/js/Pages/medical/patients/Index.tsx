@@ -53,6 +53,18 @@ export default function PatientsIndex({
   patients, 
   stats,
 }: PatientsIndexProps) {
+  // Helper para parsear fecha sin UTC
+  const parseDateWithoutUTC = (dateStr: string): Date => {
+    if (!dateStr) return new Date()
+    // Extraer solo la parte YYYY-MM-DD
+    const datePart = dateStr.split('T')[0] || dateStr.split(' ')[0]
+    if (!datePart) return new Date()
+    
+    const [year, month, day] = datePart.split('-')
+    // Crear fecha local sin interpretar como UTC
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+  }
+
   const handleDelete = async (id: number) => {
     try {
       router.delete(`/medical/patients/${id}`, {
@@ -108,11 +120,22 @@ export default function PatientsIndex({
       header: 'Fecha de Nacimiento',
       cell: ({ row }) => {
         const birthDate = row.getValue('birth_date') as string
-        return (
-          <div className="text-sm text-gray-600">
-            {birthDate ? new Date(birthDate).toLocaleDateString() : 'No especificada'}
-          </div>
-        )
+        
+        if (!birthDate) return <div className="text-sm text-gray-600">No especificada</div>
+        
+        try {
+          return (
+            <div className="text-sm text-gray-600">
+              {parseDateWithoutUTC(birthDate).toLocaleDateString('es-PY', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </div>
+          )
+        } catch {
+          return <div className="text-sm text-gray-600">Fecha inválida</div>
+        }
       },
     },
     {

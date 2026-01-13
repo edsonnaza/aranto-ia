@@ -70,7 +70,7 @@ class Patient extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'birth_date' => 'datetime',
+        'birth_date' => 'date',
         'insurance_valid_until' => 'datetime',
         'insurance_coverage_percentage' => 'decimal:2',
         'created_at' => 'datetime',
