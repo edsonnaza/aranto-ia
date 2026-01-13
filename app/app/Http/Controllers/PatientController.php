@@ -291,10 +291,19 @@ class PatientController extends Controller
      */
     public function destroy(Patient $patient): RedirectResponse
     {
-        // En un sistema real, probablemente no se eliminarían pacientes
-        // sino que se marcarían como inactivos por temas de auditoría
+        $oldStatus = $patient->status;
         
+        // Marcar como inactivo
         $patient->update(['status' => 'inactive']);
+
+        // Log la acción con quién y cuándo
+        \App\Models\AuditLog::logActivity(
+            $patient,
+            'inactivated',
+            ['status' => $oldStatus],
+            ['status' => 'inactive'],
+            "Paciente marcado como inactivo por " . auth()->user()->name
+        );
 
         return redirect()
             ->route('medical.patients.index')
