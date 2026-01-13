@@ -1,5 +1,5 @@
 import React from 'react'
-import { Head, Link, router } from '@inertiajs/react'
+import { Head, Link } from '@inertiajs/react'
 import { ColumnDef } from '@tanstack/react-table'
 import { PlusCircle, Pencil, Eye, Trash2, Users, Calendar, Phone, Shield } from 'lucide-react'
 import HeadingSmall from '@/components/heading-small'
@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { Patient, PaginatedData } from '@/types/medical'
 import { type BreadcrumbItem } from '@/types'
 import { formatBirthDate } from '@/utils/date-utils'
+import { usePatients } from '@/hooks/usePatients'
 
 interface PatientsIndexProps {
   patients: PaginatedData<Patient>
@@ -55,18 +56,11 @@ export default function PatientsIndex({
   stats,
 }: PatientsIndexProps) {
   // Las funciones de fecha se importan de date-utils
+  const { deletePatient } = usePatients()
 
   const handleDelete = async (id: number) => {
     try {
-      router.delete(`/medical/patients/${id}`, {
-        preserveScroll: true,
-        onSuccess: () => {
-          toast.success('Paciente eliminado correctamente')
-        },
-        onError: () => {
-          toast.error('Error al eliminar el paciente')
-        },
-      })
+      await deletePatient(id)
     } catch {
       toast.error('Error al eliminar el paciente')
     }
