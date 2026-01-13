@@ -5,6 +5,42 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Migra pacientes desde la base de datos legacy a aranto_medical
+ * 
+ * ESTRATEGIA DE MIGRACIÓN:
+ * 
+ * 1. FECHA DE NACIMIENTO (birth_date):
+ *    - Campo: VARCHAR en legacy → DATE en aranto_medical
+ *    - Validación: Rechaza fechas < 1900, vacías, o "0000-00-00"
+ *    - Fallback: "1969-12-31" para fechas inválidas (detecta fácilmente datos corruptos)
+ *    - Formato: YYYY-MM-DD (sin timestamp)
+ *    - Nota: El helper parseDateWithoutUTC() en frontend evita offset de UTC
+ * 
+ * 2. GÉNERO (gender):
+ *    - Campo: VARCHAR en legacy → ENUM('M','F','OTHER') en aranto_medical
+ *    - Mapeo: M/MASCULINO/MALE → M
+ *           F/FEMENINO/FEMALE → F
+ *           O/OTRO/OTHER → OTHER
+ *           Vacío/Inválido → OTHER
+ *    - Garantía: Siempre retorna un valor válido
+ * 
+ * 3. TIMESTAMPS (created_at, updated_at):
+ *    - Ambos se establece al momento de la migración
+ *    - Permite auditoría de cuándo se migró cada paciente
+ *    - Auditoría automática registra la acción de migración
+ * 
+ * 4. NÚMERO DE DOCUMENTO (document_number):
+ *    - Validación de duplicados para evitar constraintviolations
+ *    - Fallback: "PAC_{HC}" si está vacío o inválido
+ *    - Garantiza unicidad: {document_type}-{document_number}
+ * 
+ * COMPATIBILIDAD CON HELPERS:
+ * - formatBirthDate(): Usa birth_date en formato DATE (YYYY-MM-DD)
+ * - calculateAge(): Calcula correctamente desde DATE
+ * - parseDateWithoutUTC(): Evita offset de UTC al mostrar
+ * - Gender mapping: M/F/OTHER matches form expectation en frontend
+ */
 class PatientsFromLegacySeeder extends Seeder
 {
     /**
@@ -70,10 +106,11 @@ class PatientsFromLegacySeeder extends Seeder
                     }
 
                     // Validar y procesar fecha de nacimiento
-                    if (!$this->validateDate($patient->Fecha_Nac)) {
+                    // validateDate ahora retorna string o null en formato Y-m-d
+                    $birthDate = $this->validateDate($patient->Fecha_Nac);
+                    if (!$birthDate) {
+                        // Si la fecha es inválida, usar fecha por defecto (1969-12-31)
                         $birthDate = '1969-12-31';
-                    } else {
-                        $birthDate = \Carbon\Carbon::parse($patient->Fecha_Nac)->toDateString();
                     }
 
                     // Transformar datos
@@ -125,6 +162,8 @@ class PatientsFromLegacySeeder extends Seeder
                         'gender' => $gender,
                         'insurance_coverage_percentage' => $insuranceCoveragePercentage,
                         'status' => $status,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ];
 
                     // Agregar campos opcionales solo si tienen valor
@@ -149,7 +188,7 @@ class PatientsFromLegacySeeder extends Seeder
 
             // Insertar bloque procesado en chunks de 500
             if (!empty($patientsToInsert)) {
-                // Normalizar todos los arrays a tener la misma estructura (12 columnas)
+                // Normalizar todos los arrays a tener la misma estructura
                 $normalizedPatients = array_map(function ($record) {
                     return [
                         'id' => $record['id'],
@@ -164,6 +203,8 @@ class PatientsFromLegacySeeder extends Seeder
                         'phone' => $record['phone'] ?? null,
                         'email' => $record['email'] ?? null,
                         'insurance_type_id' => $record['insurance_type_id'] ?? null,
+                        'created_at' => $record['created_at'] ?? now(),
+                        'updated_at' => $record['updated_at'] ?? now(),
                     ];
                 }, $patientsToInsert);
 
@@ -239,22 +280,24 @@ class PatientsFromLegacySeeder extends Seeder
 
     /**
      * Validar que la fecha sea válida (no negativa, no NULL)
+     * Retorna la fecha en formato YYYY-MM-DD o null si es inválida
      */
-    private function validateDate($date): bool
+    private function validateDate($date): ?string
     {
-        if (!$date || trim($date) === '' || $date === '0000-00-00') {
-            return false;
+        if (!$date || trim($date) === '' || $date === '0000-00-00' || $date === '0000-00-00 00:00:00') {
+            return null;
         }
 
         try {
             $parsed = \Carbon\Carbon::parse($date);
             // Rechazar fechas anteriores a 1900
             if ($parsed->year < 1900) {
-                return false;
+                return null;
             }
-            return true;
+            // Retornar en formato DATE (YYYY-MM-DD) sin timestamp
+            return $parsed->format('Y-m-d');
         } catch (\Exception $e) {
-            return false;
+            return null;
         }
     }
 
