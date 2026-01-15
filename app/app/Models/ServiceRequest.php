@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
+use App\Traits\Auditable;
 
 /**
  * @property int $id
@@ -32,6 +33,7 @@ use Carbon\Carbon;
  */
 class ServiceRequest extends Model
 {
+    use Auditable;
     /**
      * The attributes that are mass assignable.
      */

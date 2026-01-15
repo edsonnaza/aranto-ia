@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
+ * @property string $model_type Alias para auditable_type
+ * @property int $model_id Alias para auditable_id
  * @property string $auditable_type
  * @property int $auditable_id
  * @property string $event
@@ -37,6 +39,22 @@ class AuditLog extends Model
         'ip_address',
         'description',
     ];
+
+    /**
+     * Obtener model_type como alias de auditable_type.
+     */
+    public function getModelTypeAttribute(): string
+    {
+        return $this->attributes['auditable_type'] ?? '';
+    }
+
+    /**
+     * Obtener model_id como alias de auditable_id.
+     */
+    public function getModelIdAttribute(): int
+    {
+        return $this->attributes['auditable_id'] ?? 0;
+    }
 
     protected $casts = [
         'old_values' => 'array',

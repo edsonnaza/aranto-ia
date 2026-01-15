@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use App\Models\ServiceCategory;
 use App\Models\ServicePrice;
 use App\Models\InsuranceType;
+use App\Traits\Auditable;
 
 /**
  * @property int $id
@@ -32,7 +33,7 @@ use App\Models\InsuranceType;
 class MedicalService extends Model
 {
     /** @use HasFactory<\Database\Factories\MedicalServiceFactory> */
-    use HasFactory;
+    use HasFactory, Auditable;
     /**
      * The attributes that are mass assignable.
      *

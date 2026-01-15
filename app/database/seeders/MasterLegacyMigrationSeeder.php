@@ -6,6 +6,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
 use Carbon\Carbon;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class MasterLegacyMigrationSeeder extends Seeder
 {
@@ -35,6 +37,18 @@ class MasterLegacyMigrationSeeder extends Seeder
             $this->phase('FASE 1', 'Configuración Base y Estructuras', function () {
                 $this->call(NavigationPermissionsSeeder::class);
                 $this->call(CashRegisterPermissionsSeeder::class);
+                
+                // Crear permiso de auditoría
+                $auditPerm = Permission::firstOrCreate([
+                    'name' => 'access-audit-logs',
+                    'guard_name' => 'web',
+                ]);
+                
+                // Asignar a roles
+                Role::where('name', 'super-admin')->first()?->givePermissionTo($auditPerm);
+                Role::where('name', 'admin')->first()?->givePermissionTo($auditPerm);
+                Role::where('name', 'accountant')->first()?->givePermissionTo($auditPerm);
+                
                 $this->call(InsuranceTypesSeeder::class);
                 $this->call(ServiceCategoriesSeeder::class);
                 // CreateAdditionalServiceCategoriesSeeder removed - ServiceCategoriesSeeder now includes all 27 legacy categories with preserved IDs

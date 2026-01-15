@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Auditable;
 
 /**
  * CommissionLiquidation Model
@@ -36,7 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class CommissionLiquidation extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
     /**
      * The attributes that are mass assignable.

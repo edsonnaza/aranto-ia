@@ -63,19 +63,13 @@ class CommissionService
 
         $totalGross = 0;
         $totalCommission = 0;
+        $totalPercentage = 0;
         $services = [];
 
         foreach ($movements as $movement) {
             $serviceAmount = $movement->amount;
-            $commissionAmount = $this->calculateCommission($serviceAmount, $professional->commission_percentage);
-
-            $totalGross += $serviceAmount;
-            $totalCommission += $commissionAmount;
-
-            // Get patient name
-            $patientName = $movement->serviceRequest?->patient?->full_name ?? 'Paciente no encontrado';
             
-            // Get service name from service_request_details
+            // Get service detail and determine commission percentage
             $serviceDetail = $movement->serviceRequest?->details?->first();
             
             // Service detail must exist
@@ -97,6 +91,32 @@ class CommissionService
             }
             
             $serviceName = $service->name;
+            
+            // Determine commission percentage: Use the percentage saved when the service was registered
+            // If not saved, fallback to professional's current percentage
+            // If professional has no percentage, use service's default
+            $commissionPercentage = $serviceDetail->professional_commission_percentage;
+            
+            if (!$commissionPercentage || $commissionPercentage <= 0) {
+                // Fallback to professional's current percentage
+                $commissionPercentage = ($professional->commission_percentage && $professional->commission_percentage > 0) 
+                    ? $professional->commission_percentage 
+                    : ($service->default_commission_percentage ?? 0);
+            }
+            
+            // If still 0, this is a problem - need to configure either professional or service commission
+            if (!$commissionPercentage || $commissionPercentage <= 0) {
+                throw new \Exception("El profesional y el servicio '{$serviceName}' no tienen porcentaje de comisión configurado. Por favor configure uno de ellos.");
+            }
+            
+            $commissionAmount = $this->calculateCommission($serviceAmount, $commissionPercentage);
+
+            $totalGross += $serviceAmount;
+            $totalCommission += $commissionAmount;
+            $totalPercentage += $commissionPercentage;
+
+            // Get patient name
+            $patientName = $movement->serviceRequest?->patient?->full_name ?? 'Paciente no encontrado';
 
             $services[] = [
                 'movement_id' => $movement->id,
@@ -108,10 +128,13 @@ class CommissionService
                 'service_date' => $movement->created_at->format('Y-m-d'),
                 'payment_date' => $movement->created_at->format('Y-m-d'),
                 'service_amount' => $serviceAmount,
-                'commission_percentage' => $professional->commission_percentage,
+                'commission_percentage' => $commissionPercentage,
                 'commission_amount' => $commissionAmount,
             ];
         }
+
+        // Calculate average percentage if multiple services
+        $averagePercentage = count($services) > 0 ? $totalPercentage / count($services) : 0;
 
         return [
             'professional' => $professional,
@@ -122,7 +145,7 @@ class CommissionService
             'summary' => [
                 'total_services' => count($services),
                 'gross_amount' => $totalGross,
-                'commission_percentage' => $professional->commission_percentage,
+                'commission_percentage' => $averagePercentage,
                 'commission_amount' => $totalCommission,
             ],
             'services' => $services,

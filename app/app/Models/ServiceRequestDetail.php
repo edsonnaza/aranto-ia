@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\Auditable;
 
 /**
  * @property int $id
  * @property int $service_request_id
  * @property int $medical_service_id
  * @property int $professional_id
+ * @property float|null $professional_commission_percentage
  * @property \Carbon\Carbon|null $scheduled_date
  * @property string|null $scheduled_time
  * @property int $estimated_duration
@@ -30,6 +32,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ServiceRequestDetail extends Model
 {
+    use Auditable;
+
     /**
      * The attributes that are mass assignable.
      */
@@ -37,6 +41,7 @@ class ServiceRequestDetail extends Model
         'service_request_id',
         'medical_service_id',
         'professional_id',
+        'professional_commission_percentage',
         'scheduled_date',
         'scheduled_time',
         'estimated_duration',
@@ -60,6 +65,7 @@ class ServiceRequestDetail extends Model
     protected $casts = [
         'scheduled_date' => 'date',
         'unit_price' => 'decimal:2',
+        'professional_commission_percentage' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'discount_percentage' => 'decimal:2',
         'discount_amount' => 'decimal:2',

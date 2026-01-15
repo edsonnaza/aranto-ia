@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Casts\CurrencyCast;
 use App\Traits\HasCurrencyHelpers;
+use App\Traits\Auditable;
 
 /**
  * @property int $id
@@ -32,14 +33,14 @@ use App\Traits\HasCurrencyHelpers;
  * @property-read CashRegisterSession $cashRegisterSession
  * @property-read User $user
  * @property-read User|null $cancelledBy
- * @property-read Service|null $service
+ * @property-read MedicalService|null $service
  * @property-read ServiceRequest|null $serviceRequest
  * @property-read Patient|null $patient
  * @property-read Professional|null $professional
  */
 class Transaction extends Model
 {
-    use HasFactory, HasCurrencyHelpers;
+    use HasFactory, HasCurrencyHelpers, Auditable;
 
     protected $fillable = [
         'cash_register_session_id',
@@ -87,7 +88,7 @@ class Transaction extends Model
 
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(MedicalService::class);
     }
 
     public function serviceRequest(): BelongsTo

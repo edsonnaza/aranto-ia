@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Casts\CurrencyCast;
 use App\Traits\HasCurrencyHelpers;
+use App\Traits\Auditable;
 
 /**
  * @property int $id
@@ -40,7 +41,7 @@ use App\Traits\HasCurrencyHelpers;
  */
 class CashRegisterSession extends Model
 {
-    use HasFactory, HasCurrencyHelpers;
+    use HasFactory, HasCurrencyHelpers, Auditable;
 
     protected $fillable = [
         'user_id',

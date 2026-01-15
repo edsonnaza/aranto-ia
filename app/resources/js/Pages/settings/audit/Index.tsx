@@ -11,21 +11,21 @@ import { type BreadcrumbItem } from '@/types'
 
 interface AuditLog {
   id: number
-  model_type: string
-  model_id: number
-  event: string
-  user_id: number | null
-  user?: {
+  entidad: string
+  idEntidad: number
+  evento: string
+  usuarioId: number | null
+  usuario?: {
     id: number
-    name: string
-    email: string
+    nombre: string
+    correo: string
   } | null
-  old_values: Record<string, unknown> | null
-  new_values: Record<string, unknown> | null
-  ip_address: string | null
-  user_agent: string | null
-  description: string | null
-  created_at: string
+  valoresAnteriores: Record<string, unknown> | null
+  valoresNuevos: Record<string, unknown> | null
+  direccionIp: string | null
+  agenteUsuario: string | null
+  descripcion: string | null
+  fechaHora: string
 }
 
 interface AuditIndexProps {
@@ -44,11 +44,11 @@ interface AuditIndexProps {
     }>
   }
   filters: {
-    model_type?: string
-    event?: string
-    user_id?: number
-    date_from?: string
-    date_to?: string
+    entidad?: string
+    evento?: string
+    usuarioId?: number
+    fechaDesde?: string
+    fechaHasta?: string
   }
 }
 
@@ -79,10 +79,10 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
   const columns: ColumnDef<AuditLog>[] = useMemo(
     () => [
       {
-        accessorKey: 'created_at',
+        accessorKey: 'fechaHora',
         header: 'Fecha y Hora',
         cell: ({ row }) => {
-          const date = new Date(row.getValue('created_at') as string)
+          const date = new Date(row.getValue('fechaHora') as string)
           return (
             <div className="text-sm text-gray-600">
               {date.toLocaleDateString('es-PY')} {date.toLocaleTimeString('es-PY')}
@@ -91,34 +91,34 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
         },
       },
       {
-        accessorKey: 'model_type',
+        accessorKey: 'entidad',
         header: 'Entidad',
         cell: ({ row }) => (
-          <div className="text-sm font-medium">{row.getValue('model_type')}</div>
+          <div className="text-sm font-medium">{row.getValue('entidad')}</div>
         ),
       },
       {
-        accessorKey: 'event',
+        accessorKey: 'evento',
         header: 'Acción',
         cell: ({ row }) => {
-          const event = row.getValue('event') as string
-          const eventInfo = EVENT_LABELS[event] || { label: event, variant: 'default' as const }
+          const evento = row.getValue('evento') as string
+          const eventInfo = EVENT_LABELS[evento] || { label: evento, variant: 'default' as const }
           return (
             <Badge variant={eventInfo.variant}>{eventInfo.label}</Badge>
           )
         },
       },
       {
-        accessorKey: 'user',
+        accessorKey: 'usuario',
         header: 'Usuario',
         cell: ({ row }) => {
-          const user = row.original.user
+          const usuario = row.original.usuario
           return (
             <div className="text-sm text-gray-600">
-              {user ? (
+              {usuario ? (
                 <div>
-                  <div className="font-medium">{user.name}</div>
-                  <div className="text-xs text-gray-500">{user.email}</div>
+                  <div className="font-medium">{usuario.nombre}</div>
+                  <div className="text-xs text-gray-500">{usuario.correo}</div>
                 </div>
               ) : (
                 <span className="text-gray-400">Sistema</span>
@@ -128,20 +128,20 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
         },
       },
       {
-        accessorKey: 'ip_address',
+        accessorKey: 'direccionIp',
         header: 'IP',
         cell: ({ row }) => (
           <div className="text-xs text-gray-500 font-mono">
-            {row.getValue('ip_address') || '-'}
+            {row.getValue('direccionIp') || '-'}
           </div>
         ),
       },
       {
-        accessorKey: 'description',
+        accessorKey: 'descripcion',
         header: 'Descripción',
         cell: ({ row }) => (
           <div className="text-sm text-gray-600 max-w-xs truncate">
-            {row.getValue('description') || '-'}
+            {row.getValue('descripcion') || '-'}
           </div>
         ),
       },
@@ -192,7 +192,7 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {auditLogs.data.filter(a => a.event === 'created').length}
+                  {auditLogs.data.filter(a => a.evento === 'created').length}
                 </div>
               </CardContent>
             </Card>
@@ -205,7 +205,7 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {auditLogs.data.filter(a => a.event === 'updated').length}
+                  {auditLogs.data.filter(a => a.evento === 'updated').length}
                 </div>
               </CardContent>
             </Card>
@@ -218,7 +218,7 @@ export default function AuditIndex({ auditLogs }: AuditIndexProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {auditLogs.data.filter(a => a.event === 'inactivated').length}
+                  {auditLogs.data.filter(a => a.evento === 'inactivated').length}
                 </div>
               </CardContent>
             </Card>

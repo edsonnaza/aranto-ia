@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\Auditable;
 
 /**
  * CommissionLiquidationDetail Model
@@ -34,7 +35,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class CommissionLiquidationDetail extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
     /**
      * The attributes that are mass assignable.
