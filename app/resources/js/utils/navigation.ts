@@ -16,11 +16,13 @@ import {
 // Definición de permisos por módulo
 export const MODULE_PERMISSIONS = {
   DASHBOARD: undefined, // Siempre accesible
+  MEDICAL_SYSTEM: 'access-medical-system',
+  FINANCIAL: 'access-financial', // Nuevo menú padre
   TREASURY: 'access-treasury',
   COMMISSIONS: 'access-commissions',
-  MEDICAL: 'access-medical-system',
   REPORTS: 'access-reports',
   SETTINGS: 'access-settings',
+  CATALOGS: 'access-catalogs',
   USERS: 'access-user-management',
   AUDIT: 'access-audit-logs',
 } as const
@@ -34,40 +36,102 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
     permission: MODULE_PERMISSIONS.DASHBOARD,
   },
   {
-    title: 'Tesorería',
-    href: { url: '/cash-register', method: 'get' },
-    icon: DollarSign,
-    permission: MODULE_PERMISSIONS.TREASURY,
-  },
-  {
-    title: 'Comisiones',
-    href: { url: '/medical/commissions', method: 'get' },
-    icon: Percent,
-    permission: MODULE_PERMISSIONS.COMMISSIONS,
-  },
-  {
     title: 'Sistema Médico',
-    href: { url: '/medical', method: 'get' },
     icon: Stethoscope,
-    permission: MODULE_PERMISSIONS.MEDICAL,
+    permission: MODULE_PERMISSIONS.MEDICAL_SYSTEM,
+    items: [
+      {
+        title: 'Recepción',
+        href: { url: '/medical/service-requests', method: 'get' },
+      },
+      {
+        title: 'Atención Médica',
+        href: { url: '/medical', method: 'get' },
+      },
+      {
+        title: 'Agenda',
+        href: { url: '/medical/schedule', method: 'get' },
+      },
+    ],
+  },
+  {
+    title: 'Financiero',
+    icon: DollarSign,
+    permission: MODULE_PERMISSIONS.FINANCIAL,
+    items: [
+      {
+        title: 'Caja',
+        href: { url: '/cash-register', method: 'get' },
+        permission: MODULE_PERMISSIONS.TREASURY,
+      },
+      {
+        title: 'Liquidación de Comisiones',
+        href: { url: '/medical/commissions', method: 'get' },
+        permission: MODULE_PERMISSIONS.COMMISSIONS,
+      },
+      {
+        title: 'Tesorería',
+        href: { url: '/treasury', method: 'get' },
+        permission: MODULE_PERMISSIONS.TREASURY,
+      },
+    ],
+  },
+  {
+    title: 'Configuración',
+    icon: Settings,
+    permission: MODULE_PERMISSIONS.SETTINGS,
+    items: [
+      {
+        title: 'Catálogos',
+        items: [
+          {
+            title: 'Profesionales',
+            href: { url: '/settings/professionals', method: 'get' },
+          },
+          {
+            title: 'Pacientes',
+            href: { url: '/settings/patients', method: 'get' },
+          },
+          {
+            title: 'Especialidades',
+            href: { url: '/settings/specialties', method: 'get' },
+          },
+          {
+            title: 'Servicios Médicos',
+            href: { url: '/settings/services', method: 'get' },
+          },
+          {
+            title: 'Seguros',
+            href: { url: '/settings/insurance-types', method: 'get' },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Usuarios',
+    icon: Users,
+    permission: MODULE_PERMISSIONS.USERS,
+    items: [
+      {
+        title: 'Usuarios',
+        href: { url: '/users', method: 'get' },
+      },
+      {
+        title: 'Roles',
+        href: { url: '/roles', method: 'get' },
+      },
+      {
+        title: 'Permisos',
+        href: { url: '/permissions', method: 'get' },
+      },
+    ],
   },
   {
     title: 'Reportes',
     href: { url: '/reports', method: 'get' },
     icon: BarChart3,
     permission: MODULE_PERMISSIONS.REPORTS,
-  },
-  {
-    title: 'Usuarios',
-    href: { url: '/users', method: 'get' },
-    icon: Users,
-    permission: MODULE_PERMISSIONS.USERS,
-  },
-  {
-    title: 'Configuración',
-    href: { url: '/settings', method: 'get' },
-    icon: Settings,
-    permission: MODULE_PERMISSIONS.SETTINGS,
   },
   {
     title: 'Auditoría',
@@ -107,19 +171,27 @@ export const ROLE_PERMISSIONS = {
   'super-admin': [
     'access-treasury',
     'access-commissions',
+    'access-financial',
     'access-medical-system', 
     'access-reports',
     'access-settings',
+    'access-catalogs',
     'access-user-management',
+    'access-audit-logs',
   ],
   'admin': [
     'access-treasury',
     'access-commissions',
+    'access-financial',
     'access-medical-system',
     'access-reports',
+    'access-settings',
+    'access-catalogs',
+    'access-audit-logs',
   ],
   'cashier': [
     'access-treasury',
+    'access-financial',
   ],
   'medical-staff': [
     'access-medical-system',
@@ -132,7 +204,9 @@ export const ROLE_PERMISSIONS = {
   ],
   'accountant': [
     'access-commissions',
+    'access-financial',
     'access-reports',
+    'access-audit-logs',
   ],
 } as const
 

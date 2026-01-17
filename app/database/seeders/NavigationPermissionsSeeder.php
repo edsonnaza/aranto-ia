@@ -17,9 +17,11 @@ class NavigationPermissionsSeeder extends Seeder
         $navigationPermissions = [
             'access-treasury' => 'Acceso al módulo de Tesorería',
             'access-commissions' => 'Acceso al módulo de Comisiones',
+            'access-financial' => 'Acceso al módulo Financiero',
             'access-medical-system' => 'Acceso al Sistema Médico',
             'access-reports' => 'Acceso al módulo de Reportes',
             'access-settings' => 'Acceso al módulo de Configuración',
+            'access-catalogs' => 'Acceso a Catálogos',
             'access-user-management' => 'Acceso a la gestión de usuarios',
             'access-audit-logs' => 'Acceso a los registros de auditoría',
         ];
@@ -39,9 +41,11 @@ class NavigationPermissionsSeeder extends Seeder
                 'permissions' => [
                     'access-treasury',
                     'access-commissions',
+                    'access-financial',
                     'access-medical-system',
                     'access-reports',
                     'access-settings',
+                    'access-catalogs',
                     'access-user-management',
                     'access-audit-logs',
                 ],
@@ -52,8 +56,11 @@ class NavigationPermissionsSeeder extends Seeder
                 'permissions' => [
                     'access-treasury',
                     'access-commissions',
+                    'access-financial',
                     'access-medical-system',
                     'access-reports',
+                    'access-settings',
+                    'access-catalogs',
                     'access-audit-logs',
                 ],
             ],
@@ -62,6 +69,7 @@ class NavigationPermissionsSeeder extends Seeder
                 'description' => 'Operador de caja registradora',
                 'permissions' => [
                     'access-treasury',
+                    'access-financial',
                 ],
             ],
             'medical-staff' => [
@@ -90,6 +98,7 @@ class NavigationPermissionsSeeder extends Seeder
                 'description' => 'Gestión de comisiones y reportes financieros',
                 'permissions' => [
                     'access-commissions',
+                    'access-financial',
                     'access-reports',
                     'access-audit-logs',
                 ],

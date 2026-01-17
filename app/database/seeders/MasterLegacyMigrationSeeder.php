@@ -32,6 +32,49 @@ class MasterLegacyMigrationSeeder extends Seeder
 
         $this->printHeader();
 
+        // Verificar si base de datos legacy existe
+        $legacyExists = DB::select("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'db_legacy_infomed'");
+        
+        if (empty($legacyExists)) {
+            $this->warn('⚠️  Base de datos legacy (db_legacy_infomed) no existe');
+            $this->line('Ejecutando seeding SIN migraciones de legacy...');
+            $this->line('');
+            
+            try {
+                // FASE 1: Configuración Base
+                $this->phase('FASE 1', 'Configuración Base y Estructuras', function () {
+                    $this->call(NavigationPermissionsSeeder::class);
+                    $this->call(CashRegisterPermissionsSeeder::class);
+                    
+                    // Crear permiso de auditoría
+                    $auditPerm = Permission::firstOrCreate([
+                        'name' => 'access-audit-logs',
+                        'guard_name' => 'web',
+                    ]);
+                    
+                    // Asignar a roles
+                    Role::where('name', 'super-admin')->first()?->givePermissionTo($auditPerm);
+                    Role::where('name', 'admin')->first()?->givePermissionTo($auditPerm);
+                    Role::where('name', 'accountant')->first()?->givePermissionTo($auditPerm);
+                    
+                    $this->call(InsuranceTypesSeeder::class);
+                    $this->call(ServiceCategoriesSeeder::class);
+                });
+
+                // FASE 2: Datos Básicos de Aranto (sin legacy)
+                $this->phase('FASE 2', 'Datos Básicos de Aranto', function () {
+                    $this->call(ServicesSeeder::class);
+                    $this->call(CashRegisterUsersSeeder::class);
+                });
+
+                $this->info('✅ Seeding completado SIN datos de legacy');
+            } catch (\Exception $e) {
+                $this->printError($e);
+                throw $e;
+            }
+            return;
+        }
+
         try {
             // FASE 1: Configuración Base
             $this->phase('FASE 1', 'Configuración Base y Estructuras', function () {
