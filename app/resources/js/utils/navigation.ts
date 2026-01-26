@@ -42,7 +42,7 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
     items: [
       {
         title: 'Recepción',
-        href: { url: '/medical/service-requests', method: 'get' },
+        href: { url: '/medical/reception', method: 'get' },
       },
       {
         title: 'Atención Médica',
@@ -86,23 +86,23 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
         items: [
           {
             title: 'Profesionales',
-            href: { url: '/settings/professionals', method: 'get' },
+            href: { url: '/medical/professionals', method: 'get' },
           },
           {
             title: 'Pacientes',
-            href: { url: '/settings/patients', method: 'get' },
+            href: { url: '/medical/patients', method: 'get' },
           },
           {
             title: 'Especialidades',
-            href: { url: '/settings/specialties', method: 'get' },
+            href: { url: '/medical/specialties', method: 'get' },
           },
           {
             title: 'Servicios Médicos',
-            href: { url: '/settings/services', method: 'get' },
+            href: { url: '/medical/medical-services', method: 'get' },
           },
           {
             title: 'Seguros',
-            href: { url: '/settings/insurance-types', method: 'get' },
+            href: { url: '/medical/insurance-types', method: 'get' },
           },
         ],
       },
@@ -156,6 +156,7 @@ export function getNavigationForUser(userPermissions: string[]): NavItem[] {
       href: item.href,
       icon: item.icon,
       isActive: item.isActive,
+      items: item.items,
     }))
 }
 

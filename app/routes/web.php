@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use App\Http\Controllers\UserController;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -22,6 +23,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'professionals' => \App\Models\Professional::with('specialty')->get()
         ]);
     })->name('commissions.index');
+
+    // Users Management
+    Route::resource('users', UserController::class)->only(['index', 'create', 'show', 'edit']);
 });
 
 require __DIR__.'/settings.php';

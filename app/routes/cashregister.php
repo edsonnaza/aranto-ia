@@ -1,9 +1,15 @@
 <?php
 
 use App\Http\Controllers\CashRegisterController;
+use App\Http\Controllers\TreasuryController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // Treasury Dashboard
+    Route::get('treasury', [TreasuryController::class, 'index'])
+        ->name('treasury.index')
+        ->middleware('permission:access-treasury');
+
     // Cash Register Dashboard
     Route::get('cash-register', [CashRegisterController::class, 'index'])
         ->name('cash-register.index')
