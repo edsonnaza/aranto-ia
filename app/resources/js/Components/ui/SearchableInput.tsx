@@ -48,42 +48,46 @@ export default function SearchableInput({
   const [isLoading, setIsLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const debouncedSearchRef = useRef<ReturnType<typeof debounce> | null>(null)
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    (query: string) => {
-      const searchFn = debounce(async (q: string) => {
-        // Allow empty search if minSearchLength is 0 or less
-        if (q.length === 0 && minSearchLength > 0) {
-          setResults([])
-          setIsLoading(false)
-          return
-        }
+  // Create debounced search function
+  useEffect(() => {
+    debouncedSearchRef.current = debounce(async (q: string) => {
+      // Allow empty search if minSearchLength is 0 or less
+      if (q.length === 0 && minSearchLength > 0) {
+        setResults([])
+        setIsLoading(false)
+        return
+      }
 
-        // Require minimum search length for non-empty queries
-        if (q.length > 0 && q.length < minSearchLength) {
-          setResults([])
-          setIsLoading(false)
-          return
-        }
+      // Require minimum search length for non-empty queries
+      if (q.length > 0 && q.length < minSearchLength) {
+        setResults([])
+        setIsLoading(false)
+        return
+      }
 
-        try {
-          setIsLoading(true)
-          const searchResults = await onSearch(q)
-          setResults(searchResults.slice(0, maxResults))
-          setShowDropdown(true)
-        } catch (error) {
-          console.error('Error searching:', error)
-          setResults([])
-        } finally {
-          setIsLoading(false)
-        }
-      }, 300)
-      
-      searchFn(query)
-    },
-    [onSearch, maxResults, minSearchLength]
-  )
+      try {
+        setIsLoading(true)
+        console.log(`Searching professionals with query: "${q}"`, { minSearchLength })
+        const searchResults = await onSearch(q)
+        console.log('Search results:', searchResults)
+        setResults(searchResults.slice(0, maxResults))
+        setShowDropdown(true)
+      } catch (error) {
+        console.error('Error searching:', error)
+        setResults([])
+      } finally {
+        setIsLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      if (debouncedSearchRef.current) {
+        debouncedSearchRef.current.cancel?.()
+      }
+    }
+  }, [onSearch, maxResults, minSearchLength])
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +95,9 @@ export default function SearchableInput({
     setInputValue(newValue)
     
     if (newValue.trim()) {
-      debouncedSearch(newValue.trim())
+      if (debouncedSearchRef.current) {
+        debouncedSearchRef.current(newValue.trim())
+      }
     } else {
       setResults([])
       setShowDropdown(false)
@@ -111,7 +117,9 @@ export default function SearchableInput({
   const handleFocus = () => {
     // When focused, search with empty query to show all results
     if (inputValue === '' && minSearchLength <= 0) {
-      debouncedSearch('')
+      if (debouncedSearchRef.current) {
+        debouncedSearchRef.current('')
+      }
     } else if (results.length > 0) {
       setShowDropdown(true)
     }

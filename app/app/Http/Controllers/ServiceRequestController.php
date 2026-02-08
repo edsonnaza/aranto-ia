@@ -193,9 +193,18 @@ class ServiceRequestController extends Controller
 
         // Crear los detalles de servicios
         foreach ($validated['services'] as $serviceData) {
-            // Obtener el profesional para guardar su comisión en este momento
-            $professional = Professional::find($serviceData['professional_id']);
-            $commissionPercentage = $professional?->commission_percentage;
+            // Obtener el profesional con sus configuraciones de comisión
+            $professional = Professional::with('commissionSettings')->find($serviceData['professional_id']);
+            
+            // Get commission percentage from professional_commission_settings (single source of truth)
+            $commissionPercentage = $professional?->commissionSettings?->commission_percentage ?? 0;
+            
+            \Log::info('Service detail created with commission percentage', [
+                'professional_id' => $serviceData['professional_id'],
+                'professional_name' => $professional?->full_name,
+                'commission_percentage' => $commissionPercentage,
+                'source' => 'professional_commission_settings',
+            ]);
             
             $serviceRequest->details()->create([
                 'medical_service_id' => $serviceData['medical_service_id'],

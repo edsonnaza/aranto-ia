@@ -310,7 +310,6 @@ export default function ServiceCartTable({
               <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Seguro</th>
               <th className="px-1 py-1.5 text-center font-medium text-gray-700 whitespace-nowrap">Cant.</th>
               <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Precio</th>
-              <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Desc.</th>
               <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Total</th>
               <th className="px-1 py-1.5 text-center font-medium text-gray-700 whitespace-nowrap">Acc.</th>
             </tr>
@@ -398,23 +397,6 @@ export default function ServiceCartTable({
                   <div className="text-xs font-medium text-gray-900">
                     {formatCurrency(service.unit_price || 0)}
                   </div>
-                </td>
-
-                {/* Discount - Expandable */}
-                <td className="px-1 py-1.5 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRow(expandedRow === service.id ? null : service.id)}
-                    className={`text-xs font-medium px-2 py-1 rounded ${
-                      service.discount_percentage > 0 || service.discount_amount > 0
-                        ? 'text-orange-700 bg-orange-50 border border-orange-200'
-                        : 'text-indigo-600 bg-indigo-50 border border-indigo-200'
-                    }`}
-                  >
-                    {service.discount_percentage > 0 || service.discount_amount > 0
-                      ? `${service.discount_percentage}%`
-                      : 'Sin desc.'}
-                  </button>
                 </td>
 
                 {/* Total */}

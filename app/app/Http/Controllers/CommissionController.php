@@ -102,10 +102,15 @@ class CommissionController extends Controller
 
         return Inertia::render('commission/Index', [
             'professionals' => \App\Models\Professional::where('status', 'active')
-                ->with('specialties')
+                ->with('specialties', 'commissionSettings')
                 ->select('id', 'first_name', 'last_name', 'commission_percentage')
                 ->orderBy('last_name')
-                ->get(),
+                ->get()
+                ->map(function($prof) {
+                    return array_merge($prof->toArray(), [
+                        'commission_percentage' => $prof->commissionSettings?->commission_percentage ?? $prof->commission_percentage ?? 0
+                    ]);
+                }),
             'liquidations' => $transformedPaginator,
             'pendingApprovals' => $pendingApprovals,
             'filters' => [
@@ -124,7 +129,7 @@ class CommissionController extends Controller
     private function getProfessionalsWithPendingCommissions(): array
     {
         $professionals = \App\Models\Professional::where('status', 'active')
-            ->with('specialties')
+            ->with('specialties', 'commissionSettings')
             ->get()
             ->map(function ($professional) {
                 // Get transaction movements that have not been liquidated yet
@@ -137,6 +142,9 @@ class CommissionController extends Controller
 
                 $pendingCount = $pendingMovements->count();
                 $pendingAmount = $pendingMovements->sum('amount');
+                
+                // Get commission percentage from commissionSettings, fallback to professional.commission_percentage
+                $commissionPercentage = $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0;
 
                 return [
                     'id' => $professional->id,
@@ -144,10 +152,10 @@ class CommissionController extends Controller
                     'first_name' => $professional->first_name,
                     'last_name' => $professional->last_name,
                     'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
-                    'commission_percentage' => $professional->commission_percentage,
+                    'commission_percentage' => $commissionPercentage,
                     'pending_services_count' => $pendingCount,
                     'pending_amount' => $pendingAmount,
-                    'commission_amount' => round(($pendingAmount * $professional->commission_percentage) / 100, 2),
+                    'commission_amount' => round(($pendingAmount * $commissionPercentage) / 100, 2),
                 ];
             })
             ->filter(function ($professional) {
@@ -169,7 +177,7 @@ class CommissionController extends Controller
         $limit = (int)$request->query('limit', 10);
 
         $professionals = \App\Models\Professional::where('status', 'active')
-            ->with('specialties')
+            ->with('specialties', 'commissionSettings')
             ->get()
             ->map(function ($professional) {
                 // Get transaction movements that have not been liquidated yet
@@ -187,6 +195,9 @@ class CommissionController extends Controller
                 $pendingCount = $pendingMovements->count();
                 $pendingAmount = $pendingMovements->sum('amount');
                 
+                // Get commission percentage from commissionSettings, fallback to professional.commission_percentage
+                $commissionPercentage = $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0;
+                
                 // Calculate date range from transactions
                 $dates = $pendingMovements->pluck('created_at')->map(function ($date) {
                     return \Carbon\Carbon::parse($date);
@@ -199,10 +210,10 @@ class CommissionController extends Controller
                     'id' => $professional->id,
                     'full_name' => $professional->full_name,
                     'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
-                    'commission_percentage' => $professional->commission_percentage,
+                    'commission_percentage' => $commissionPercentage,
                     'pending_services_count' => $pendingCount,
                     'pending_amount' => $pendingAmount,
-                    'commission_amount' => round(($pendingAmount * $professional->commission_percentage) / 100, 2),
+                    'commission_amount' => round(($pendingAmount * $commissionPercentage) / 100, 2),
                     'period_start' => $periodStart,
                     'period_end' => $periodEnd,
                 ];
@@ -868,10 +879,14 @@ class CommissionController extends Controller
                 'commission_percentage' => 'required|numeric|min:0|max:100',
             ]);
 
-            // Update directly in professionals table
+            // Update in professional_commission_settings as single source of truth
             $professional = \App\Models\Professional::findOrFail($professionalId);
-            $professional->commission_percentage = $validated['commission_percentage'];
-            $professional->save();
+            
+            // Update or create commission settings
+            $professional->commissionSettings()->updateOrCreate(
+                ['professional_id' => $professionalId],
+                ['commission_percentage' => $validated['commission_percentage']]
+            );
 
             return response()->json([
                 'message' => 'Comisión actualizada correctamente',

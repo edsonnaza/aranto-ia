@@ -291,8 +291,20 @@ class ProfessionalController extends Controller
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
+        
+        // Extract commission_percentage to save in professional_commission_settings
+        $commissionPercentage = $validated['commission_percentage'] ?? null;
+        unset($validated['commission_percentage']); // Remove from professional update
 
         $professional->update($validated);
+        
+        // Save commission_percentage in professional_commission_settings as single source of truth
+        if ($commissionPercentage !== null) {
+            $professional->commissionSettings()->updateOrCreate(
+                ['professional_id' => $professional->id],
+                ['commission_percentage' => $commissionPercentage]
+            );
+        }
 
         // Sync specialties with first one as primary
         if (!empty($validated['specialties'])) {
@@ -446,7 +458,13 @@ class ProfessionalController extends Controller
         try {
             $query = $request->get('q', '');
             
+            \Log::info('Professional search requested', [
+                'query' => $query,
+                'query_length' => strlen($query),
+            ]);
+            
             if (strlen($query) < 1) {
+                \Log::info('Query too short, returning empty array');
                 return response()->json([]);
             }
 
@@ -471,6 +489,11 @@ class ProfessionalController extends Controller
                         'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
                     ];
                 });
+
+            \Log::info('Professional search results', [
+                'query' => $query,
+                'count' => $professionals->count(),
+            ]);
 
             return response()->json($professionals);
         } catch (\Exception $e) {
