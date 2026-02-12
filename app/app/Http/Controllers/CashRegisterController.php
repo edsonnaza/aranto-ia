@@ -359,6 +359,9 @@ class CashRegisterController extends Controller
         if ($activeSession) {
             $paidTotal = Transaction::where('cash_register_session_id', $activeSession->id)
                 ->where('category', 'SERVICE_PAYMENT')
+                ->whereHas('serviceRequest', function ($q) {
+                    $q->where('status', '!=', ServiceRequest::STATUS_CANCELLED);
+                })
                 ->sum('amount');
         }
 
