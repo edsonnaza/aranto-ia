@@ -46,7 +46,7 @@ class CommissionService
      */
     public function getProfessionalCommissionData(int $professionalId, string $startDate, string $endDate): array
     {
-        $professional = Professional::findOrFail($professionalId);
+        $professional = Professional::with('commissionSettings')->findOrFail($professionalId);
 
         // Get paid movements for the professional in the date range
         // Excluir transacciones que ya tienen commission_liquidation_id
@@ -93,14 +93,15 @@ class CommissionService
             $serviceName = $service->name;
             
             // Determine commission percentage: Use the percentage saved when the service was registered
-            // If not saved, fallback to professional's current percentage
+            // If not saved, fallback to professional's commission settings
             // If professional has no percentage, use service's default
             $commissionPercentage = $serviceDetail->professional_commission_percentage;
             
             if (!$commissionPercentage || $commissionPercentage <= 0) {
-                // Fallback to professional's current percentage
-                $commissionPercentage = ($professional->commission_percentage && $professional->commission_percentage > 0) 
-                    ? $professional->commission_percentage 
+                // Fallback to professional's commission settings
+                $commissionSettings = $professional->commissionSettings;
+                $commissionPercentage = ($commissionSettings && $commissionSettings->commission_percentage > 0) 
+                    ? $commissionSettings->commission_percentage 
                     : ($service->default_commission_percentage ?? 0);
             }
             
