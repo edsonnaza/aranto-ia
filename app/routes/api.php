@@ -13,8 +13,5 @@ use App\Http\Controllers\CommissionController;
 |
 */
 
-Route::middleware(['auth:sanctum'])->group(function () {
-    // Professional Commissions API
-    Route::get('/professional-commissions', [CommissionController::class, 'apiGetProfessionalCommissions']);
-    Route::post('/professional-commissions/{professionalId}', [CommissionController::class, 'apiUpdateProfessionalCommission']);
-});
+// No se usa API con Inertia.js - toda la comunicación es a través de web.php
+

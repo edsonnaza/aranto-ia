@@ -202,12 +202,7 @@ function CommissionLiquidationList({
               <Eye className="mr-2 h-4 w-4" />
               Ver Items
             </DropdownMenuItem>
-            {onViewDetails && (
-              <DropdownMenuItem onClick={() => onViewDetails(row.original)}>
-                <Eye className="mr-2 h-4 w-4" />
-                Ver Detalles
-              </DropdownMenuItem>
-            )}
+            
             {onEdit && row.original.status === 'draft' && (
               <DropdownMenuItem onClick={() => onEdit(row.original)}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -223,7 +218,7 @@ function CommissionLiquidationList({
                 Cancelar Aprobación
               </DropdownMenuItem>
             )}
-            {onDelete && row.original.status === 'draft' && (
+            {row.original.status === 'draft' && (
               <DropdownMenuItem
                 onClick={() => handleDeleteClick(row.original)}
                 className="text-destructive"

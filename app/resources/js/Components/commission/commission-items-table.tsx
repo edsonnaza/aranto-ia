@@ -119,8 +119,8 @@ export function CommissionItemsTable({
   const totals = useMemo(() => {
     return {
       count: items.length,
-      totalAmount: items.reduce((sum, item) => sum + item.service_amount, 0),
-      totalCommission: items.reduce((sum, item) => sum + item.commission_amount, 0),
+      totalAmount: items.reduce((sum, item) => sum + (Number(item.service_amount) || 0), 0),
+      totalCommission: items.reduce((sum, item) => sum + (Number(item.commission_amount) || 0), 0),
     }
   }, [items])
 

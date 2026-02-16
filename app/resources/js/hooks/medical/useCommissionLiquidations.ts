@@ -31,7 +31,8 @@ const commissionRoutes = {
   approve: (id: number | string) => `/medical/commissions/${id}/approve`,
   pay: (id: number | string) => `/medical/commissions/${id}/pay`,
   cancel: (id: number | string) => `/medical/commissions/${id}/cancel`,
-  data: '/medical/commission-data'
+  data: '/medical/commission-data',
+  details: (id: number | string) => `/medical/commissions/${id}/details`,
 }
 
 interface UseCommissionLiquidationsReturn {
@@ -44,7 +45,7 @@ interface UseCommissionLiquidationsReturn {
   navigateToCreate: () => void
   navigateToShow: (id: number | string) => void
   navigateToEdit: (id: number | string) => void
-  createLiquidation: (data: CommissionLiquidationFormData, options?: VisitOptions) => void
+  createLiquidation: (data: CommissionLiquidationFormData, liquidationId?: number | null, options?: VisitOptions) => void
   updateLiquidation: (id: number | string, data: Partial<CommissionLiquidationFormData>, options?: VisitOptions) => void
   deleteLiquidation: (id: number | string, options?: VisitOptions) => void
   approveLiquidation: (id: number | string, options?: VisitOptions) => void
@@ -105,22 +106,38 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
   }, [withLoading])
 
   // CRUD operations
-  const createLiquidation = useCallback((data: CommissionLiquidationFormData, options: VisitOptions = {}) => {
+  const createLiquidation = useCallback((data: CommissionLiquidationFormData, liquidationId?: number | null, options: VisitOptions = {}) => {
     withLoading(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      router.post(commissionRoutes.store, data as any, {
-        preserveState: true,
-        onSuccess: () => {
-          setError(null)
-        },
-        onError: (errors) => {
-          console.error('Error creando liquidación:', errors)
-          // Extraer mensaje de error del backend
-          const errorMessage = errors?.general?.[0] || errors?.message || 'Error al crear la liquidación de comisiones'
-          setError(errorMessage)
-        },
-        ...options
-      })
+      // If liquidationId is provided, use PATCH to update; otherwise use POST to create
+      if (liquidationId) {
+        router.patch(commissionRoutes.update(liquidationId), data, {
+          preserveState: true,
+          onSuccess: () => {
+            setError(null)
+          },
+          onError: (errors) => {
+            console.error('Error actualizando liquidación:', errors)
+            const errorMessage = errors?.general?.[0] || errors?.message || 'Error al actualizar la liquidación de comisiones'
+            setError(errorMessage)
+          },
+          ...options
+        })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.post(commissionRoutes.store, data as any, {
+          preserveState: true,
+          onSuccess: () => {
+            setError(null)
+          },
+          onError: (errors) => {
+            console.error('Error creando liquidación:', errors)
+            // Extraer mensaje de error del backend
+            const errorMessage = errors?.general?.[0] || errors?.message || 'Error al crear la liquidación de comisiones'
+            setError(errorMessage)
+          },
+          ...options
+        })
+      }
     })
   }, [withLoading])
 
@@ -247,7 +264,7 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         setLoading(true)
         setError(null)
 
-        const response = await fetch(commissionRoutes.show(id), {
+        const response = await fetch(commissionRoutes.details(id), {
           headers: {
             'Accept': 'application/json',
           },
@@ -266,6 +283,7 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         setLoading(false)
       }
     }, [])
+
   const getCommissionData = useCallback(async (
     professionalId: number,
     startDate: string,
@@ -278,6 +296,8 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
       // Convert dates from dd-mm-yyyy to yyyy-mm-dd if needed
       const convertDate = (dateStr: string): string => {
         if (!dateStr) return dateStr
+        // Trim whitespace
+        dateStr = dateStr.trim()
         // If already in yyyy-mm-dd format, return as is
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
           return dateStr
@@ -285,6 +305,11 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
         // If in dd-mm-yyyy format, convert to yyyy-mm-dd
         if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
           const [day, month, year] = dateStr.split('-')
+          return `${year}-${month}-${day}`
+        }
+        // If in dd/mm/yyyy format, convert to yyyy-mm-dd
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+          const [day, month, year] = dateStr.split('/')
           return `${year}-${month}-${day}`
         }
         return dateStr

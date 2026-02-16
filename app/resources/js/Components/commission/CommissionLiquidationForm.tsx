@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -52,12 +52,14 @@ type CommissionLiquidationFormData = CommissionFormData & {
 
 interface CommissionLiquidationFormProps {
   professionals: Professional[]
+  liquidationId?: number | null
   onSuccess?: () => void
   onCancel?: () => void
 }
 
 export default function CommissionLiquidationForm({
   professionals,
+  liquidationId,
   onSuccess,
   onCancel,
 }: CommissionLiquidationFormProps) {
@@ -66,8 +68,10 @@ export default function CommissionLiquidationForm({
   const [calculating, setCalculating] = useState(false)
   const [startDateOpen, setStartDateOpen] = useState(false)
   const [endDateOpen, setEndDateOpen] = useState(false)
+  const [loadingDraft, setLoadingDraft] = useState(false)
+  const isInitialLoadRef = useRef(true)
 
-  const { createLiquidation, getCommissionData, loading, error } = useCommissionLiquidations()
+  const { createLiquidation, getCommissionData, getLiquidationDetail, loading, error } = useCommissionLiquidations()
 
   const form = useForm<CommissionFormData>({
     resolver: zodResolver(commissionFormSchema),
@@ -88,7 +92,21 @@ export default function CommissionLiquidationForm({
       return null
     }
 
-    const dates = commissionData.services.map(s => new Date(s.service_date + 'T00:00:00').getTime())
+    const dates = commissionData.services
+      .filter(s => s.service_date)
+      .map(s => {
+        try {
+          return new Date(s.service_date + 'T00:00:00').getTime()
+        } catch {
+          return null
+        }
+      })
+      .filter((t): t is number => t !== null)
+
+    if (dates.length === 0) {
+      return null
+    }
+
     const minDate = new Date(Math.min(...dates))
     const maxDate = new Date(Math.max(...dates))
 
@@ -116,24 +134,157 @@ export default function CommissionLiquidationForm({
 
     return {
       count: selectedServicesList.length,
-      grossAmount: selectedServicesList.reduce((sum, s) => sum + s.service_amount, 0),
-      commissionAmount: selectedServicesList.reduce((sum, s) => sum + s.commission_amount, 0)
+      grossAmount: selectedServicesList.reduce((sum, s) => sum + (Number(s.service_amount) || 0), 0),
+      commissionAmount: selectedServicesList.reduce((sum, s) => sum + (Number(s.commission_amount) || 0), 0)
     }
   }, [commissionData, selectedServices])
 
+  // Load draft liquidation data if liquidationId is provided
+  useEffect(() => {
+    if (!liquidationId) return
+
+    const loadDraft = async () => {
+      setLoadingDraft(true)
+      try {
+        const response = await getLiquidationDetail(liquidationId)
+        if (response) {
+          const { liquidation, services } = response
+          
+          console.log('Draft services received from backend:', services)
+          console.log('First service:', services[0])
+          
+          // Get the selected service IDs from draft
+          const selectedServiceIds = services.map(s => s.service_request_id)
+          
+          // Find min and max dates from services
+          const validDates = services
+            .filter(s => s.service_date)
+            .map(s => new Date(s.service_date + 'T00:00:00'))
+            .filter(d => !isNaN(d.getTime()))
+          
+          let minDateStr = liquidation.period_start
+          let maxDateStr = liquidation.period_end
+          
+          if (validDates.length > 0) {
+            const min = new Date(Math.min(...validDates.map(d => d.getTime())))
+            const max = new Date(Math.max(...validDates.map(d => d.getTime())))
+            minDateStr = format(min, 'yyyy-MM-dd')
+            maxDateStr = format(max, 'yyyy-MM-dd')
+          } else {
+            // If no valid dates from services, parse the liquidation dates and convert to string
+            if (typeof minDateStr === 'string' && !minDateStr.includes('T')) {
+              // Already in string format
+            } else if (typeof minDateStr === 'string') {
+              minDateStr = minDateStr.split('T')[0]
+            }
+            if (typeof maxDateStr === 'string' && !maxDateStr.includes('T')) {
+              // Already in string format
+            } else if (typeof maxDateStr === 'string') {
+              maxDateStr = maxDateStr.split('T')[0]
+            }
+          }
+          
+          // Set form values with calculated date range (as strings for the form fields)
+          console.log('Setting form values from draft:', { 
+            professional_id: liquidation.professional_id, 
+            period_start: minDateStr, 
+            period_end: maxDateStr 
+          })
+          form.setValue('professional_id', liquidation.professional_id)
+          form.setValue('period_start', minDateStr)
+          form.setValue('period_end', maxDateStr)
+
+          // Store selected services to pre-select them after data loads
+          setSelectedServices(selectedServiceIds)
+          
+          // Use services directly from the draft - they're already calculated
+          // Transform the draft services into the CommissionData format
+          if (services && services.length > 0) {
+            const commissionDataFromDraft = {
+              professional: {
+                id: liquidation.professional_id,
+              },
+              period: {
+                start: minDateStr,
+                end: maxDateStr,
+              },
+              services: services,
+              summary: {
+                total_services: services.length,
+                gross_amount: services.reduce((sum, s) => sum + (Number(s.service_amount) || 0), 0),
+                commission_percentage: services.length > 0 ? Number(services[0].commission_percentage) || 0 : 0,
+                commission_amount: services.reduce((sum, s) => sum + (Number(s.commission_amount) || 0), 0),
+              }
+            }
+            console.log('Using services from draft with', services.length, 'services:', services)
+            console.log('First service details:', services[0])
+            setCommissionData(commissionDataFromDraft)
+          }
+        }
+      } catch (err) {
+        console.error('Error loading draft liquidation:', err)
+      } finally {
+        setLoadingDraft(false)
+      }
+    }
+
+    loadDraft()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liquidationId])
+
   // Calculate commission data when professional or period changes
   useEffect(() => {
+    // If this is the initial load with a liquidationId, skip and let loadDraft handle it
+    if (liquidationId && isInitialLoadRef.current) {
+      return
+    }
+    
+    // Reset flag when liquidationId is removed
+    if (!liquidationId && !isInitialLoadRef.current) {
+      isInitialLoadRef.current = true
+    }
+    
+    // Skip calculation if we're loading a draft
+    if (loadingDraft) return
+
     const calculateCommission = async () => {
       const professionalId = form.getValues('professional_id')
-      const startDate = form.getValues('period_start')
-      const endDate = form.getValues('period_end')
+      let startDate = form.getValues('period_start')
+      let endDate = form.getValues('period_end')
+
+      // Ensure dates are formatted as YYYY-MM-DD
+      if (startDate instanceof Date) {
+        startDate = format(startDate, 'yyyy-MM-dd')
+      } else if (startDate && typeof startDate === 'string') {
+        // If it's already a string, extract just the date part (remove time)
+        startDate = startDate.split('T')[0]
+      }
+
+      if (endDate instanceof Date) {
+        endDate = format(endDate, 'yyyy-MM-dd')
+      } else if (endDate && typeof endDate === 'string') {
+        // If it's already a string, extract just the date part (remove time)
+        endDate = endDate.split('T')[0]
+      }
+
+      // Log for debugging
+      console.log('Calculating commission (formatted):', { professionalId, startDate, endDate })
 
       if (professionalId && professionalId > 0 && startDate && endDate) {
         setCalculating(true)
         try {
+          console.log('calculateCommission: Fetching data for', { professionalId, startDate, endDate })
           const data = await getCommissionData(professionalId, startDate, endDate)
+          console.log('calculateCommission: Received data with', data?.services.length || 0, 'services')
           setCommissionData(data)
-          setSelectedServices(data?.services.map(s => s.service_request_id) || []) // Selecciona todos por defecto
+          // If editing a draft, pre-select the services from draft; otherwise select all
+          if (liquidationId) {
+            console.log('calculateCommission: In edit mode (liquidationId:', liquidationId, '), keeping draft selection')
+            // Services are already set from loadDraft, don't override
+          } else {
+            console.log('calculateCommission: In create mode, selecting all services')
+            setSelectedServices(data?.services.map(s => s.service_request_id) || []) // Selecciona todos por defecto
+          }
         } catch (err) {
           console.error('Error calculating commission:', err)
           setCommissionData(null)
@@ -142,6 +293,7 @@ export default function CommissionLiquidationForm({
           setCalculating(false)
         }
       } else {
+        console.log('calculateCommission: Skipping, missing required fields', { professionalId, startDate, endDate })
         setCommissionData(null)
         setSelectedServices([])
       }
@@ -150,12 +302,34 @@ export default function CommissionLiquidationForm({
     // Call calculateCommission when dependencies change
     calculateCommission()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.watch('professional_id'), form.watch('period_start'), form.watch('period_end')])
+  }, [form.watch('professional_id'), form.watch('period_start'), form.watch('period_end'), loadingDraft, liquidationId])
 
   const onSubmit = (data: CommissionFormData) => {
     if (selectedServices.length === 0) return
-    const payload: CommissionLiquidationFormData = { ...data, service_request_ids: selectedServices }
-    createLiquidation(payload, {
+    
+    // Ensure dates are formatted as YYYY-MM-DD for submission
+    let startDate = data.period_start
+    let endDate = data.period_end
+    
+    if (startDate instanceof Date) {
+      startDate = format(startDate, 'yyyy-MM-dd')
+    } else if (startDate && typeof startDate === 'string') {
+      startDate = startDate.split('T')[0]
+    }
+    
+    if (endDate instanceof Date) {
+      endDate = format(endDate, 'yyyy-MM-dd')
+    } else if (endDate && typeof endDate === 'string') {
+      endDate = endDate.split('T')[0]
+    }
+    
+    const payload: CommissionLiquidationFormData = {
+      ...data,
+      period_start: startDate,
+      period_end: endDate,
+      service_request_ids: selectedServices
+    }
+    createLiquidation(payload, liquidationId ? liquidationId : undefined, {
       onSuccess: () => {
         if (onSuccess) onSuccess()
       },
@@ -167,6 +341,44 @@ export default function CommissionLiquidationForm({
       style: 'currency',
       currency: 'PYG',
     }).format(amount)
+  }
+
+  // Safe date formatter
+  const safeFormatDate = (dateValue: string | Date | undefined, formatStr: string = "PPP") => {
+    if (!dateValue) return null
+    try {
+      let date: Date
+      if (dateValue instanceof Date) {
+        date = dateValue
+      } else if (typeof dateValue === 'string') {
+        date = new Date(dateValue.includes('T') ? dateValue : dateValue + 'T00:00:00')
+      } else {
+        return null
+      }
+      if (isNaN(date.getTime())) return null
+      return format(date, formatStr, { locale: es })
+    } catch {
+      return null
+    }
+  }
+
+  // Safe date for Calendar component
+  const safeParseDate = (dateValue: string | Date | undefined): Date | undefined => {
+    if (!dateValue) return undefined
+    try {
+      let date: Date
+      if (dateValue instanceof Date) {
+        date = dateValue
+      } else if (typeof dateValue === 'string') {
+        date = new Date(dateValue.includes('T') ? dateValue : dateValue + 'T00:00:00')
+      } else {
+        return undefined
+      }
+      if (isNaN(date.getTime())) return undefined
+      return date
+    } catch {
+      return undefined
+    }
   }
 
   // Define columns for DataTable
@@ -257,11 +469,15 @@ export default function CommissionLiquidationForm({
     {
       accessorKey: 'service_date',
       header: 'Fecha',
-      cell: ({ row }) => (
-        <div className="text-sm text-muted-foreground">
-          {format(new Date(row.getValue('service_date') + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const dateValue = row.getValue('service_date')
+        const parsedDate = safeParseDate(typeof dateValue === 'string' ? dateValue : String(dateValue))
+        return (
+          <div className="text-sm text-muted-foreground">
+            {parsedDate ? format(parsedDate, 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+          </div>
+        )
+      },
     },
   ], [commissionData, selectedServices])
 
@@ -374,8 +590,8 @@ export default function CommissionLiquidationForm({
                                 !field.value && "text-muted-foreground"
                               )}
                             >
-                              {field.value ? (
-                                format(new Date(field.value + 'T00:00:00'), "PPP", { locale: es })
+                              {field.value && safeFormatDate(field.value) ? (
+                                safeFormatDate(field.value)
                               ) : (
                                 <span>Seleccionar fecha</span>
                               )}
@@ -386,12 +602,11 @@ export default function CommissionLiquidationForm({
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value ? new Date(field.value + 'T00:00:00') : undefined}
+                            selected={safeParseDate(field.value)}
                             onSelect={(date) => {
                               field.onChange(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
                               setStartDateOpen(false)
                             }}
-                            // isDateDisabled removed: Calendar does not support this prop
                             initialFocus
                           />
                         </PopoverContent>
@@ -417,8 +632,8 @@ export default function CommissionLiquidationForm({
                                 !field.value && "text-muted-foreground"
                               )}
                             >
-                              {field.value ? (
-                                format(new Date(field.value + 'T00:00:00'), "PPP", { locale: es })
+                              {field.value && safeFormatDate(field.value) ? (
+                                safeFormatDate(field.value)
                               ) : (
                                 <span>Seleccionar fecha</span>
                               )}
@@ -429,12 +644,11 @@ export default function CommissionLiquidationForm({
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value ? new Date(field.value + 'T00:00:00') : undefined}
+                            selected={safeParseDate(field.value)}
                             onSelect={(date) => {
                               field.onChange(date instanceof Date ? format(date, 'yyyy-MM-dd') : '')
                               setEndDateOpen(false)
                             }}
-                            // isDateDisabled removed: Calendar does not support this prop
                             initialFocus
                           />
                         </PopoverContent>

@@ -60,6 +60,7 @@ export default function CommissionIndex({
   // const { props } = usePage()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedLiquidationId, setSelectedLiquidationId] = useState<number | null>(null)
+  const [editingLiquidationId, setEditingLiquidationId] = useState<number | null>(null)
 
   const handleViewDetails = (liquidationId: number) => {
     setSelectedLiquidationId(liquidationId)
@@ -101,8 +102,15 @@ export default function CommissionIndex({
             <TabsContent value="create">
               <CommissionLiquidationForm
                 professionals={professionals}
-                onSuccess={handleLiquidationSuccess}
-                onCancel={() => setActiveTab('dashboard')}
+                liquidationId={editingLiquidationId}
+                onSuccess={() => {
+                  setEditingLiquidationId(null)
+                  setActiveTab('list')
+                }}
+                onCancel={() => {
+                  setEditingLiquidationId(null)
+                  setActiveTab('dashboard')
+                }}
               />
             </TabsContent>
 
@@ -111,10 +119,9 @@ export default function CommissionIndex({
                 liquidations={liquidations || { data: [], current_page: 1, last_page: 1, per_page: 20, total: 0, from: 1, to: 0, path: '', links: [] }}
                 filters={filters}
                 onViewDetails={(liquidation) => handleViewDetails(liquidation.id)}
-                onEdit={() => {
-                  // TODO: Implement edit functionality
+                onEdit={(liquidation) => {
+                  setEditingLiquidationId(liquidation.id)
                   setActiveTab('create')
-                  // Could set form data for editing
                 }}
                 onDelete={() => {
                   // TODO: Implement delete functionality with confirmation

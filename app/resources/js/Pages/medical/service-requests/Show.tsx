@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react'
+import { Head, router } from '@inertiajs/react'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
@@ -99,8 +99,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
     error, 
     confirmServiceRequest, 
     cancelServiceRequest, 
-    navigateToEdit,
-    navigateToIndex 
+    navigateToEdit, 
   } = useServiceRequests()
 
   const breadcrumbs = [
@@ -199,7 +198,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
             
             <div className="mt-4 lg:mt-0 flex space-x-3">
               <button
-                onClick={() => navigateToIndex()}
+                onClick={() => router.visit('/medical/reception')}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
               >
                 Volver a la Lista

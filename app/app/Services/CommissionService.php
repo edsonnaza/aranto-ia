@@ -61,6 +61,14 @@ class CommissionService
             ->with(['serviceRequest.patient', 'serviceRequest.details.medicalService'])
             ->get();
 
+        \Log::debug('CommissionService::getProfessionalCommissionData', [
+            'professional_id' => $professionalId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'movements_count' => $movements->count(),
+            'movements' => $movements->toArray()
+        ]);
+
         $totalGross = 0;
         $totalCommission = 0;
         $totalPercentage = 0;

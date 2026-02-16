@@ -303,8 +303,24 @@ class CommissionController extends Controller
             'details.paymentMovement'
         ]);
 
+        // Transform services for frontend
+        $services = $liquidation->details->map(function($detail) {
+            return [
+                'service_request_id' => $detail->service_request_id,
+                'patient_id' => $detail->serviceRequest->patient_id ?? null,
+                'patient_name' => $detail->serviceRequest->patient->full_name ?? 'N/A',
+                'service_id' => $detail->service_id,
+                'service_name' => $detail->service->name ?? 'N/A',
+                'service_amount' => $detail->service_amount,
+                'commission_percentage' => $detail->commission_percentage,
+                'commission_amount' => $detail->commission_amount,
+                'service_date' => $detail->serviceRequest->service_date ?? $detail->created_at->toDateString(),
+            ];
+        });
+
         return Inertia::render('commission/Show', [
             'liquidation' => $liquidation,
+            'services' => $services,
         ]);
     }
 
@@ -554,29 +570,33 @@ class CommissionController extends Controller
             $details = $commission->details()
                 ->with(['serviceRequest.patient', 'service'])
                 ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($detail) {
-                    return [
-                        'service_request_id' => $detail->service_request_id,
-                        'patient_name' => $detail->serviceRequest?->patient?->full_name ?? 'N/A',
-                        'service_name' => $detail->service?->name ?? 'Servicio desconocido',
-                        'service_amount' => $detail->service_amount,
-                        'commission_percentage' => $detail->commission_percentage,
-                        'commission_amount' => $detail->commission_amount,
-                        'service_date' => $detail->service_date,
-                    ];
-                });
-
-            $totalServices = $details->sum('service_amount');
-            $totalCommission = $details->sum('commission_amount');
+                ->get();
 
             // Get professional specialty name
             $professional = $commission->load('professional.specialties')->professional;
             $specialtyName = $professional?->specialties?->first()?->name ?? 'N/A';
 
+            $mappedDetails = $details->map(function ($detail) {
+                return [
+                    'service_request_id' => $detail->service_request_id,
+                    'patient_name' => $detail->serviceRequest?->patient?->full_name ?? 'N/A',
+                    'service_name' => $detail->service?->name ?? 'Servicio desconocido',
+                    'service_amount' => $detail->service_amount,
+                    'commission_percentage' => $detail->commission_percentage,
+                    'commission_amount' => $detail->commission_amount,
+                    'service_date' => $detail->service_date 
+                        ? \Carbon\Carbon::parse($detail->service_date)->format('Y-m-d')
+                        : null,
+                ];
+            });
+
+            $totalServices = $mappedDetails->sum('service_amount');
+            $totalCommission = $mappedDetails->sum('commission_amount');
+
             return response()->json([
                 'liquidation' => [
                     'id' => $commission->id,
+                    'professional_id' => $commission->professional_id,
                     'professional_name' => $professional?->full_name ?? 'N/A',
                     'professional_specialty' => $specialtyName,
                     'period_start' => $commission->period_start,
@@ -589,8 +609,21 @@ class CommissionController extends Controller
                     'generated_at' => $commission->created_at,
                     'approved_at' => $commission->updated_at,
                 ],
-                'details' => $details,
-                'count' => $details->count(),
+                'services' => $mappedDetails->map(function($detail) {
+                    return [
+                        'service_request_id' => $detail['service_request_id'],
+                        'patient_id' => null,
+                        'patient_name' => $detail['patient_name'],
+                        'service_id' => null,
+                        'service_name' => $detail['service_name'],
+                        'service_amount' => $detail['service_amount'],
+                        'commission_percentage' => $detail['commission_percentage'],
+                        'commission_amount' => $detail['commission_amount'],
+                        'service_date' => $detail['service_date'],
+                    ];
+                }),
+                'details' => $mappedDetails,
+                'count' => $mappedDetails->count(),
                 'total_services' => $totalServices,
                 'total_commission' => $totalCommission,
             ]);
