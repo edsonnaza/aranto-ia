@@ -121,13 +121,41 @@ class CommissionController extends Controller
         return Inertia::render('commission/Index', [
             'professionals' => \App\Models\Professional::where('status', 'active')
                 ->with('specialties', 'commissionSettings')
-                ->select('id', 'first_name', 'last_name', 'commission_percentage')
+                ->select(
+                    'id',
+                    'first_name',
+                    'last_name',
+                    'email',
+                    'phone',
+                    'license_number',
+                    'commission_percentage',
+                    'status',
+                    'created_at',
+                    'updated_at'
+                )
                 ->orderBy('last_name')
                 ->get()
-                ->map(function($prof) {
-                    return array_merge($prof->toArray(), [
-                        'commission_percentage' => $prof->commissionSettings?->commission_percentage ?? $prof->commission_percentage ?? 0
-                    ]);
+                ->map(function (\App\Models\Professional $prof) {
+                    return [
+                        'id' => $prof->id,
+                        'first_name' => $prof->first_name,
+                        'last_name' => $prof->last_name,
+                        'email' => $prof->email,
+                        'phone' => $prof->phone,
+                        'license_number' => $prof->license_number,
+                        'commission_percentage' => $prof->commissionSettings?->commission_percentage ?? $prof->commission_percentage ?? 0,
+                        'is_active' => $prof->status === 'active',
+                        'status' => $prof->status,
+                        'specialties' => $prof->specialties
+                            ->map(fn ($specialty) => [
+                                'id' => $specialty->id,
+                                'name' => $specialty->name,
+                            ])
+                            ->values()
+                            ->all(),
+                        'created_at' => $prof->created_at?->toDateTimeString(),
+                        'updated_at' => $prof->updated_at?->toDateTimeString(),
+                    ];
                 }),
             'liquidations' => $transformedPaginator,
             'pendingApprovals' => $pendingApprovals,
