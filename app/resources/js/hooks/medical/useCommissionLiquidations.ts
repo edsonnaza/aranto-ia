@@ -51,7 +51,7 @@ interface UseCommissionLiquidationsReturn {
   approveLiquidation: (id: number | string, options?: VisitOptions) => void
   payLiquidation: (id: number | string, data?: CommissionPaymentFormData, options?: VisitOptions) => void
   cancelLiquidation: (id: number | string, options?: VisitOptions) => void
-  getCommissionData: (professionalId: number, startDate: string, endDate: string) => Promise<CommissionData | null>
+  getCommissionData: (professionalId: number, startDate: string, endDate: string, liquidationId?: number | string | null) => Promise<CommissionData | null>
   getLiquidationDetail: (id: number | string) => Promise<{ liquidation: CommissionLiquidation; services: CommissionLiquidationDetail[] } | null>
   fetchLiquidations: () => Promise<CommissionLiquidation[]>
 
@@ -287,7 +287,8 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
   const getCommissionData = useCallback(async (
     professionalId: number,
     startDate: string,
-    endDate: string
+    endDate: string,
+    liquidationId?: number | string | null
   ): Promise<CommissionData | null> => {
     try {
       setLoading(true)
@@ -327,6 +328,7 @@ export const useCommissionLiquidations = (): UseCommissionLiquidationsReturn => 
           professional_id: professionalId,
           start_date: convertDate(startDate),
           end_date: convertDate(endDate),
+          liquidation_id: liquidationId ?? null,
         }),
       })
 

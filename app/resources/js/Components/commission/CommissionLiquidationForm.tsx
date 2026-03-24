@@ -6,6 +6,7 @@ import { CalendarIcon, Calculator, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ColumnDef } from '@tanstack/react-table'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -53,6 +54,7 @@ type CommissionLiquidationFormData = CommissionFormData & {
 interface CommissionLiquidationFormProps {
   professionals: Professional[]
   liquidationId?: number | null
+  initialProfessionalId?: number | null
   onSuccess?: () => void
   onCancel?: () => void
 }
@@ -60,6 +62,7 @@ interface CommissionLiquidationFormProps {
 export default function CommissionLiquidationForm({
   professionals,
   liquidationId,
+  initialProfessionalId,
   onSuccess,
   onCancel,
 }: CommissionLiquidationFormProps) {
@@ -139,6 +142,19 @@ export default function CommissionLiquidationForm({
     }
   }, [commissionData, selectedServices])
 
+  // Monitor errors and show toast notifications
+  useEffect(() => {
+    if (error) {
+      toast.error(error)
+    }
+  }, [error])
+
+  useEffect(() => {
+    if (!liquidationId && initialProfessionalId) {
+      form.setValue('professional_id', initialProfessionalId)
+    }
+  }, [form, initialProfessionalId, liquidationId])
+
   // Load draft liquidation data if liquidationId is provided
   useEffect(() => {
     if (!liquidationId) return
@@ -156,33 +172,12 @@ export default function CommissionLiquidationForm({
           // Get the selected service IDs from draft
           const selectedServiceIds = services.map(s => s.service_request_id)
           
-          // Find min and max dates from services
-          const validDates = services
-            .filter(s => s.service_date)
-            .map(s => new Date(s.service_date + 'T00:00:00'))
-            .filter(d => !isNaN(d.getTime()))
-          
-          let minDateStr = liquidation.period_start
-          let maxDateStr = liquidation.period_end
-          
-          if (validDates.length > 0) {
-            const min = new Date(Math.min(...validDates.map(d => d.getTime())))
-            const max = new Date(Math.max(...validDates.map(d => d.getTime())))
-            minDateStr = format(min, 'yyyy-MM-dd')
-            maxDateStr = format(max, 'yyyy-MM-dd')
-          } else {
-            // If no valid dates from services, parse the liquidation dates and convert to string
-            if (typeof minDateStr === 'string' && !minDateStr.includes('T')) {
-              // Already in string format
-            } else if (typeof minDateStr === 'string') {
-              minDateStr = minDateStr.split('T')[0]
-            }
-            if (typeof maxDateStr === 'string' && !maxDateStr.includes('T')) {
-              // Already in string format
-            } else if (typeof maxDateStr === 'string') {
-              maxDateStr = maxDateStr.split('T')[0]
-            }
-          }
+          let minDateStr = typeof liquidation.period_start === 'string'
+            ? liquidation.period_start.split('T')[0]
+            : format(liquidation.period_start, 'yyyy-MM-dd')
+          let maxDateStr = typeof liquidation.period_end === 'string'
+            ? liquidation.period_end.split('T')[0]
+            : format(liquidation.period_end, 'yyyy-MM-dd')
           
           // Set form values with calculated date range (as strings for the form fields)
           console.log('Setting form values from draft:', { 
@@ -196,10 +191,19 @@ export default function CommissionLiquidationForm({
 
           // Store selected services to pre-select them after data loads
           setSelectedServices(selectedServiceIds)
-          
-          // Use services directly from the draft - they're already calculated
-          // Transform the draft services into the CommissionData format
-          if (services && services.length > 0) {
+
+          const eligibleCommissionData = await getCommissionData(
+            liquidation.professional_id,
+            minDateStr,
+            maxDateStr,
+            liquidationId
+          )
+
+          if (eligibleCommissionData) {
+            setCommissionData(eligibleCommissionData)
+            const availableIds = new Set(eligibleCommissionData.services.map(s => s.service_request_id))
+            setSelectedServices(selectedServiceIds.filter(id => availableIds.has(id)))
+          } else if (services && services.length > 0) {
             const commissionDataFromDraft = {
               professional: {
                 id: liquidation.professional_id,
@@ -216,10 +220,10 @@ export default function CommissionLiquidationForm({
                 commission_amount: services.reduce((sum, s) => sum + (Number(s.commission_amount) || 0), 0),
               }
             }
-            console.log('Using services from draft with', services.length, 'services:', services)
-            console.log('First service details:', services[0])
             setCommissionData(commissionDataFromDraft)
           }
+
+          isInitialLoadRef.current = false
         }
       } catch (err) {
         console.error('Error loading draft liquidation:', err)
@@ -274,13 +278,14 @@ export default function CommissionLiquidationForm({
         setCalculating(true)
         try {
           console.log('calculateCommission: Fetching data for', { professionalId, startDate, endDate })
-          const data = await getCommissionData(professionalId, startDate, endDate)
+          const data = await getCommissionData(professionalId, startDate, endDate, liquidationId)
           console.log('calculateCommission: Received data with', data?.services.length || 0, 'services')
           setCommissionData(data)
           // If editing a draft, pre-select the services from draft; otherwise select all
           if (liquidationId) {
             console.log('calculateCommission: In edit mode (liquidationId:', liquidationId, '), keeping draft selection')
-            // Services are already set from loadDraft, don't override
+            const availableIds = new Set(data?.services.map(s => s.service_request_id) || [])
+            setSelectedServices(prev => prev.filter(id => availableIds.has(id)))
           } else {
             console.log('calculateCommission: In create mode, selecting all services')
             setSelectedServices(data?.services.map(s => s.service_request_id) || []) // Selecciona todos por defecto
@@ -331,6 +336,19 @@ export default function CommissionLiquidationForm({
     }
     createLiquidation(payload, liquidationId ? liquidationId : undefined, {
       onSuccess: () => {
+        if (liquidationId) {
+          toast.success('Liquidación actualizada exitosamente')
+        } else {
+          toast.success('Liquidación creada exitosamente')
+        }
+        // Reset form and state
+        form.reset()
+        setCommissionData(null)
+        setSelectedServices([])
+        setCalculating(false)
+        setStartDateOpen(false)
+        setEndDateOpen(false)
+        
         if (onSuccess) onSuccess()
       },
     })
@@ -774,10 +792,10 @@ export default function CommissionLiquidationForm({
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generando...
+                      {liquidationId ? 'Actualizando...' : 'Generando...'}
                     </>
                   ) : (
-                    'Generar Liquidación'
+                    liquidationId ? 'Actualizar Liquidación' : 'Generar Liquidación'
                   )}
                 </Button>
               </div>

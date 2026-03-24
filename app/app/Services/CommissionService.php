@@ -6,9 +6,7 @@ use App\Models\CommissionLiquidation;
 use App\Models\CommissionLiquidationDetail;
 use App\Models\Professional;
 use App\Models\User;
-use App\Models\ProfessionalCommission;
 use App\Models\MedicalService;
-use App\Models\ServiceRequest;
 use App\Models\Transaction;
 use App\Models\CashRegisterSession;
 use Carbon\Carbon;
@@ -44,7 +42,7 @@ class CommissionService
      * @param string $endDate
      * @return array
      */
-    public function getProfessionalCommissionData(int $professionalId, string $startDate, string $endDate): array
+    public function getProfessionalCommissionData(int $professionalId, string $startDate, string $endDate, ?int $currentLiquidationId = null): array
     {
         $professional = Professional::with('commissionSettings')->findOrFail($professionalId);
 
@@ -57,7 +55,13 @@ class CommissionService
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $endDate)
             ->whereNotNull('service_request_id')
-            ->whereNull('commission_liquidation_id') // Solo transacciones no liquidadas
+            ->where(function ($query) use ($currentLiquidationId) {
+                $query->whereNull('commission_liquidation_id');
+
+                if ($currentLiquidationId) {
+                    $query->orWhere('commission_liquidation_id', $currentLiquidationId);
+                }
+            }) // Incluir items actuales al editar la misma liquidación
             ->with(['serviceRequest.patient', 'serviceRequest.details.medicalService'])
             ->get();
 
@@ -65,6 +69,7 @@ class CommissionService
             'professional_id' => $professionalId,
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'current_liquidation_id' => $currentLiquidationId,
             'movements_count' => $movements->count(),
             'movements' => $movements->toArray()
         ]);

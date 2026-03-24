@@ -22,10 +22,28 @@ class CommissionController extends Controller
     ) {}
 
     /**
+     * Tabs válidos para la página índice de comisiones.
+     *
+     * @var array<int, string>
+     */
+    private const INDEX_TABS = [
+        'dashboard',
+        'create',
+        'list',
+        'reports',
+        'approvals',
+        'settings',
+        'details',
+    ];
+
+    /**
      * Display a listing of commission liquidations.
      */
     public function index(Request $request): Response
     {
+        $requestedTab = $request->query('tab', 'dashboard');
+        $activeTab = in_array($requestedTab, self::INDEX_TABS, true) ? $requestedTab : 'dashboard';
+
         $query = CommissionLiquidation::with(['professional.specialties', 'generatedBy', 'approvedBy'])
             ->orderBy('created_at', 'desc');
 
@@ -119,6 +137,10 @@ class CommissionController extends Controller
                 'date_from' => $formatDate($dateFrom),
                 'date_to' => $formatDate($dateTo),
             ],
+            'initialTab' => $activeTab,
+            'selectedLiquidationId' => $request->filled('liquidation_id') ? (int) $request->query('liquidation_id') : null,
+            'editingLiquidationId' => $request->filled('edit_liquidation_id') ? (int) $request->query('edit_liquidation_id') : null,
+            'createProfessionalId' => $request->filled('create_professional_id') ? (int) $request->query('create_professional_id') : null,
             'professionalsWithPendingCommissions' => $this->getProfessionalsWithPendingCommissions(),
         ]);
     }
@@ -233,19 +255,12 @@ class CommissionController extends Controller
     /**
      * Show the form for creating a new commission liquidation.
      */
-    public function create(): Response
+    public function create(Request $request): RedirectResponse
     {
-        return Inertia::render('commission/Create', [
-            'professionals' => \App\Models\Professional::where('status', 'active')
-                ->where(function($q) {
-                    $q->where('commission_percentage', '>', 0)
-                      ->orWhereHas('commissionSettings', function($sq) {
-                          $sq->where('commission_percentage', '>', 0);
-                      });
-                })
-                ->orderBy('last_name')
-                ->get(),
-        ]);
+        return redirect()->route('medical.commissions.index', array_filter([
+            'tab' => 'create',
+            'create_professional_id' => $request->query('professional_id'),
+        ], static fn ($value) => $value !== null));
     }
 
     /**
@@ -291,77 +306,144 @@ class CommissionController extends Controller
     /**
      * Display the specified commission liquidation.
      */
-    public function show(CommissionLiquidation $liquidation): Response
+    public function show(CommissionLiquidation $commission): RedirectResponse
     {
-        $liquidation->load([
-            'professional',
-            'generatedBy',
-            'approvedBy',
-            'paymentMovement',
-            'details.serviceRequest.patient',
-            'details.service',
-            'details.paymentMovement'
-        ]);
-
-        // Transform services for frontend
-        $services = $liquidation->details->map(function($detail) {
-            return [
-                'service_request_id' => $detail->service_request_id,
-                'patient_id' => $detail->serviceRequest->patient_id ?? null,
-                'patient_name' => $detail->serviceRequest->patient->full_name ?? 'N/A',
-                'service_id' => $detail->service_id,
-                'service_name' => $detail->service->name ?? 'N/A',
-                'service_amount' => $detail->service_amount,
-                'commission_percentage' => $detail->commission_percentage,
-                'commission_amount' => $detail->commission_amount,
-                'service_date' => $detail->serviceRequest->service_date ?? $detail->created_at->toDateString(),
-            ];
-        });
-
-        return Inertia::render('commission/Show', [
-            'liquidation' => $liquidation,
-            'services' => $services,
+        return redirect()->route('medical.commissions.index', [
+            'tab' => 'details',
+            'liquidation_id' => $commission->id,
         ]);
     }
 
     /**
      * Show the form for editing the specified commission liquidation.
      */
-    public function edit(CommissionLiquidation $liquidation): Response
+    public function edit(CommissionLiquidation $commission): RedirectResponse
     {
         // Only draft liquidations can be edited
-        if (!$liquidation->isDraft()) {
+        if (!$commission->isDraft()) {
             abort(403, 'Solo se pueden editar liquidaciones en estado borrador.');
         }
 
-        return Inertia::render('commission/Edit', [
-            'liquidation' => $liquidation->load(['professional', 'details']),
+        return redirect()->route('medical.commissions.index', [
+            'tab' => 'create',
+            'edit_liquidation_id' => $commission->id,
         ]);
     }
 
     /**
      * Update the specified commission liquidation.
      */
-    public function update(Request $request, CommissionLiquidation $liquidation): RedirectResponse
+    public function update(Request $request, CommissionLiquidation $commission): RedirectResponse
     {
-        if (!$liquidation->isDraft()) {
-            return back()->withErrors(['general' => ['Solo se pueden actualizar liquidaciones en estado borrador.']]);
+        \Log::info('CommissionController update called with request', [
+            'request_data' => $request->all(),
+            'route_param_liquidation_id' => $commission->id ?? 'null',
+            'liquidation_object' => $commission->toArray(),
+        ]);
+        
+        \Log::debug('CommissionController update - liquidation object', [
+            'liquidation_id' => $commission->id,
+            'status' => $commission->status,
+            'isDraft' => $commission->isDraft(),
+        ]);
+        
+        if (!$commission->isDraft()) {
+            \Log::warning('Attempt to update non-draft liquidation', [
+                'liquidation_id' => $commission->id,
+                'status' => $commission->status,
+            ]);
+            return back()->withErrors(['general' => ["Solo se pueden actualizar liquidaciones en estado borrador. Estado actual: {$commission->status}"]]);
         }
 
         $request->validate([
-            'period_start' => 'required|date',
-            'period_end' => 'required|date|after_or_equal:period_start',
+            'period_start' => 'required|date_format:Y-m-d',
+            'period_end' => 'required|date_format:Y-m-d|after_or_equal:period_start',
+            'service_request_ids' => 'required|array|min:1',
+            'service_request_ids.*' => 'required|integer|exists:service_requests,id',
         ]);
 
         try {
-            // For now, we'll just update the period dates
-            // In a more complex implementation, we might recalculate the liquidation
-            $liquidation->update([
+            $currentDetails = $commission->details()->get();
+            $currentServiceRequestIds = $currentDetails->pluck('service_request_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $selectedServiceRequestIds = collect($request->service_request_ids)
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            $serviceRequestIdsToRemove = array_values(array_diff($currentServiceRequestIds, $selectedServiceRequestIds));
+            $serviceRequestIdsToAdd = array_values(array_diff($selectedServiceRequestIds, $currentServiceRequestIds));
+
+            if (!empty($serviceRequestIdsToRemove)) {
+                $commission->details()
+                    ->whereIn('service_request_id', $serviceRequestIdsToRemove)
+                    ->delete();
+
+                \App\Models\Transaction::where('commission_liquidation_id', $commission->id)
+                    ->whereIn('service_request_id', $serviceRequestIdsToRemove)
+                    ->update(['commission_liquidation_id' => null]);
+            }
+
+            if (!empty($serviceRequestIdsToAdd)) {
+                $commissionData = $this->commissionService->getProfessionalCommissionData(
+                    $commission->professional_id,
+                    $request->period_start,
+                    $request->period_end,
+                    $commission->id
+                );
+
+                $availableServices = collect($commissionData['services'])->keyBy('service_request_id');
+
+                foreach ($serviceRequestIdsToAdd as $serviceRequestId) {
+                    $service = $availableServices->get($serviceRequestId);
+
+                    if (!$service) {
+                        throw new \Exception("El servicio {$serviceRequestId} no está disponible para el rango seleccionado.");
+                    }
+
+                    \App\Models\CommissionLiquidationDetail::create([
+                        'liquidation_id' => $commission->id,
+                        'service_request_id' => $service['service_request_id'],
+                        'patient_id' => $service['patient_id'],
+                        'service_id' => $service['service_id'] ?? null,
+                        'service_date' => $service['service_date'],
+                        'payment_date' => $service['payment_date'],
+                        'service_amount' => $service['service_amount'],
+                        'commission_percentage' => $service['commission_percentage'],
+                        'commission_amount' => $service['commission_amount'],
+                        'payment_movement_id' => $service['movement_id'],
+                    ]);
+
+                    \App\Models\Transaction::where('id', $service['movement_id'])
+                        ->update(['commission_liquidation_id' => $commission->id]);
+                }
+            }
+
+            // Recalculate totals based on remaining services
+            $remainingDetails = $commission->fresh('details')->details;
+
+            $totalGross = $remainingDetails->sum('service_amount');
+            $totalCommission = $remainingDetails->sum('commission_amount');
+            $totalPercentage = $remainingDetails->count() > 0 
+                ? $remainingDetails->first()->commission_percentage 
+                : 0;
+
+            // Update the liquidation with new totals and dates
+            $commission->update([
                 'period_start' => $request->period_start,
                 'period_end' => $request->period_end,
+                'total_services' => $remainingDetails->count(),
+                'gross_amount' => $totalGross,
+                'commission_percentage' => $totalPercentage,
+                'commission_amount' => $totalCommission,
             ]);
 
-            return redirect()->route('medical.commissions.show', $liquidation)
+            return redirect()->route('medical.commissions.index', [
+                'tab' => 'details',
+                'liquidation_id' => $commission->id,
+            ])
                 ->with('success', 'Liquidación actualizada exitosamente.');
 
         } catch (\Exception $e) {
@@ -461,14 +543,14 @@ class CommissionController extends Controller
     /**
      * Remove the specified commission liquidation.
      */
-    public function destroy(CommissionLiquidation $liquidation): RedirectResponse
+    public function destroy(CommissionLiquidation $commission): RedirectResponse
     {
-        if (!$liquidation->isDraft()) {
+        if (!$commission->isDraft()) {
             return back()->withErrors(['general' => ['Solo se pueden eliminar liquidaciones en estado borrador.']]);
         }
 
         try {
-            $liquidation->delete();
+            $commission->delete();
 
             return redirect()->route('medical.commissions.index')
                 ->with('success', 'Liquidación eliminada exitosamente.');
@@ -481,35 +563,20 @@ class CommissionController extends Controller
     /**
      * Get commission report for a professional.
      */
-    public function report(Request $request): Response
+    public function report(Request $request): RedirectResponse
     {
-        $request->validate([
-            'professional_id' => 'required|exists:professionals,id',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-        ]);
-
-        $report = $this->commissionService->getCommissionReport(
-            $request->professional_id,
-            $request->start_date,
-            $request->end_date
-        );
-
-        return Inertia::render('commission/Report', [
-            'report' => $report,
-            'filters' => $request->only(['professional_id', 'start_date', 'end_date']),
+        return redirect()->route('medical.commissions.index', [
+            'tab' => 'reports',
         ]);
     }
 
     /**
      * Get pending liquidations for approval.
      */
-    public function pending(): Response
+    public function pending(): RedirectResponse
     {
-        $pendingLiquidations = $this->commissionService->getPendingLiquidations();
-
-        return Inertia::render('commission/Pending', [
-            'pendingLiquidations' => $pendingLiquidations,
+        return redirect()->route('medical.commissions.index', [
+            'tab' => 'approvals',
         ]);
     }
 
@@ -523,12 +590,14 @@ class CommissionController extends Controller
                 'professional_id' => 'required|integer|exists:professionals,id',
                 'start_date' => 'required|date_format:Y-m-d',
                 'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+                'liquidation_id' => 'nullable|integer|exists:commission_liquidations,id',
             ]);
 
             $data = $this->commissionService->getProfessionalCommissionData(
                 $validated['professional_id'],
                 $validated['start_date'],
-                $validated['end_date']
+                $validated['end_date'],
+                $validated['liquidation_id'] ?? null
             );
 
             return response()->json($data);
@@ -579,7 +648,9 @@ class CommissionController extends Controller
             $mappedDetails = $details->map(function ($detail) {
                 return [
                     'service_request_id' => $detail->service_request_id,
+                    'patient_id' => $detail->serviceRequest?->patient_id,
                     'patient_name' => $detail->serviceRequest?->patient?->full_name ?? 'N/A',
+                    'service_id' => $detail->service_id,
                     'service_name' => $detail->service?->name ?? 'Servicio desconocido',
                     'service_amount' => $detail->service_amount,
                     'commission_percentage' => $detail->commission_percentage,
@@ -612,9 +683,9 @@ class CommissionController extends Controller
                 'services' => $mappedDetails->map(function($detail) {
                     return [
                         'service_request_id' => $detail['service_request_id'],
-                        'patient_id' => null,
+                        'patient_id' => $detail['patient_id'],
                         'patient_name' => $detail['patient_name'],
-                        'service_id' => null,
+                        'service_id' => $detail['service_id'],
                         'service_name' => $detail['service_name'],
                         'service_amount' => $detail['service_amount'],
                         'commission_percentage' => $detail['commission_percentage'],

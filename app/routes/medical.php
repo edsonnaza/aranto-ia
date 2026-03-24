@@ -10,6 +10,7 @@ use App\Http\Controllers\SpecialtyController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ReceptionController;
 use App\Http\Controllers\CommissionController;
+use App\Models\CommissionLiquidation;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,6 +24,11 @@ use App\Http\Controllers\CommissionController;
 */
 
 Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->group(function () {
+    
+    // Route Model Bindings
+    Route::bind('commission', function($value) {
+        return CommissionLiquidation::findOrFail($value);
+    });
     
     // Medical System Dashboard
     Route::get('/', function () {

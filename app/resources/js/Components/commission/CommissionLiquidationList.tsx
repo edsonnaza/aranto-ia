@@ -28,9 +28,7 @@ interface CommissionLiquidationListProps {
     date_from?: string
     date_to?: string
   }
-  onViewDetails?: (liquidation: CommissionLiquidation) => void
   onEdit?: (liquidation: CommissionLiquidation) => void
-  onDelete?: (liquidation: CommissionLiquidation) => void
 }
 
 export default CommissionLiquidationList;
@@ -38,9 +36,7 @@ export default CommissionLiquidationList;
 function CommissionLiquidationList({
   liquidations,
   filters,
-  onViewDetails,
   onEdit,
-  onDelete,
 }: CommissionLiquidationListProps) {
   const { toBackend } = useDateFormat()
   const { format: formatCurrency } = useCurrencyFormatter()
@@ -231,7 +227,7 @@ function CommissionLiquidationList({
         </DropdownMenu>
       ),
     },
-  ], [formatCurrency, onViewDetails, onEdit, onDelete])
+  ], [formatCurrency, onEdit])
 
   return (
     <div className="space-y-4">

@@ -1,30 +1,33 @@
 import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CheckCircle, Eye, Clock, AlertTriangle } from 'lucide-react'
+import { CheckCircle, Eye, Clock, AlertTriangle, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import { CommissionItemsModal } from './commission-items-modal'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { CommissionPendingApproval } from '@/types'
 
 interface CommissionPendingApprovalsProps {
   initialApprovals?: CommissionPendingApproval[]
-  onViewDetail?: (liquidationId: number) => void
+  onEdit?: (liquidationId: number) => void
   refreshTrigger?: number
 }
 
 export default function CommissionPendingApprovals({
   initialApprovals = [],
-  onViewDetail,
+  onEdit,
   refreshTrigger,
 }: CommissionPendingApprovalsProps) {
   const [pendingApprovals, setPendingApprovals] = useState<CommissionPendingApproval[]>(initialApprovals)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionPendingApproval | null>(null)
+  const [showItemsModal, setShowItemsModal] = useState(false)
+  const [selectedItemsLiquidationId, setSelectedItemsLiquidationId] = useState<number | null>(null)
 
   // Usamos el hook para aprobar liquidaciones
   const { approveLiquidation, loading, error } = useCommissionLiquidations()
@@ -213,13 +216,23 @@ export default function CommissionPendingApprovals({
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center gap-2">
-                            {onViewDetail && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedItemsLiquidationId(approval.id)
+                                setShowItemsModal(true)
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {onEdit && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => onViewDetail(approval.id)}
+                                onClick={() => onEdit(approval.id)}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
                             )}
                             <Button
@@ -294,6 +307,15 @@ export default function CommissionPendingApprovals({
         confirmText="Aprobar"
         cancelText="Cancelar"
         onConfirm={handleConfirmApprove}
+      />
+
+      <CommissionItemsModal
+        isOpen={showItemsModal}
+        onClose={() => {
+          setShowItemsModal(false)
+          setSelectedItemsLiquidationId(null)
+        }}
+        liquidationId={selectedItemsLiquidationId || 0}
       />
     </div>
   )
