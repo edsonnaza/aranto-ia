@@ -1,191 +1,213 @@
 # Aranto-IA
 
-Sistema de gestión médica con módulo de caja registradora desarrollado con Laravel + React + TypeScript.
+Sistema de gestión médica con módulo de caja desarrollado con Laravel, Inertia, React y TypeScript. Este archivo queda como la única documentación operativa visible en la raíz del repositorio.
 
-**Estado**: 🚀 **Listo para producción con sistema automatizado de migración Legacy**
+## Resumen
 
-## 📚 Documentación Principal
+- Backend: Laravel + PHP
+- Frontend: React 18 + TypeScript + Inertia.js
+- Base de datos: MySQL 8
+- Infraestructura local: Docker Compose
+- UI: Tailwind CSS + shadcn/ui
+- Permisos: Spatie Laravel Permission
 
-### 🎯 Para Comenzar Rápido
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Índice maestro de toda la documentación
-- **[EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)** - Resumen ejecutivo del sistema
+## Inicio Rápido
 
-### 🚀 Para Ejecutar en Producción
-```bash
-# Un comando para migrar toda la data de legacy a aranto
-# (incluyendo todas las sanitaciones y validaciones)
-php artisan legacy:migrate --force
-```
-
-Documentación detallada:
-- **[AUTOMATED_MIGRATION_GUIDE.md](AUTOMATED_MIGRATION_GUIDE.md)** - Guía rápida y referencia
-- **[PRODUCTION_MIGRATION_GUIDE.md](PRODUCTION_MIGRATION_GUIDE.md)** - Checklist completo para producción
-
-### 📊 Para Entender el Sistema
-- **[MIGRATION_SYSTEM_DIAGRAM.md](MIGRATION_SYSTEM_DIAGRAM.md)** - Diagramas visuales de los 6 pasos de migración
-- **[SANITIZATION_SUMMARY.md](SANITIZATION_SUMMARY.md)** - Detalles técnicos de sanitizaciones
-- **[UTF8_CLEANUP_SUMMARY.md](UTF8_CLEANUP_SUMMARY.md)** - Detalles de limpieza UTF-8
-
-## 🚀 Stack Tecnológico
-
-- **Backend**: Laravel 12 + PHP 8.4
-- **Frontend**: React 18 + TypeScript + Inertia.js
-- **Database**: MySQL 8.0
-- **Cache**: Redis
-- **UI**: shadcn/ui + Tailwind CSS
-- **Permisos**: Spatie Laravel Permission
-- **Containerización**: Docker + Docker Compose
-
-## 📋 Requisitos
+### Requisitos
 
 - Docker
 - Docker Compose
 - Git
 
-## ⚙️ Configuración
-
-### 1. Clonar el repositorio
+### Levantar el proyecto
 
 ```bash
 git clone git@github.com:edsonnaza/aranto-ia.git
 cd aranto-ia
-```
-
-### 2. Configurar variables de entorno
-
-```bash
 cp .env.example .env
-```
-
-Edita el archivo `.env` y configura tus credenciales:
-
-```env
-# Database Configuration
-MYSQL_ROOT_PASSWORD=tu_password_seguro
-MYSQL_PASSWORD=tu_password_usuario
-# ... resto de configuraciones
-```
-
-### 3. Configurar la aplicación Laravel
-
-```bash
 cd app
 cp .env.example .env
-```
-
-Edita `app/.env` con la configuración de base de datos correspondiente.
-
-### 4. Levantar los servicios
-
-```bash
+cd ..
 docker compose up -d
-```
-
-### 5. Instalar dependencias y configurar Laravel
-
-```bash
-# Instalar dependencias de Composer
 docker compose exec app composer install
-
-# Generar clave de aplicación
 docker compose exec app php artisan key:generate
-
-# Ejecutar migraciones
 docker compose exec app php artisan migrate
-
-# Ejecutar seeders
 docker compose exec app php artisan db:seed
-
-# Instalar dependencias de NPM
 docker compose exec app npm install
-
-# Compilar assets
 docker compose exec app npm run build
 ```
 
-## 🌐 Acceso
+### Accesos locales
 
-- **Aplicación**: http://localhost:8000
-- **PHPMyAdmin**: http://localhost:8081
-- **MySQL**: localhost:3307
-- **Redis**: localhost:6380
+- Aplicación: http://localhost:8000
+- PHPMyAdmin: http://localhost:8081
+- MySQL: localhost:3307
+- Redis: localhost:6380
 
-## 👥 Usuarios de Prueba
+### Usuarios de prueba
 
-- **Super Admin**: admin@aranto.com / password
-- **Cajero**: cajero@aranto.com / password
-- **Doctor**: doctor@aranto.com / password
-- **Supervisor**: supervisor@aranto.com / password
-- **Auditor**: auditor@aranto.com / password
+- Super Admin: admin@aranto.com / password
+- Cajero: cajero@aranto.com / password
+- Doctor: doctor@aranto.com / password
+- Supervisor: supervisor@aranto.com / password
+- Auditor: auditor@aranto.com / password
 
-## 🏗️ Arquitectura
+## Base de Datos y Docker
 
-### Backend (Laravel)
-- **Controladores**: Siguen patrón Inertia.js
-- **Modelos**: Eloquent con relaciones definidas
-- **Servicios**: Lógica de negocio separada en servicios
-- **Permisos**: Sistema granular con 22 permisos específicos
-- **Rutas**: Organizadas por módulos
+Este proyecto corre sobre Docker. No hay una configuración local soportada fuera de contenedores.
 
-### Frontend (React + TypeScript)
-- **Componentes**: shadcn/ui components
-- **Páginas**: Inertia.js pages
-- **Tipos**: TypeScript para type safety
-- **Estilos**: Tailwind CSS
+Configuración Laravel recomendada en app/.env:
 
-## 📁 Estructura del Proyecto
-
+```env
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=aranto_medical
+DB_USERNAME=aranto_user
+DB_PASSWORD=4r4nt0
 ```
+
+Comandos útiles:
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose logs -f mysql
+docker compose restart
+docker compose down
+docker compose up -d --build
+```
+
+## Migración Legacy
+
+Para migrar datos legacy a la base actual:
+
+```bash
+docker compose exec app php artisan legacy:migrate --force
+```
+
+Qué hace el flujo:
+
+- importa y transforma datos legacy
+- ejecuta sanitización y limpieza de texto
+- preserva idempotencia para reintentos controlados
+- genera reportes y logs de ejecución
+
+Si necesitas importar una base legacy completa y preparar entorno desde cero:
+
+```bash
+bash ./scripts/setup-complete.sh /ruta/al/archivo.sql
+```
+
+## Desarrollo Diario
+
+### Backend
+
+```bash
+docker compose exec app php artisan migrate
+docker compose exec app php artisan test
+docker compose exec app php artisan tinker
+```
+
+### Frontend
+
+```bash
+docker compose exec app npm install
+docker compose exec app npm run dev
+docker compose exec app npm run build
+```
+
+### Limpieza y cache
+
+```bash
+docker compose exec app php artisan cache:clear
+docker compose exec app php artisan config:clear
+docker compose exec app php artisan route:clear
+docker compose exec app php artisan view:clear
+```
+
+## Convenciones del Proyecto
+
+### Arquitectura
+
+- Los controladores devuelven respuestas Inertia.
+- La lógica de negocio vive en servicios de Laravel.
+- Las rutas del dominio médico están en app/routes/medical.php.
+- React consume datos mediante hooks personalizados; no mediante fetch ad hoc en páginas cuando ya existe hook del dominio.
+
+### Frontend
+
+- Las páginas Inertia viven en app/resources/js/pages.
+- Los componentes reutilizables viven en app/resources/js/components.
+- Los hooks de dominio viven en app/resources/js/hooks.
+- Los tipos compartidos viven en app/resources/js/types.
+
+### Permisos
+
+- El sistema usa Spatie Laravel Permission.
+- La navegación y acciones visibles deben respetar permisos y roles.
+- Los cambios de menú o sidebar deben considerarse junto con permisos asociados.
+
+### UI y patrones
+
+- Formato monetario consistente en guaraníes.
+- Layouts y estados visuales deben seguir los patrones existentes.
+- Los mensajes flash y estados de error deben mantenerse homogéneos.
+
+## Estructura del Repositorio
+
+```text
 aranto-ia/
-├── app/                    # Aplicación Laravel
+├── app/
 │   ├── app/
-│   │   ├── Http/Controllers/
-│   │   ├── Models/
-│   │   ├── Services/
-│   │   └── ...
 │   ├── resources/js/
-│   │   ├── pages/
-│   │   ├── components/
-│   │   └── types/
+│   ├── routes/
+│   ├── tests/
 │   └── ...
-├── docker-compose.yml     # Configuración Docker
-├── .env.example           # Template de variables de entorno
+├── database/
+├── docs/
+├── scripts/
+├── specs/
+├── docker-compose.yml
 └── README.md
 ```
 
-## 🛡️ Seguridad
+## Troubleshooting
 
-- Variables de entorno para datos sensibles
-- Sistema de permisos granular
-- Validación en backend y frontend
-- Sanitización de datos
+### Docker no inicia
 
-## 🤝 Contribución
-
-1. Fork el proyecto
-2. Crea tu rama (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -am 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
-
-## 📝 Licencia
-
-Este proyecto es privado y propietario.
-
-## 🐳 Conexión Laravel <-> MySQL (Docker)
-
-Si usas Docker Compose, la configuración recomendada para conectar Laravel con MySQL es:
-
-```env
-DB_HOST=mysql
-DB_PORT=3307
-DB_DATABASE=aranto_medical
-DB_USERNAME=aranto_user
-DB_PASSWORD=password
+```bash
+docker compose down -v
+docker compose up -d
 ```
 
-- El contenedor MySQL expone el puerto interno 3306 en el puerto externo 3307.
-- El contenedor `app` depende de que el contenedor `mysql` esté saludable.
-- Las credenciales por defecto están definidas en `docker-compose.yml` y pueden ser sobreescritas por variables de entorno.
+### La app no conecta a MySQL
 
-> Si tienes problemas de conexión, revisa que el contenedor MySQL esté corriendo y que el puerto y usuario coincidan con los valores anteriores.
+- verifica que DB_HOST sea mysql
+- verifica que el contenedor mysql esté healthy
+- revisa app/.env y docker-compose.yml
+
+### Error 500
+
+```bash
+docker compose logs -f app
+docker compose exec app tail -f storage/logs/laravel.log
+```
+
+### Rehacer setup completo
+
+```bash
+bash ./scripts/setup-complete.sh /ruta/al/archivo.sql
+```
+
+## Qué se Mantiene Fuera de Este README
+
+Para no seguir llenando la raíz de reportes e historiales:
+
+- specs/ conserva especificaciones de trabajo y planificación
+- docs/ conserva documentación puntual de scripts o procesos aislados
+- .github/ y .specify/ conservan archivos de tooling y automatización
+
+## Estado
+
+El repositorio quedó limpiado para usar un solo documento central en la raíz. La documentación histórica, redundante o de cierre de tareas fue retirada de ese nivel para reducir ruido.
