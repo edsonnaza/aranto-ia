@@ -149,6 +149,30 @@ class Professional extends Model
     }
 
     /**
+     * Get configured schedules for this professional.
+     */
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(ProfessionalSchedule::class);
+    }
+
+    /**
+     * Get availability blocks for this professional.
+     */
+    public function scheduleBlocks(): HasMany
+    {
+        return $this->hasMany(ProfessionalScheduleBlock::class);
+    }
+
+    /**
+     * Get appointments for this professional.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(ScheduleAppointment::class);
+    }
+
+    /**
      * Check if this professional is active.
      */
     public function isActive(): bool

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\Auditable;
 
 /**
@@ -128,6 +129,14 @@ class Patient extends Model
         return $this->insurances()
             ->where('valid_until', '>=', now())
             ->orWhereNull('valid_until');
+    }
+
+    /**
+     * Get appointments for this patient.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(ScheduleAppointment::class);
     }
 
     /**

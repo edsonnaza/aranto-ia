@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { router } from '@inertiajs/react'
 import type { VisitOptions } from '@inertiajs/core'
+import { toast } from 'sonner'
 
 interface ServiceRequest {
   id: number
@@ -82,6 +83,7 @@ interface ServiceData {
 interface CreateServiceRequestData {
   [key: string]: string | number | boolean | ServiceData[] | undefined
   patient_id: number
+  appointment_id?: number
   reception_type: string
   priority: string
   request_date: string
@@ -126,6 +128,16 @@ interface UseServiceRequestsReturn {
 export const useServiceRequests = (): UseServiceRequestsReturn => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const resolveErrorMessage = useCallback((errors: Record<string, string | string[]>) => {
+    const firstError = Object.values(errors)[0]
+
+    if (Array.isArray(firstError)) {
+      return firstError[0] || 'Ocurrió un error inesperado'
+    }
+
+    return firstError || 'Ocurrió un error inesperado'
+  }, [])
 
   // Utility to handle loading states
   const withLoading = useCallback(async (operation: () => void) => {
@@ -177,14 +189,17 @@ export const useServiceRequests = (): UseServiceRequestsReturn => {
         preserveState: true,
         onSuccess: () => {
           setError(null)
+          toast.success('Solicitud de servicio creada correctamente')
         },
-        onError: () => {
-          setError('Error al crear la solicitud de servicio')
+        onError: (errors) => {
+          const message = resolveErrorMessage(errors)
+          setError(message)
+          toast.error(message)
         },
         ...options
       })
     })
-  }, [withLoading])
+  }, [resolveErrorMessage, withLoading])
 
   const updateServiceRequest = useCallback((id: number | string, data: Partial<CreateServiceRequestData>, options: VisitOptions = {}) => {
     withLoading(() => {

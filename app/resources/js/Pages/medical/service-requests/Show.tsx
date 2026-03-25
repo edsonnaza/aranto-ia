@@ -212,7 +212,7 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                 🖨️ Imprimir
               </button>
               
-              {serviceRequest.status === 'pending' && (
+              {serviceRequest.status === 'pending_confirmation' && (
                 <>
                   <button
                     onClick={() => navigateToEdit(serviceRequest.id)}

@@ -143,6 +143,14 @@ class ServiceRequest extends Model
     }
 
     /**
+     * Get appointments linked to this service request.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(ScheduleAppointment::class);
+    }
+
+    /**
      * Generate a unique request number.
      */
     public static function generateRequestNumber(): string
@@ -222,6 +230,13 @@ class ServiceRequest extends Model
             'status' => self::STATUS_CONFIRMED,
             'confirmed_at' => now(),
         ]);
+
+        $this->appointments()
+            ->where('status', ScheduleAppointment::STATUS_SCHEDULED)
+            ->update([
+                'status' => ScheduleAppointment::STATUS_CHECKED_IN,
+                'checked_in_at' => now(),
+            ]);
     }
 
     /**

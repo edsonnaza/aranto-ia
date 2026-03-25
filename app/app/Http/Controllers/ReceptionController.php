@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ServiceRequest;
-use App\Models\Patient;
 use App\Models\MedicalService;
 use App\Models\Professional;
 use App\Models\InsuranceType;
+use App\Models\ScheduleAppointment;
 use App\Models\ServiceCategory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -177,6 +177,7 @@ class ReceptionController extends Controller
         $professionals = [];
         $medicalServices = [];
         $insuranceTypes = [];
+        $initialContext = null;
         
         try {
             // Cargar profesionales
@@ -253,11 +254,80 @@ class ReceptionController extends Controller
             \Log::error('Error loading insurance types in ReceptionController: ' . $e->getMessage());
         }
 
+        $appointmentId = request()->integer('appointment_id');
+
+        if ($appointmentId) {
+            $appointment = ScheduleAppointment::with(['patient.insurances', 'patient.insuranceType', 'professional', 'medicalService'])
+                ->find($appointmentId);
+
+            if ($appointment) {
+                $defaultInsurance = null;
+
+                if ($appointment->patient) {
+                    $defaultInsurance = $appointment->patient->insurances
+                        ->filter(function ($insurance) {
+                            $validUntil = $insurance->pivot->valid_until;
+
+                            return empty($validUntil) || Carbon::parse((string) $validUntil)->endOfDay()->gte(now());
+                        })
+                        ->sortByDesc(fn ($insurance) => (int) $insurance->pivot->is_primary)
+                        ->first();
+
+                    if (!$defaultInsurance && $appointment->patient->insuranceType) {
+                        $defaultInsurance = $appointment->patient->insuranceType;
+                    }
+                }
+
+                $serviceIds = collect($appointment->medical_service_ids ?? [])
+                    ->when($appointment->medical_service_id, fn ($collection) => $collection->prepend((int) $appointment->medical_service_id))
+                    ->filter()
+                    ->map(fn ($serviceId) => (int) $serviceId)
+                    ->unique()
+                    ->values();
+
+                $services = MedicalService::query()
+                    ->whereIn('id', $serviceIds->all())
+                    ->get(['id', 'name', 'duration_minutes'])
+                    ->map(fn ($service) => [
+                        'id' => $service->id,
+                        'name' => $service->name,
+                        'duration_minutes' => $service->duration_minutes,
+                    ])
+                    ->values()
+                    ->all();
+
+                $initialContext = [
+                    'appointment' => [
+                        'id' => $appointment->id,
+                        'status' => $appointment->status,
+                        'professional_id' => $appointment->professional_id,
+                        'professional_name' => $appointment->professional?->full_name,
+                        'medical_service_name' => collect($services)->pluck('name')->implode(', '),
+                        'medical_service_ids' => $serviceIds->all(),
+                        'medical_service_names' => collect($services)->pluck('name')->values()->all(),
+                        'services' => $services,
+                    ],
+                    'patient' => $appointment->patient ? [
+                        'id' => $appointment->patient->id,
+                        'name' => $appointment->patient->full_name,
+                        'default_insurance_type_id' => $defaultInsurance?->id,
+                        'default_insurance_name' => $defaultInsurance?->name,
+                    ] : null,
+                    'request_date' => $appointment->appointment_date?->format('Y-m-d'),
+                    'request_time' => $appointment->start_time
+                        ? Carbon::parse((string) $appointment->start_time)->format('H:i')
+                        : null,
+                    'notes' => $appointment->notes,
+                ];
+            }
+        }
+
         return Inertia::render('medical/reception/Create', [
             'patients' => [],
             'medicalServices' => $medicalServices,
             'professionals' => $professionals,
             'insuranceTypes' => $insuranceTypes,
+            'initialContext' => $initialContext,
         ]);
     }
 

@@ -10,6 +10,7 @@ use App\Http\Controllers\SpecialtyController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ReceptionController;
 use App\Http\Controllers\CommissionController;
+use App\Http\Controllers\ScheduleController;
 use App\Models\CommissionLiquidation;
 
 /*
@@ -176,6 +177,27 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         Route::get('/professionals', [ProfessionalController::class, 'apiGetProfessionals'])
             ->name('professionals');
     });
+
+    // Schedule Module
+    Route::prefix('schedule')->name('schedule.')->group(function () {
+        Route::get('/', [ScheduleController::class, 'index'])
+            ->name('index');
+        Route::post('/schedules', [ScheduleController::class, 'storeSchedule'])
+            ->name('schedules.store');
+        Route::patch('/schedules/{schedule}', [ScheduleController::class, 'updateSchedule'])
+            ->name('schedules.update');
+        Route::post('/blocks', [ScheduleController::class, 'storeBlock'])
+            ->name('blocks.store');
+        Route::patch('/blocks/{block}', [ScheduleController::class, 'updateBlock'])
+            ->name('blocks.update');
+        Route::post('/appointments', [ScheduleController::class, 'storeAppointment'])
+            ->name('appointments.store');
+        Route::patch('/appointments/{appointment}', [ScheduleController::class, 'updateAppointment'])
+            ->name('appointments.update');
+    });
+
+    Route::get('appointments', [ScheduleController::class, 'appointmentsIndex'])
+        ->name('appointments.index');
 
     // Commission Liquidations Management
     

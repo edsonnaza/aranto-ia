@@ -105,6 +105,14 @@ class MedicalService extends Model
     }
 
     /**
+     * Get appointments linked to this service.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(ScheduleAppointment::class);
+    }
+
+    /**
      * Get current active prices for this service.
      * First tries to get prices within valid date range.
      * If none found, returns the most recent price (ordered by effective_from DESC).

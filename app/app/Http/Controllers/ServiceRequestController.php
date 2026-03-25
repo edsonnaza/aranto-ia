@@ -7,12 +7,14 @@ use App\Models\Patient;
 use App\Models\MedicalService;
 use App\Models\Professional;
 use App\Models\InsuranceType;
+use App\Models\ScheduleAppointment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ServiceRequestController extends Controller
 {
@@ -146,6 +148,7 @@ class ServiceRequestController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => ['required', 'exists:patients,id'],
+            'appointment_id' => ['nullable', 'exists:schedule_appointments,id'],
             'reception_type' => ['required', Rule::in([
                 ServiceRequest::RECEPTION_SCHEDULED,
                 ServiceRequest::RECEPTION_WALK_IN,
@@ -176,6 +179,26 @@ class ServiceRequestController extends Controller
             'services.*.notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $appointment = null;
+
+        if (!empty($validated['appointment_id'])) {
+            $appointment = ScheduleAppointment::find($validated['appointment_id']);
+
+            if (!$appointment) {
+                throw ValidationException::withMessages([
+                    'appointment_id' => 'La cita seleccionada no existe.',
+                ]);
+            }
+
+            if ($appointment->service_request_id) {
+                throw ValidationException::withMessages([
+                    'appointment_id' => 'La cita seleccionada ya fue enviada a recepción.',
+                ]);
+            }
+        }
+
+        $shouldAutoConfirmFromAppointment = $appointment !== null;
+
         // Crear la solicitud de servicio
         $serviceRequest = ServiceRequest::create([
             'patient_id' => $validated['patient_id'],
@@ -185,10 +208,13 @@ class ServiceRequestController extends Controller
             'reception_type' => $validated['reception_type'],
             'priority' => $validated['priority'],
             'notes' => $validated['notes'] ?? null,
-            'status' => ServiceRequest::STATUS_PENDING_CONFIRMATION,
+            'status' => $shouldAutoConfirmFromAppointment
+                ? ServiceRequest::STATUS_CONFIRMED
+                : ServiceRequest::STATUS_PENDING_CONFIRMATION,
             'payment_status' => ServiceRequest::PAYMENT_PENDING,
             'total_amount' => 0, // Se calculará automáticamente
             'paid_amount' => 0,
+            'confirmed_at' => $shouldAutoConfirmFromAppointment ? now() : null,
         ]);
 
         // Crear los detalles de servicios
@@ -221,6 +247,14 @@ class ServiceRequestController extends Controller
                 'preparation_instructions' => $serviceData['preparation_instructions'] ?? null,
                 'notes' => $serviceData['notes'] ?? null,
                 'status' => \App\Models\ServiceRequestDetail::STATUS_PENDING,
+            ]);
+        }
+
+        if ($appointment) {
+            $appointment->update([
+                'service_request_id' => $serviceRequest->id,
+                'status' => ScheduleAppointment::STATUS_CHECKED_IN,
+                'checked_in_at' => now(),
             ]);
         }
 
@@ -428,7 +462,16 @@ class ServiceRequestController extends Controller
             abort(403, 'Solo se pueden confirmar solicitudes pendientes.');
         }
 
-        $serviceRequest->confirm();
+        DB::transaction(function () use ($serviceRequest) {
+            $serviceRequest->confirm();
+
+            $serviceRequest->appointments()
+                ->where('status', ScheduleAppointment::STATUS_SCHEDULED)
+                ->update([
+                    'status' => ScheduleAppointment::STATUS_CHECKED_IN,
+                    'checked_in_at' => now(),
+                ]);
+        });
 
         return redirect()
             ->route('medical.service-requests.show', $serviceRequest)

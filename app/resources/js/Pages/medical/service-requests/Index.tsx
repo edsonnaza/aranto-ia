@@ -181,7 +181,7 @@ export default function ServiceRequestsIndex({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
               >
                 <option value="">Todos los estados</option>
-                <option value="pending">Pendiente</option>
+                <option value="pending_confirmation">Pendiente</option>
                 <option value="confirmed">Confirmado</option>
                 <option value="in_progress">En Progreso</option>
                 <option value="completed">Completado</option>
@@ -314,7 +314,7 @@ export default function ServiceRequestsIndex({
                             <EyeIcon className="h-4 w-4" />
                           </button>
                           
-                          {request.status === 'pending' && (
+                          {request.status === 'pending_confirmation' && (
                             <>
                               <button
                                 onClick={() => navigateToEdit(request.id)}

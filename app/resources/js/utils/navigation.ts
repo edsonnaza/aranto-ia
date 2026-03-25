@@ -52,6 +52,10 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
         title: 'Agenda',
         href: { url: '/medical/schedule', method: 'get' },
       },
+      {
+        title: 'Citas',
+        href: { url: '/medical/appointments', method: 'get' },
+      },
     ],
   },
   {

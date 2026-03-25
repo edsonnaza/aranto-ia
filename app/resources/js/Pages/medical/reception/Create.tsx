@@ -16,6 +16,20 @@ const PlusIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
+const normalizeTimeValue = (value?: string | null) => {
+  if (!value) {
+    return ''
+  }
+
+  const [hours = '', minutes = ''] = value.split(':')
+
+  if (!hours || !minutes) {
+    return value
+  }
+
+  return `${hours}:${minutes}`
+}
+
 interface ServiceItem {
   id: string
   medical_service_id: number
@@ -38,31 +52,76 @@ interface ReceptionCreateProps {
   medicalServices: ReceptionCreateData['medicalServices']
   professionals: ReceptionCreateData['professionals']
   insuranceTypes: ReceptionCreateData['insuranceTypes']
+  initialContext?: {
+    appointment?: {
+      id: number
+      status: string
+      professional_id?: number | null
+      professional_name?: string | null
+      medical_service_name?: string | null
+      medical_service_ids?: number[] | null
+      medical_service_names?: string[] | null
+      services?: Array<{
+        id: number
+        name: string
+        duration_minutes: number
+      }> | null
+    } | null
+    patient?: {
+      id: number
+      name: string
+      default_insurance_type_id?: number | null
+      default_insurance_name?: string | null
+    } | null
+    request_date?: string | null
+    request_time?: string | null
+    notes?: string | null
+  } | null
 }
 
 export default function ReceptionCreate({ 
   medicalServices = [],
   professionals = [],
-  insuranceTypes = []
+  insuranceTypes = [],
+  initialContext = null,
 }: ReceptionCreateProps) {
   const { loading, error, createServiceRequest } = useServiceRequests()
   const { searchPatients, searchServices } = useSearch()
   const { getServicePriceFromData } = useServicePricing()
 
   // Form state
-  const [selectedPatient, setSelectedPatient] = useState<{ id: number, name: string } | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<{ id: number, name: string } | null>(initialContext?.patient ?? null)
   const [receptionType, setReceptionType] = useState('scheduled')
   const [priority, setPriority] = useState('normal')
-  const [requestDate, setRequestDate] = useState(new Date().toISOString().split('T')[0])
-  const [requestTime, setRequestTime] = useState('')
-  const [notes, setNotes] = useState('')
+  const [requestDate, setRequestDate] = useState(initialContext?.request_date || new Date().toISOString().split('T')[0])
+  const [requestTime, setRequestTime] = useState(normalizeTimeValue(initialContext?.request_time))
+  const [notes, setNotes] = useState(initialContext?.notes || '')
   
   // Expandible sections
   const [expandedPatient, setExpandedPatient] = useState(true)
   const [expandedInfo, setExpandedInfo] = useState(true)
   
   // Services cart
-  const [services, setServices] = useState<ServiceItem[]>([])
+  const [services, setServices] = useState<ServiceItem[]>(() => {
+    const appointmentServices = initialContext?.appointment?.services ?? []
+
+    return appointmentServices.map((service, index) => ({
+      id: `appointment-service-${service.id}-${index}`,
+      medical_service_id: service.id,
+      service_name: service.name,
+      professional_id: initialContext?.appointment?.professional_id || 0,
+      insurance_type_id: initialContext?.patient?.default_insurance_type_id || 0,
+      scheduled_date: initialContext?.request_date || new Date().toISOString().split('T')[0],
+      scheduled_time: initialContext?.request_time || '',
+      estimated_duration: service.duration_minutes || 30,
+      unit_price: 0,
+      quantity: 1,
+      discount_percentage: 0,
+      discount_amount: 0,
+      preparation_instructions: '',
+      notes: '',
+    }))
+  })
 
   // Flatten services for select options
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -236,6 +295,7 @@ export default function ReceptionCreate({
 
     const formData = {
       patient_id: selectedPatient.id,
+      appointment_id: initialContext?.appointment?.id,
       reception_type: receptionType,
       priority,
       request_date: requestDate,
@@ -327,13 +387,22 @@ export default function ReceptionCreate({
                 </div>
                 
                 {expandedPatient && (
-                  <SearchableInput
-                    placeholder="Buscar paciente por nombre, documento..."
-                    value={selectedPatient?.name || ''}
-                    onSelect={handlePatientSelect}
-                    onSearch={searchPatients}
-                    className="w-full"
-                  />
+                  <div className="space-y-3">
+                    {initialContext?.appointment && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Turno vinculado #{initialContext.appointment.id}
+                        {initialContext.appointment.professional_name ? ` · ${initialContext.appointment.professional_name}` : ''}
+                        {initialContext.appointment.medical_service_name ? ` · ${initialContext.appointment.medical_service_name}` : ''}
+                      </div>
+                    )}
+                    <SearchableInput
+                      placeholder="Buscar paciente por nombre, documento..."
+                      value={selectedPatient?.name || ''}
+                      onSelect={handlePatientSelect}
+                      onSearch={searchPatients}
+                      className="w-full"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -409,7 +478,7 @@ export default function ReceptionCreate({
                     <input
                       type="time"
                       value={requestTime}
-                      onChange={(e) => setRequestTime(e.target.value)}
+                      onChange={(e) => setRequestTime(normalizeTimeValue(e.target.value))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>

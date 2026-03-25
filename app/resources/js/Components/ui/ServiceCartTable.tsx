@@ -322,7 +322,7 @@ export default function ServiceCartTable({
                   <div className="min-w-64">
                     <SearchableInput
                       placeholder="Servicio..."
-                      value={selectedService(service.medical_service_id)?.label || ''}
+                      value={selectedService(service.medical_service_id)?.label || service.service_name || ''}
                       onSelect={(s) => {
                         const extractLabel = (item: unknown): string => {
                           if (typeof item === 'object' && item !== null) {

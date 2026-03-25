@@ -1,7 +1,8 @@
 import { Head } from '@inertiajs/react'
 import { useState, useMemo } from 'react'
 import AppLayout from '@/layouts/app-layout'
-import { useServiceRequests } from '@/hooks/medical'
+import SearchableInput from '@/components/ui/SearchableInput'
+import { useSearch, useServiceRequests } from '@/hooks/medical'
 import type { ReceptionCreateData } from '@/hooks/medical'
 import SelectItem from '@/components/ui/SelectItem'
 
@@ -66,6 +67,7 @@ export default function ServiceRequestEdit({
   insuranceTypes,
   serviceRequest 
 }: ServiceRequestEditProps) {
+  const { searchProfessionals } = useSearch()
   const { loading, error, updateServiceRequest } = useServiceRequests()
 
   // Form state initialized with existing data
@@ -111,6 +113,10 @@ export default function ServiceRequestEdit({
     { href: `/medical/service-requests/${serviceRequest.id}`, title: `#${serviceRequest.request_number}` },
     { href: `/medical/service-requests/${serviceRequest.id}/edit`, title: 'Editar', current: true }
   ]
+
+  const selectedProfessional = (professionalId: number) => {
+    return professionals.find((professional) => professional.value === professionalId)
+  }
 
   const removeServiceFromCart = (id: string | number) => {
     setServices(services.filter(service => service.id !== id))
@@ -360,18 +366,15 @@ export default function ServiceRequestEdit({
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Profesional *
                           </label>
-                          <SelectItem
-                            value={service.professional_id.toString()}
-                            onValueChange={(value: string) => updateService(service.id, 'professional_id', Number(value))}
-                            required
-                          >
-                            <option value="0">Seleccionar profesional...</option>
-                            {professionals.map((professional) => (
-                              <option key={professional.value} value={professional.value.toString()}>
-                                {professional.label}
-                              </option>
-                            ))}
-                          </SelectItem>
+                          <SearchableInput
+                            placeholder="Prof."
+                            value={selectedProfessional(service.professional_id)?.label || ''}
+                            onSelect={(professional) => updateService(service.id, 'professional_id', professional.id)}
+                            onSearch={searchProfessionals}
+                            minSearchLength={1}
+                            maxResults={10}
+                            className="w-full"
+                          />
                         </div>
 
                         <div>
