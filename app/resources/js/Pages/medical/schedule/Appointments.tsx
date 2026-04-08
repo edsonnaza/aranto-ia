@@ -6,7 +6,7 @@ import SearchableInput from '@/components/ui/SearchableInput'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
 import { useSchedule, useSearch } from '@/hooks/medical'
 
@@ -99,6 +99,7 @@ export default function AppointmentsPage({
 
   const [selectedDate, setSelectedDate] = useState(filters.selected_date)
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month'>(filters.view)
+  const [currentPanel, setCurrentPanel] = useState<'range' | 'today'>('range')
   const [filterProfessionalId, setFilterProfessionalId] = useState(filters.professional_id ? String(filters.professional_id) : '')
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -175,6 +176,31 @@ export default function AppointmentsPage({
   }, [slotBoard])
 
   const orderedDates = useMemo(() => Object.keys(groupedSlots).sort(), [groupedSlots])
+
+  const professionalsForDailyView = useMemo(() => {
+    if (filterProfessionalId) {
+      return professionals.filter((professional) => String(professional.id) === filterProfessionalId)
+    }
+
+    return professionals
+  }, [filterProfessionalId, professionals])
+
+  const appointmentsByProfessionalForSelectedDate = useMemo(() => {
+    const appointmentsForSelectedDate = appointments
+      .filter((appointment) => appointment.appointment_date === selectedDate)
+      .sort((left, right) => {
+        if (left.start_time === right.start_time) {
+          return left.patient_name.localeCompare(right.patient_name, 'es')
+        }
+
+        return left.start_time.localeCompare(right.start_time)
+      })
+
+    return professionalsForDailyView.map((professional) => ({
+      professional,
+      appointments: appointmentsForSelectedDate.filter((appointment) => appointment.professional_id === professional.id),
+    }))
+  }, [appointments, professionalsForDailyView, selectedDate])
 
   const isAppointmentLocked = (
     appointment:
@@ -418,6 +444,66 @@ export default function AppointmentsPage({
     </div>
   )
 
+  const renderDailyProfessionalColumn = (entry: { professional: ProfessionalOption; appointments: Appointment[] }) => (
+    <div key={entry.professional.id} className="flex min-w-[300px] max-w-[300px] flex-col rounded-xl border border-gray-200 bg-white">
+      <div className="sticky top-0 rounded-t-xl border-b border-gray-200 bg-slate-50 px-4 py-3">
+        <div className="font-semibold text-gray-900">{entry.professional.full_name}</div>
+        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500">
+          <span>{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
+          <Badge variant="outline">{entry.appointments.length} citas</Badge>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-3 p-3">
+        {entry.appointments.length === 0 && (
+          <div className="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-500">
+            Sin citas para este día.
+          </div>
+        )}
+
+        {entry.appointments.map((appointment) => {
+          const appointmentLocked = isAppointmentLocked(appointment)
+          const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
+
+          return (
+            <div key={appointment.id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+              <button
+                type="button"
+                onClick={() => openExistingAppointment(appointment.id)}
+                disabled={appointmentLocked}
+                className={`w-full text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-gray-900">{appointment.patient_name}</div>
+                    <div className="mt-1 text-xs text-gray-500">{appointment.start_time} a {appointment.end_time}</div>
+                    {appointment.medical_service_name && <div className="mt-1 text-xs text-gray-500">{appointment.medical_service_name}</div>}
+                    {appointment.service_request_number && <div className="mt-1 text-xs text-emerald-600">Recepción: {appointment.service_request_number}</div>}
+                  </div>
+                  <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'outline'}>
+                    {getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}
+                  </Badge>
+                </div>
+              </button>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => openExistingAppointment(appointment.id)} disabled={appointmentLocked}>
+                  {appointmentLocked ? 'No editable' : 'Editar'}
+                </Button>
+
+                {appointmentCanGoToReception && (
+                  <Button type="button" size="sm" onClick={() => goToReceptionFromAppointment(appointment.id)} disabled={loadingAction === 'reception'}>
+                    Enviar a Recepción
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Citas médicas" />
@@ -480,111 +566,155 @@ export default function AppointmentsPage({
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 xl:grid-cols-[1.6fr,1fr]">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <CardTitle>Slots navegables</CardTitle>
-                  <p className="text-sm text-gray-500">Fecha foco: {formattedSelectedDate}</p>
-                </div>
-                <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(event) => navigateBoard(event.target.value)}
-                    className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
-                  />
-                  <div className="mt-1 text-xs text-gray-500">Rango visible: {filters.range_start} al {filters.range_end}</div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!filterProfessionalId && (
-                <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
-                  Seleccioná un profesional para navegar sus slots y citas por día, semana o mes.
-                </div>
-              )}
+        <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as 'range' | 'today')}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="range">Agenda del rango</TabsTrigger>
+            <TabsTrigger value="today">Citas del día</TabsTrigger>
+          </TabsList>
 
-              {filterProfessionalId && orderedDates.length === 0 && (
-                <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
-                  No hay slots generados para el rango seleccionado.
-                </div>
-              )}
-
-              {filterProfessionalId && currentView === 'day' && orderedDates.map((date) => (
-                <div key={date} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                  <div className="grid grid-cols-[84px,1fr] border-b border-gray-200 bg-gray-50">
-                    <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Hora</div>
-                    <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Detalle del slot</div>
-                  </div>
-                  {groupedSlots[date].map(renderDaySlotRow)}
-                </div>
-              ))}
-
-              {filterProfessionalId && currentView === 'week' && (
-                <div className="grid gap-4 lg:grid-cols-7">
-                  {orderedDates.map((date) => (
-                    <div key={date} className="space-y-3 rounded-lg border border-gray-200 p-3">
-                      <div className="text-sm font-semibold text-gray-900">{new Intl.DateTimeFormat('es-PY', { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`))}</div>
-                      <div className="space-y-2">
-                        {groupedSlots[date].length === 0 && <div className="text-xs text-gray-500">Sin slots</div>}
-                        {groupedSlots[date].map(renderSlotCard)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {filterProfessionalId && currentView === 'month' && (
-                <div className="grid gap-4 lg:grid-cols-7">
-                  {orderedDates.map((date) => (
-                    <div key={date} className="rounded-lg border border-gray-200 p-3">
-                      <div className="mb-3 text-sm font-semibold text-gray-900">{new Intl.DateTimeFormat('es-PY', { day: '2-digit', month: 'short' }).format(new Date(`${date}T00:00:00`))}</div>
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                        {groupedSlots[date].length === 0 && <div className="text-xs text-gray-500">Sin slots</div>}
-                        {groupedSlots[date].map(renderSlotCard)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Citas del rango</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {appointments.length === 0 && <p className="text-sm text-gray-500">No hay citas registradas en este rango.</p>}
-              {appointments.map((appointment) => (
-                <div key={appointment.id} className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex flex-col gap-3">
+          <TabsContent value="range" className="mt-4">
+            <div className="grid gap-6 xl:grid-cols-[1.6fr,1fr]">
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <div className="font-medium text-gray-900">{appointment.patient_name}</div>
-                      <div className="text-sm text-gray-500">{appointment.professional_name}</div>
-                      <div className="mt-1 text-xs text-gray-500">{appointment.appointment_date} · {appointment.start_time} a {appointment.end_time}</div>
-                      {appointment.medical_service_name && <div className="mt-1 text-xs text-gray-500">{appointment.medical_service_name}</div>}
-                      {appointment.service_request_number && <div className="mt-1 text-xs text-emerald-600">Recepción: {appointment.service_request_number}</div>}
+                      <CardTitle>Slots navegables</CardTitle>
+                      <p className="text-sm text-gray-500">Fecha foco: {formattedSelectedDate}</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'default'}>{getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}</Badge>
-                      <Button type="button" variant="outline" size="sm" onClick={() => openExistingAppointment(appointment.id)} disabled={isAppointmentLocked(appointment)}>
-                        {isAppointmentLocked(appointment) ? 'No editable' : 'Editar'}
-                      </Button>
-                      {!appointment.service_request_id && appointment.status !== 'cancelled' && (
-                        <Button type="button" size="sm" onClick={() => goToReceptionFromAppointment(appointment.id)} disabled={loadingAction === 'reception'}>
-                          Enviar a Recepción
-                        </Button>
-                      )}
+                    <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(event) => navigateBoard(event.target.value)}
+                        className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
+                      />
+                      <div className="mt-1 text-xs text-gray-500">Rango visible: {filters.range_start} al {filters.range_end}</div>
                     </div>
                   </div>
+                </CardHeader>
+                <CardContent>
+                  {!filterProfessionalId && (
+                    <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
+                      Seleccioná un profesional para navegar sus slots y citas por día, semana o mes.
+                    </div>
+                  )}
+
+                  {filterProfessionalId && orderedDates.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
+                      No hay slots generados para el rango seleccionado.
+                    </div>
+                  )}
+
+                  {filterProfessionalId && currentView === 'day' && orderedDates.map((date) => (
+                    <div key={date} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                      <div className="grid grid-cols-[84px,1fr] border-b border-gray-200 bg-gray-50">
+                        <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Hora</div>
+                        <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Detalle del slot</div>
+                      </div>
+                      {groupedSlots[date].map(renderDaySlotRow)}
+                    </div>
+                  ))}
+
+                  {filterProfessionalId && currentView === 'week' && (
+                    <div className="grid gap-4 lg:grid-cols-7">
+                      {orderedDates.map((date) => (
+                        <div key={date} className="space-y-3 rounded-lg border border-gray-200 p-3">
+                          <div className="text-sm font-semibold text-gray-900">{new Intl.DateTimeFormat('es-PY', { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`))}</div>
+                          <div className="space-y-2">
+                            {groupedSlots[date].length === 0 && <div className="text-xs text-gray-500">Sin slots</div>}
+                            {groupedSlots[date].map(renderSlotCard)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {filterProfessionalId && currentView === 'month' && (
+                    <div className="grid gap-4 lg:grid-cols-7">
+                      {orderedDates.map((date) => (
+                        <div key={date} className="rounded-lg border border-gray-200 p-3">
+                          <div className="mb-3 text-sm font-semibold text-gray-900">{new Intl.DateTimeFormat('es-PY', { day: '2-digit', month: 'short' }).format(new Date(`${date}T00:00:00`))}</div>
+                          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                            {groupedSlots[date].length === 0 && <div className="text-xs text-gray-500">Sin slots</div>}
+                            {groupedSlots[date].map(renderSlotCard)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Citas del rango</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {appointments.length === 0 && <p className="text-sm text-gray-500">No hay citas registradas en este rango.</p>}
+                  {appointments.map((appointment) => (
+                    <div key={appointment.id} className="rounded-lg border border-gray-200 p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <div className="font-medium text-gray-900">{appointment.patient_name}</div>
+                          <div className="text-sm text-gray-500">{appointment.professional_name}</div>
+                          <div className="mt-1 text-xs text-gray-500">{appointment.appointment_date} · {appointment.start_time} a {appointment.end_time}</div>
+                          {appointment.medical_service_name && <div className="mt-1 text-xs text-gray-500">{appointment.medical_service_name}</div>}
+                          {appointment.service_request_number && <div className="mt-1 text-xs text-emerald-600">Recepción: {appointment.service_request_number}</div>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'default'}>{getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}</Badge>
+                          <Button type="button" variant="outline" size="sm" onClick={() => openExistingAppointment(appointment.id)} disabled={isAppointmentLocked(appointment)}>
+                            {isAppointmentLocked(appointment) ? 'No editable' : 'Editar'}
+                          </Button>
+                          {!appointment.service_request_id && appointment.status !== 'cancelled' && (
+                            <Button type="button" size="sm" onClick={() => goToReceptionFromAppointment(appointment.id)} disabled={loadingAction === 'reception'}>
+                              Enviar a Recepción
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="today" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle>Citas del día por profesional</CardTitle>
+                    <p className="text-sm text-gray-500">Vista navegable por columnas para {formattedSelectedDate}.</p>
+                  </div>
+                  <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => navigateBoard(event.target.value)}
+                      className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
+                    />
+                    <div className="mt-1 text-xs text-gray-500">Cada columna representa un médico.</div>
+                  </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+              </CardHeader>
+              <CardContent>
+                {appointmentsByProfessionalForSelectedDate.every((entry) => entry.appointments.length === 0) ? (
+                  <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+                    No hay citas registradas para la fecha seleccionada.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto pb-2">
+                    <div className="flex gap-4">
+                      {appointmentsByProfessionalForSelectedDate.map(renderDailyProfessionalColumn)}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         <AppointmentSlotModal
           open={isAppointmentModalOpen}

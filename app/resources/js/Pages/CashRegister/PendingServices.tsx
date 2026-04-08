@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { useCashRegisterPendingServiceNotifications } from '@/hooks/useCashRegisterPendingServiceNotifications';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useState, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
@@ -20,6 +21,7 @@ import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import { getReceptionTypeConfig } from '@/hooks/medical/useReceptionTypeLabel';
 import {  CreditCard, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
 
@@ -105,6 +107,37 @@ export default function PendingServices({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null);
+
+  useCashRegisterPendingServiceNotifications(
+    (event) => {
+      const patientName = event.service_request.patient_name;
+      const notificationMessage = patientName
+        ? `${event.message} · ${patientName}`
+        : event.message;
+
+      toast.info(notificationMessage);
+
+      router.reload({
+        only: ['serviceRequests', 'summary'],
+        preserveState: true,
+        preserveScroll: true,
+      });
+    },
+    (event) => {
+      const patientName = event.service_request.patient_name;
+      const notificationMessage = patientName
+        ? `${event.message} · ${patientName}`
+        : event.message;
+
+      toast.warning(notificationMessage);
+
+      router.reload({
+        only: ['serviceRequests', 'summary'],
+        preserveState: true,
+        preserveScroll: true,
+      });
+    },
+  );
 
   const getPaymentStatusBadge = (paymentStatus: string) => {
     type StatusKey = 'pending' | 'partial' | 'paid' | 'cancelled';
