@@ -101,6 +101,32 @@ bash ./scripts/setup-complete.sh /ruta/al/archivo.sql
 
 ## Desarrollo Diario
 
+### Arranque rápido con Reverb
+
+```bash
+sh ./scripts/dev-reverb-up.sh
+```
+
+Alternativa con Artisan desde la carpeta app:
+
+```bash
+php artisan dev:realtime up --build
+php artisan dev:realtime logs
+php artisan dev:realtime ps
+php artisan dev:realtime down
+```
+
+Para detener solo el stack de desarrollo principal:
+
+```bash
+sh ./scripts/dev-reverb-down.sh
+```
+
+Puertos usados para WebSocket:
+
+- Interno Docker Reverb: 8080
+- Expuesto al host: 8585
+
 ### Backend
 
 ```bash

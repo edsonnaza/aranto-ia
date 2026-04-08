@@ -101,6 +101,7 @@ class ServiceRequest extends Model
     const PAYMENT_PENDING = 'pending';
     const PAYMENT_PARTIAL = 'partial';
     const PAYMENT_PAID = 'paid';
+    const PAYMENT_CANCELLED = 'cancelled';
 
     /**
      * Get the patient that owns this service request.
@@ -246,7 +247,7 @@ class ServiceRequest extends Model
     {
         $this->update([
             'status' => self::STATUS_CANCELLED,
-            'payment_status' => 'cancelled',
+            'payment_status' => self::PAYMENT_CANCELLED,
             'cancelled_at' => now(),
             'cancelled_by' => $cancelledBy,
             'cancellation_reason' => $reason,

@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\CashRegisterService;
 use App\Services\PaymentService;
-use App\Services\AuditService;
 use App\Models\CashRegisterSession;
-use App\Models\User;
 use App\Models\Professional;
 use App\Models\Transaction;
 use App\Models\ServiceRequest;
@@ -232,18 +230,22 @@ class CashRegisterController extends Controller
         // Filtro extendido: permitir ver cancelados
         if ($request->payment_status && $request->payment_status !== 'all') {
             if ($request->payment_status === 'pending') {
-                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING)
+                    ->where('status', '!=', ServiceRequest::STATUS_CANCELLED);
             } elseif ($request->payment_status === 'partial') {
-                $query->where('payment_status', ServiceRequest::PAYMENT_PARTIAL);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PARTIAL)
+                    ->where('status', '!=', ServiceRequest::STATUS_CANCELLED);
             } elseif ($request->payment_status === 'paid') {
-                $query->where('payment_status', ServiceRequest::PAYMENT_PAID);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PAID)
+                    ->where('status', '!=', ServiceRequest::STATUS_CANCELLED);
             } elseif ($request->payment_status === 'cancelled') {
                 $query->where('status', ServiceRequest::STATUS_CANCELLED);
             }
         } else {
             // Default: solo pendientes si no hay filtro; si 'all', no filtrar
             if (!$request->has('payment_status')) {
-                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING);
+                $query->where('payment_status', ServiceRequest::PAYMENT_PENDING)
+                    ->where('status', '!=', ServiceRequest::STATUS_CANCELLED);
             }
         }
 
@@ -346,8 +348,12 @@ class CashRegisterController extends Controller
             ->get(['id', 'name']);
 
         // Calculate summary - including paid total from current cash session
-        $pendingCount = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->count();
-        $pendingTotal = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)->sum('total_amount');
+        $pendingCount = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)
+            ->where('status', '!=', ServiceRequest::STATUS_CANCELLED)
+            ->count();
+        $pendingTotal = ServiceRequest::where('payment_status', ServiceRequest::PAYMENT_PENDING)
+            ->where('status', '!=', ServiceRequest::STATUS_CANCELLED)
+            ->sum('total_amount');
         
         // Get paid total from current active cash session
         $activeSession = CashRegisterSession::where('user_id', Auth::id())

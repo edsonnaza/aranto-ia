@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PendingServicePaymentCancelled;
+use App\Events\PendingServicePaymentRequested;
 use App\Models\ServiceRequest;
 use App\Models\Patient;
 use App\Models\MedicalService;
@@ -199,63 +201,66 @@ class ServiceRequestController extends Controller
 
         $shouldAutoConfirmFromAppointment = $appointment !== null;
 
-        // Crear la solicitud de servicio
-        $serviceRequest = ServiceRequest::create([
-            'patient_id' => $validated['patient_id'],
-            'created_by' => auth()->id(),
-            'request_date' => $validated['request_date'],
-            'request_time' => $validated['request_time'] ?? null,
-            'reception_type' => $validated['reception_type'],
-            'priority' => $validated['priority'],
-            'notes' => $validated['notes'] ?? null,
-            'status' => $shouldAutoConfirmFromAppointment
-                ? ServiceRequest::STATUS_CONFIRMED
-                : ServiceRequest::STATUS_PENDING_CONFIRMATION,
-            'payment_status' => ServiceRequest::PAYMENT_PENDING,
-            'total_amount' => 0, // Se calculará automáticamente
-            'paid_amount' => 0,
-            'confirmed_at' => $shouldAutoConfirmFromAppointment ? now() : null,
-        ]);
+        $serviceRequest = DB::transaction(function () use ($appointment, $shouldAutoConfirmFromAppointment, $validated) {
+            $serviceRequest = ServiceRequest::create([
+                'patient_id' => $validated['patient_id'],
+                'created_by' => auth()->id(),
+                'request_date' => $validated['request_date'],
+                'request_time' => $validated['request_time'] ?? null,
+                'reception_type' => $validated['reception_type'],
+                'priority' => $validated['priority'],
+                'notes' => $validated['notes'] ?? null,
+                'status' => $shouldAutoConfirmFromAppointment
+                    ? ServiceRequest::STATUS_CONFIRMED
+                    : ServiceRequest::STATUS_PENDING_CONFIRMATION,
+                'payment_status' => ServiceRequest::PAYMENT_PENDING,
+                'total_amount' => 0,
+                'paid_amount' => 0,
+                'confirmed_at' => $shouldAutoConfirmFromAppointment ? now() : null,
+            ]);
 
-        // Crear los detalles de servicios
-        foreach ($validated['services'] as $serviceData) {
-            // Obtener el profesional con sus configuraciones de comisión
-            $professional = Professional::with('commissionSettings')->find($serviceData['professional_id']);
-            
-            // Get commission percentage from professional_commission_settings (single source of truth)
-            $commissionPercentage = $professional?->commissionSettings?->commission_percentage ?? 0;
-            
-            \Log::info('Service detail created with commission percentage', [
-                'professional_id' => $serviceData['professional_id'],
-                'professional_name' => $professional?->full_name,
-                'commission_percentage' => $commissionPercentage,
-                'source' => 'professional_commission_settings',
-            ]);
-            
-            $serviceRequest->details()->create([
-                'medical_service_id' => $serviceData['medical_service_id'],
-                'professional_id' => $serviceData['professional_id'],
-                'professional_commission_percentage' => $commissionPercentage,
-                'insurance_type_id' => $serviceData['insurance_type_id'],
-                'scheduled_date' => $serviceData['scheduled_date'] ?? null,
-                'scheduled_time' => $serviceData['scheduled_time'] ?? null,
-                'estimated_duration' => $serviceData['estimated_duration'] ?? 30,
-                'unit_price' => $serviceData['unit_price'],
-                'quantity' => $serviceData['quantity'],
-                'discount_percentage' => $serviceData['discount_percentage'] ?? 0,
-                'discount_amount' => $serviceData['discount_amount'] ?? 0,
-                'preparation_instructions' => $serviceData['preparation_instructions'] ?? null,
-                'notes' => $serviceData['notes'] ?? null,
-                'status' => \App\Models\ServiceRequestDetail::STATUS_PENDING,
-            ]);
-        }
+            foreach ($validated['services'] as $serviceData) {
+                $professional = Professional::with('commissionSettings')->find($serviceData['professional_id']);
+                $commissionPercentage = $professional?->commissionSettings?->commission_percentage ?? 0;
 
-        if ($appointment) {
-            $appointment->update([
-                'service_request_id' => $serviceRequest->id,
-                'status' => ScheduleAppointment::STATUS_CHECKED_IN,
-                'checked_in_at' => now(),
-            ]);
+                \Log::info('Service detail created with commission percentage', [
+                    'professional_id' => $serviceData['professional_id'],
+                    'professional_name' => $professional?->full_name,
+                    'commission_percentage' => $commissionPercentage,
+                    'source' => 'professional_commission_settings',
+                ]);
+
+                $serviceRequest->details()->create([
+                    'medical_service_id' => $serviceData['medical_service_id'],
+                    'professional_id' => $serviceData['professional_id'],
+                    'professional_commission_percentage' => $commissionPercentage,
+                    'insurance_type_id' => $serviceData['insurance_type_id'],
+                    'scheduled_date' => $serviceData['scheduled_date'] ?? null,
+                    'scheduled_time' => $serviceData['scheduled_time'] ?? null,
+                    'estimated_duration' => $serviceData['estimated_duration'] ?? 30,
+                    'unit_price' => $serviceData['unit_price'],
+                    'quantity' => $serviceData['quantity'],
+                    'discount_percentage' => $serviceData['discount_percentage'] ?? 0,
+                    'discount_amount' => $serviceData['discount_amount'] ?? 0,
+                    'preparation_instructions' => $serviceData['preparation_instructions'] ?? null,
+                    'notes' => $serviceData['notes'] ?? null,
+                    'status' => \App\Models\ServiceRequestDetail::STATUS_PENDING,
+                ]);
+            }
+
+            if ($appointment) {
+                $appointment->update([
+                    'service_request_id' => $serviceRequest->id,
+                    'status' => ScheduleAppointment::STATUS_CHECKED_IN,
+                    'checked_in_at' => now(),
+                ]);
+            }
+
+            return $serviceRequest->refresh()->load(['patient', 'details']);
+        });
+
+        if ($serviceRequest->payment_status === ServiceRequest::PAYMENT_PENDING) {
+            PendingServicePaymentRequested::dispatch($serviceRequest);
         }
 
         return redirect()
@@ -500,6 +505,8 @@ class ServiceRequestController extends Controller
         $reason = $validated['cancellation_reason'] ?? 'Cancelación solicitada desde la recepción';
         
         $serviceRequest->cancel(auth()->id(), $reason);
+
+        PendingServicePaymentCancelled::dispatch($serviceRequest->fresh(['patient', 'details']));
 
         // Si la solicitud es cancelada desde una petición AJAX (modal), devolver JSON
         if ($request->expectsJson()) {
