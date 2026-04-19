@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
 import SearchableInput from '@/components/ui/SearchableInput'
@@ -99,7 +99,7 @@ export default function AppointmentsPage({
 
   const [selectedDate, setSelectedDate] = useState(filters.selected_date)
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month'>(filters.view)
-  const [currentPanel, setCurrentPanel] = useState<'range' | 'today'>('range')
+  const [currentPanel, setCurrentPanel] = useState<'range' | 'today'>(filters.view === 'day' ? 'today' : 'range')
   const [filterProfessionalId, setFilterProfessionalId] = useState(filters.professional_id ? String(filters.professional_id) : '')
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -130,6 +130,10 @@ export default function AppointmentsPage({
     setSelectedDate(nextDate)
     setCurrentView(nextView)
 
+    if (nextView !== 'day') {
+      setCurrentPanel('range')
+    }
+
     router.get('/medical/appointments', {
       selected_date: nextDate,
       view: nextView,
@@ -154,53 +158,117 @@ export default function AppointmentsPage({
     navigateBoard(nextDate.toISOString().split('T')[0])
   }
 
-  const formattedSelectedDate = useMemo(
-    () => new Intl.DateTimeFormat('es-PY', {
-      weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(`${selectedDate}T00:00:00`)),
-    [selectedDate]
-  )
+  const formattedSelectedDate = new Intl.DateTimeFormat('es-PY', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${selectedDate}T00:00:00`))
 
-  const groupedSlots = useMemo(() => {
-    return slotBoard.reduce<Record<string, SlotBoardEntry[]>>((accumulator, slot) => {
-      if (!accumulator[slot.date]) {
-        accumulator[slot.date] = []
+  const groupedSlots = slotBoard.reduce<Record<string, SlotBoardEntry[]>>((accumulator, slot) => {
+    if (!accumulator[slot.date]) {
+      accumulator[slot.date] = []
+    }
+
+    accumulator[slot.date].push(slot)
+    return accumulator
+  }, {})
+
+  const orderedDates = Object.keys(groupedSlots).sort()
+
+  const selectedDateAppointments = appointments
+    .filter((appointment) => appointment.appointment_date === selectedDate)
+    .sort((left, right) => {
+      if (left.start_time === right.start_time) {
+        return left.patient_name.localeCompare(right.patient_name, 'es')
       }
 
-      accumulator[slot.date].push(slot)
-      return accumulator
-    }, {})
-  }, [slotBoard])
+      return left.start_time.localeCompare(right.start_time)
+    })
 
-  const orderedDates = useMemo(() => Object.keys(groupedSlots).sort(), [groupedSlots])
+  const selectedDateSlots = slotBoard
+    .filter((slot) => slot.date === selectedDate)
+    .sort((left, right) => {
+      if (left.start_time === right.start_time) {
+        return left.professional_name.localeCompare(right.professional_name, 'es')
+      }
 
-  const professionalsForDailyView = useMemo(() => {
+      return left.start_time.localeCompare(right.start_time)
+    })
+
+  const professionalsForDailyView = (() => {
     if (filterProfessionalId) {
       return professionals.filter((professional) => String(professional.id) === filterProfessionalId)
     }
 
-    return professionals
-  }, [filterProfessionalId, professionals])
+    const professionalIdsWithSchedule = new Set<number>()
 
-  const appointmentsByProfessionalForSelectedDate = useMemo(() => {
-    const appointmentsForSelectedDate = appointments
-      .filter((appointment) => appointment.appointment_date === selectedDate)
-      .sort((left, right) => {
-        if (left.start_time === right.start_time) {
-          return left.patient_name.localeCompare(right.patient_name, 'es')
-        }
+    selectedDateSlots.forEach((slot) => {
+      professionalIdsWithSchedule.add(slot.professional_id)
+    })
 
-        return left.start_time.localeCompare(right.start_time)
-      })
+    selectedDateAppointments.forEach((appointment) => {
+      professionalIdsWithSchedule.add(appointment.professional_id)
+    })
 
-    return professionalsForDailyView.map((professional) => ({
-      professional,
-      appointments: appointmentsForSelectedDate.filter((appointment) => appointment.professional_id === professional.id),
-    }))
-  }, [appointments, professionalsForDailyView, selectedDate])
+    return professionals.filter((professional) => professionalIdsWithSchedule.has(professional.id))
+  })()
+
+  const slotColumnsByProfessionalForSelectedDate = professionalsForDailyView.map((professional) => ({
+    professional,
+    slots: selectedDateSlots.filter((slot) => slot.professional_id === professional.id),
+    appointmentCount: selectedDateAppointments.filter((appointment) => appointment.professional_id === professional.id).length,
+  }))
+
+  const currentViewLabel = currentView === 'day' ? 'día' : currentView === 'week' ? 'semana' : 'mes'
+  const timelinePixelsPerMinute = 3.5
+  const dailyTimelineTopOffset = 20
+  const dailyTimelineBottomOffset = 24
+  const dailySlotGap = 10
+
+  const parseTimeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number)
+    return (hours * 60) + minutes
+  }
+
+  const formatMinutesToLabel = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+
+    return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`
+  }
+
+  const getTimelinePosition = (minutes: number) => {
+    return dailyTimelineTopOffset + ((minutes - dailyTimeline.startMinutes) * timelinePixelsPerMinute)
+  }
+
+  const dailyTimeline = (() => {
+    const slotStartMinutes = selectedDateSlots.map((slot) => parseTimeToMinutes(slot.start_time))
+    const slotEndMinutes = selectedDateSlots.map((slot) => parseTimeToMinutes(slot.end_time))
+    const defaultStartMinutes = 7 * 60
+    const defaultEndMinutes = 19 * 60
+    const earliestSlotMinutes = slotStartMinutes.length > 0 ? Math.min(...slotStartMinutes) : defaultStartMinutes
+    const latestSlotMinutes = slotEndMinutes.length > 0 ? Math.max(...slotEndMinutes) : defaultEndMinutes
+    const startMinutes = slotStartMinutes.length > 0
+      ? Math.floor(earliestSlotMinutes / 60) * 60
+      : defaultStartMinutes
+    const endMinutes = slotEndMinutes.length > 0
+      ? Math.ceil(latestSlotMinutes / 60) * 60
+      : defaultEndMinutes
+    const hourlyMarks: number[] = []
+
+    for (let value = startMinutes; value <= endMinutes; value += 60) {
+      hourlyMarks.push(value)
+    }
+
+    return {
+      startMinutes,
+      endMinutes,
+      totalMinutes: endMinutes - startMinutes,
+      totalHeight: dailyTimelineTopOffset + ((endMinutes - startMinutes) * timelinePixelsPerMinute) + dailyTimelineBottomOffset,
+      hourlyMarks,
+    }
+  })()
 
   const isAppointmentLocked = (
     appointment:
@@ -254,6 +322,23 @@ export default function AppointmentsPage({
       default:
         return 'border-emerald-300 bg-emerald-50'
     }
+  }
+
+  const getDailySlotBlockClasses = (slot: SlotBoardEntry) => {
+    switch (slot.slot_status) {
+      case 'blocked':
+        return 'border-amber-300 bg-amber-100 text-amber-950'
+      case 'occupied':
+        return 'border-rose-300 bg-rose-100 text-rose-950'
+      case 'partial':
+        return 'border-sky-300 bg-sky-100 text-sky-950'
+      default:
+        return 'border-lime-300 bg-lime-100 text-lime-950'
+    }
+  }
+
+  const isSlotAssignable = (slot: SlotBoardEntry) => {
+    return slot.slot_status !== 'blocked' && slot.available_capacity > 0
   }
 
   const openSlotForNewAppointment = (slot: SlotBoardEntry) => {
@@ -317,7 +402,7 @@ export default function AppointmentsPage({
   }
 
   const renderSlotCard = (slot: SlotBoardEntry) => (
-    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-3 ${getSlotClasses(slot)}`}>
+    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-4 ${getSlotClasses(slot)}`}>
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <div className="font-semibold text-gray-900">{slot.start_time} - {slot.end_time}</div>
@@ -444,65 +529,141 @@ export default function AppointmentsPage({
     </div>
   )
 
-  const renderDailyProfessionalColumn = (entry: { professional: ProfessionalOption; appointments: Appointment[] }) => (
-    <div key={entry.professional.id} className="flex min-w-[300px] max-w-[300px] flex-col rounded-xl border border-gray-200 bg-white">
-      <div className="sticky top-0 rounded-t-xl border-b border-gray-200 bg-slate-50 px-4 py-3">
-        <div className="font-semibold text-gray-900">{entry.professional.full_name}</div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500">
-          <span>{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
-          <Badge variant="outline">{entry.appointments.length} citas</Badge>
+  const renderDailyProfessionalColumn = (entry: {
+    professional: ProfessionalOption
+    slots: SlotBoardEntry[]
+    appointmentCount: number
+  }) => {
+    return (
+      <div key={entry.professional.id} className="flex min-w-[270px] max-w-[270px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="sticky top-0 z-10 rounded-t-xl border-b border-slate-200 bg-sky-600 px-4 py-3 text-white">
+          <div className="font-semibold text-white">{entry.professional.full_name}</div>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-sky-50/90">
+            <span className="truncate">{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.slots.length} slots</Badge>
+              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.appointmentCount} citas</Badge>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 space-y-3 p-3">
-        {entry.appointments.length === 0 && (
-          <div className="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-500">
-            Sin citas para este día.
+        <div
+          className="relative flex-1 overflow-hidden bg-slate-50"
+          style={{ height: `${Math.max(dailyTimeline.totalHeight, 720)}px` }}
+        >
+          {dailyTimeline.hourlyMarks.map((hourMark) => {
+            const topPosition = getTimelinePosition(hourMark)
+
+            return (
+              <div
+                key={`${entry.professional.id}-${hourMark}`}
+                className="pointer-events-none absolute inset-x-0 border-t border-slate-200"
+                style={{ top: `${topPosition}px` }}
+              />
+            )
+          })}
+
+        {entry.slots.length === 0 && (
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
+            Sin slots para este día.
           </div>
         )}
 
-        {entry.appointments.map((appointment) => {
-          const appointmentLocked = isAppointmentLocked(appointment)
-          const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
+        {entry.slots.map((slot) => (
+          <div
+            key={`${slot.date}-${slot.start_time}-${slot.professional_id}`}
+            role={isSlotAssignable(slot) ? 'button' : undefined}
+            tabIndex={isSlotAssignable(slot) ? 0 : undefined}
+            onClick={() => {
+              if (!isSlotAssignable(slot)) {
+                return
+              }
 
-          return (
-            <div key={appointment.id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-              <button
-                type="button"
-                onClick={() => openExistingAppointment(appointment.id)}
-                disabled={appointmentLocked}
-                className={`w-full text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-gray-900">{appointment.patient_name}</div>
-                    <div className="mt-1 text-xs text-gray-500">{appointment.start_time} a {appointment.end_time}</div>
-                    {appointment.medical_service_name && <div className="mt-1 text-xs text-gray-500">{appointment.medical_service_name}</div>}
-                    {appointment.service_request_number && <div className="mt-1 text-xs text-emerald-600">Recepción: {appointment.service_request_number}</div>}
-                  </div>
-                  <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'outline'}>
-                    {getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}
-                  </Badge>
-                </div>
-              </button>
+              openSlotForNewAppointment(slot)
+            }}
+            onKeyDown={(event) => {
+              if (!isSlotAssignable(slot)) {
+                return
+              }
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => openExistingAppointment(appointment.id)} disabled={appointmentLocked}>
-                  {appointmentLocked ? 'No editable' : 'Editar'}
-                </Button>
-
-                {appointmentCanGoToReception && (
-                  <Button type="button" size="sm" onClick={() => goToReceptionFromAppointment(appointment.id)} disabled={loadingAction === 'reception'}>
-                    Enviar a Recepción
-                  </Button>
-                )}
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                openSlotForNewAppointment(slot)
+              }
+            }}
+            className={`absolute left-2 right-2 overflow-hidden rounded-lg border px-2 py-1 shadow-sm ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2' : ''}`}
+            style={{
+              top: `${getTimelinePosition(parseTimeToMinutes(slot.start_time))}px`,
+              minHeight: `${Math.max(((parseTimeToMinutes(slot.end_time) - parseTimeToMinutes(slot.start_time)) * timelinePixelsPerMinute) - dailySlotGap, 42)}px`,
+            }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold leading-none">{slot.start_time} - {slot.end_time}</div>
+                <div className="mt-0.5 text-[9px] opacity-75">{slot.duration_minutes} min · Cupo {slot.capacity}</div>
               </div>
+              <Badge variant="secondary" className="h-4 border-black/10 bg-white/70 px-1.5 text-[9px] text-slate-700">
+                {slot.slot_status === 'available' && 'Libre'}
+                {slot.slot_status === 'partial' && `Parcial ${slot.available_capacity}/${slot.capacity}`}
+                {slot.slot_status === 'occupied' && 'Ocupado'}
+                {slot.slot_status === 'blocked' && 'Bloqueado'}
+              </Badge>
             </div>
-          )
-        })}
+
+            {slot.block_title && (
+              <p className="mt-1 text-[11px] text-amber-900">{slot.block_title}</p>
+            )}
+
+            <div className="mt-1 space-y-1">
+              {slot.appointments.length === 0 && slot.slot_status !== 'blocked' && (
+                <div className="w-full rounded-md border border-dashed border-black/10 bg-white/70 px-2 py-0.5 text-left text-[9px] text-slate-700">
+                  {isSlotAssignable(slot) ? 'Click en el slot para asignar.' : 'Disponible para agendar.'}
+                </div>
+              )}
+
+              {slot.appointments.map((appointment) => {
+                const appointmentLocked = isAppointmentLocked(appointment)
+                const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
+
+                return (
+                  <div key={appointment.id} className="rounded-md border border-black/10 bg-white/85 px-2 py-0.5 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openExistingAppointment(appointment.id)
+                      }}
+                      disabled={appointmentLocked}
+                      className={`w-full text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
+                    >
+                      <div className="text-[10px] font-medium leading-tight text-gray-900">{appointment.patient_name}</div>
+                      {appointment.medical_service_name && <div className="mt-0.5 text-[9px] leading-tight text-gray-500">{appointment.medical_service_name}</div>}
+                      {appointment.service_request_number && <div className="mt-0.5 text-[9px] text-emerald-600">Recepción: {appointment.service_request_number}</div>}
+                    </button>
+
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'outline'} className="h-4 px-1.5 text-[9px]">
+                        {getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}
+                      </Badge>
+                      {appointmentCanGoToReception && (
+                        <Button type="button" size="sm" variant="outline" className="h-4 px-1.5 text-[9px]" onClick={(event) => {
+                          event.stopPropagation()
+                          goToReceptionFromAppointment(appointment.id)
+                        }} disabled={loadingAction === 'reception'}>
+                          Recepción
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -518,8 +679,8 @@ export default function AppointmentsPage({
           <CardHeader>
             <CardTitle>Panel de citas</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 lg:grid-cols-[1fr,auto,auto]">
-            <div>
+          <CardContent className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="w-full xl:max-w-xl">
               <label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
               <div className="flex gap-2">
                 <SearchableInput
@@ -535,33 +696,60 @@ export default function AppointmentsPage({
                   maxResults={10}
                   className="w-full"
                 />
-                <Button type="button" variant="outline" onClick={() => {
-                  setFilterProfessionalId('')
-                  navigateBoard(selectedDate, currentView, '')
-                }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFilterProfessionalId('')
+                    navigateBoard(selectedDate, currentView, '')
+                  }}
+                >
                   Todos
                 </Button>
               </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Vista</label>
-              <Tabs value={currentView} onValueChange={(value) => navigateBoard(selectedDate, value as 'day' | 'week' | 'month')}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="day">Día</TabsTrigger>
-                  <TabsTrigger value="week">Semana</TabsTrigger>
-                  <TabsTrigger value="month">Mes</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            <div className="flex w-full flex-col gap-3 xl:w-auto xl:items-end">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(event) => navigateBoard(event.target.value)}
+                    className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
+                  />
+                  <div className="mt-1 text-xs text-gray-500">Rango visible: {filters.range_start} al {filters.range_end}</div>
+                </div>
 
-            <div className="flex items-end gap-2">
-              <Button type="button" variant="outline" size="icon" onClick={() => changeSelectedDate(-1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="outline" size="icon" onClick={() => changeSelectedDate(1)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => changeSelectedDate(-1)}>
+                    <ChevronLeft className="mr-1 h-4 w-4" />
+                    {currentViewLabel}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => changeSelectedDate(1)}>
+                    {currentViewLabel}
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <span className="text-sm font-medium text-gray-700">Vista</span>
+                <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+                  {(['day', 'week', 'month'] as const).map((viewOption) => (
+                    <Button
+                      key={viewOption}
+                      type="button"
+                      size="sm"
+                      variant={currentView === viewOption ? 'default' : 'ghost'}
+                      className="capitalize"
+                      onClick={() => navigateBoard(selectedDate, viewOption)}
+                    >
+                      {viewOption === 'day' ? 'Día' : viewOption === 'week' ? 'Semana' : 'Mes'}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -569,53 +757,39 @@ export default function AppointmentsPage({
         <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as 'range' | 'today')}>
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="range">Agenda del rango</TabsTrigger>
-            <TabsTrigger value="today">Citas del día</TabsTrigger>
+            <TabsTrigger value="today" disabled={currentView !== 'day'}>Citas del día</TabsTrigger>
           </TabsList>
 
           <TabsContent value="range" className="mt-4">
             <div className="grid gap-6 xl:grid-cols-[1.6fr,1fr]">
               <Card>
                 <CardHeader>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       <CardTitle>Slots navegables</CardTitle>
                       <p className="text-sm text-gray-500">Fecha foco: {formattedSelectedDate}</p>
                     </div>
-                    <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(event) => navigateBoard(event.target.value)}
-                        className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
-                      />
-                      <div className="mt-1 text-xs text-gray-500">Rango visible: {filters.range_start} al {filters.range_end}</div>
-                    </div>
+                    <Badge variant="outline">Vista {currentViewLabel}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {!filterProfessionalId && (
-                    <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
-                      Seleccioná un profesional para navegar sus slots y citas por día, semana o mes.
-                    </div>
-                  )}
-
-                  {filterProfessionalId && orderedDates.length === 0 && (
+                  {orderedDates.length === 0 && (
                     <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
                       No hay slots generados para el rango seleccionado.
                     </div>
                   )}
 
-                  {filterProfessionalId && currentView === 'day' && orderedDates.map((date) => (
-                    <div key={date} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  {orderedDates.length > 0 && currentView === 'day' && (
+                    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                       <div className="grid grid-cols-[84px,1fr] border-b border-gray-200 bg-gray-50">
                         <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Hora</div>
                         <div className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Detalle del slot</div>
                       </div>
-                      {groupedSlots[date].map(renderDaySlotRow)}
+                      {orderedDates.flatMap((date) => groupedSlots[date]).map(renderDaySlotRow)}
                     </div>
-                  ))}
+                  )}
 
-                  {filterProfessionalId && currentView === 'week' && (
+                  {orderedDates.length > 0 && currentView === 'week' && (
                     <div className="grid gap-4 lg:grid-cols-7">
                       {orderedDates.map((date) => (
                         <div key={date} className="space-y-3 rounded-lg border border-gray-200 p-3">
@@ -629,7 +803,7 @@ export default function AppointmentsPage({
                     </div>
                   )}
 
-                  {filterProfessionalId && currentView === 'month' && (
+                  {orderedDates.length > 0 && currentView === 'month' && (
                     <div className="grid gap-4 lg:grid-cols-7">
                       {orderedDates.map((date) => (
                         <div key={date} className="rounded-lg border border-gray-200 p-3">
@@ -683,31 +857,49 @@ export default function AppointmentsPage({
           <TabsContent value="today" className="mt-4">
             <Card>
               <CardHeader>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <CardTitle>Citas del día por profesional</CardTitle>
-                    <p className="text-sm text-gray-500">Vista navegable por columnas para {formattedSelectedDate}.</p>
+                    <CardTitle>Agenda diaria por profesional</CardTitle>
+                    <p className="text-sm text-gray-500">Solo se muestran médicos con slots o citas en {formattedSelectedDate}.</p>
                   </div>
-                  <div className="min-w-56 rounded-md border border-gray-200 px-3 py-2 text-center">
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(event) => navigateBoard(event.target.value)}
-                      className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium text-gray-700 focus:outline-none"
-                    />
-                    <div className="mt-1 text-xs text-gray-500">Cada columna representa un médico.</div>
-                  </div>
+                  <Badge variant="outline">{slotColumnsByProfessionalForSelectedDate.length} médicos</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                {appointmentsByProfessionalForSelectedDate.every((entry) => entry.appointments.length === 0) ? (
+                {slotColumnsByProfessionalForSelectedDate.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
-                    No hay citas registradas para la fecha seleccionada.
+                    No hay agendas ni citas para la fecha seleccionada.
                   </div>
                 ) : (
                   <div className="overflow-x-auto pb-2">
-                    <div className="flex gap-4">
-                      {appointmentsByProfessionalForSelectedDate.map(renderDailyProfessionalColumn)}
+                    <div className="flex min-w-max gap-4">
+                      <div className="sticky left-0 z-10 min-w-[68px] rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="flex h-[76px] items-center justify-center rounded-t-xl border-b border-slate-200 bg-slate-100 px-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-600">
+                          Hora
+                        </div>
+                        <div className="relative bg-white" style={{ height: `${Math.max(dailyTimeline.totalHeight, 720)}px` }}>
+                          {dailyTimeline.hourlyMarks.map((hourMark) => {
+                            const topPosition = getTimelinePosition(hourMark)
+
+                            return (
+                              <div key={`timeline-${hourMark}`}>
+                                <div
+                                  className="pointer-events-none absolute inset-x-0 border-t border-slate-200"
+                                  style={{ top: `${topPosition}px` }}
+                                />
+                                <div
+                                  className="absolute left-0 right-0 -translate-y-1/2 px-2 text-center text-[11px] font-medium text-slate-500"
+                                  style={{ top: `${topPosition}px` }}
+                                >
+                                  {formatMinutesToLabel(hourMark)}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {slotColumnsByProfessionalForSelectedDate.map(renderDailyProfessionalColumn)}
                     </div>
                   </div>
                 )}

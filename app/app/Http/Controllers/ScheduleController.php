@@ -250,9 +250,7 @@ class ScheduleController extends Controller
             ->values()
             ->all();
 
-        $slotBoard = $professionalId
-            ? $this->scheduleService->getSlotBoardForRange($professionalId, $rangeStart, $rangeEnd)
-            : [];
+        $slotBoard = $this->scheduleService->getSlotBoardForRange($professionalId, $rangeStart, $rangeEnd);
 
         return Inertia::render('medical/schedule/Appointments', [
             'professionals' => $professionals,

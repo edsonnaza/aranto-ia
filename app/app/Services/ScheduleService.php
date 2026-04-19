@@ -75,12 +75,12 @@ class ScheduleService
         ));
     }
 
-    public function getSlotBoardForDate(int $professionalId, Carbon $date): array
+    public function getSlotBoardForDate(?int $professionalId, Carbon $date): array
     {
         return $this->getSlotBoardForRange($professionalId, $date->copy()->startOfDay(), $date->copy()->startOfDay());
     }
 
-    public function getSlotBoardForRange(int $professionalId, Carbon $dateFrom, Carbon $dateTo): array
+    public function getSlotBoardForRange(?int $professionalId, Carbon $dateFrom, Carbon $dateTo): array
     {
         $startDate = $dateFrom->copy()->startOfDay();
         $endDate = $dateTo->copy()->endOfDay();
@@ -88,7 +88,9 @@ class ScheduleService
         $schedules = ProfessionalSchedule::query()
             ->with(['professional', 'rules'])
             ->active()
-            ->where('professional_id', $professionalId)
+            ->when($professionalId, function ($query) use ($professionalId) {
+                $query->where('professional_id', $professionalId);
+            })
             ->whereDate('start_date', '<=', $dateTo->toDateString())
             ->where(function ($query) use ($dateFrom) {
                 $query->whereNull('end_date')
@@ -98,14 +100,18 @@ class ScheduleService
 
         $blocks = ProfessionalScheduleBlock::query()
             ->active()
-            ->where('professional_id', $professionalId)
+            ->when($professionalId, function ($query) use ($professionalId) {
+                $query->where('professional_id', $professionalId);
+            })
             ->where('start_datetime', '<=', $endDate)
             ->where('end_datetime', '>=', $startDate)
             ->get();
 
         $appointments = ScheduleAppointment::query()
             ->with(['patient', 'medicalService', 'serviceRequest'])
-            ->where('professional_id', $professionalId)
+            ->when($professionalId, function ($query) use ($professionalId) {
+                $query->where('professional_id', $professionalId);
+            })
             ->whereDate('appointment_date', '>=', $dateFrom->toDateString())
             ->whereDate('appointment_date', '<=', $dateTo->toDateString())
             ->whereNotIn('status', [ScheduleAppointment::STATUS_CANCELLED, ScheduleAppointment::STATUS_NO_SHOW])
