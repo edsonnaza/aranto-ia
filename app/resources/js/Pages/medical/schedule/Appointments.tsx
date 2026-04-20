@@ -224,7 +224,8 @@ export default function AppointmentsPage({
   const timelinePixelsPerMinute = 3.5
   const dailyTimelineTopOffset = 20
   const dailyTimelineBottomOffset = 24
-  const dailySlotGap = 10
+  const dailySlotGap = 4
+  const dailyHourDividerGap = 4
 
   const parseTimeToMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
@@ -240,6 +241,30 @@ export default function AppointmentsPage({
 
   const getTimelinePosition = (minutes: number) => {
     return dailyTimelineTopOffset + ((minutes - dailyTimeline.startMinutes) * timelinePixelsPerMinute)
+  }
+
+  const getSlotTopPosition = (startTime: string) => {
+    const startMinutes = parseTimeToMinutes(startTime)
+    const startsAtHourBoundary = startMinutes % 60 === 0
+
+    return getTimelinePosition(startMinutes) + dailySlotGap + (startsAtHourBoundary ? dailyHourDividerGap : 0)
+  }
+
+  const getSlotHeight = (startTime: string, endTime: string) => {
+    const startMinutes = parseTimeToMinutes(startTime)
+    const endMinutes = parseTimeToMinutes(endTime)
+    const startsAtHourBoundary = startMinutes % 60 === 0
+    const endsAtHourBoundary = endMinutes % 60 === 0
+    const startDividerGap = startsAtHourBoundary ? dailyHourDividerGap : 0
+    const endDividerGap = endsAtHourBoundary ? dailyHourDividerGap : 0
+
+    return Math.max(
+      ((endMinutes - startMinutes) * timelinePixelsPerMinute)
+      - (dailySlotGap * 2)
+      - startDividerGap
+      - endDividerGap,
+      42
+    )
   }
 
   const dailyTimeline = (() => {
@@ -402,8 +427,8 @@ export default function AppointmentsPage({
   }
 
   const renderSlotCard = (slot: SlotBoardEntry) => (
-    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-4 ${getSlotClasses(slot)}`}>
-      <div className="mb-2 flex items-start justify-between gap-2">
+    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-4 ${getSlotClasses(slot)}`} shadow-sm>
+      <div className="mb-2 flex items-start justify-between gap-2 ">
         <div>
           <div className="font-semibold text-gray-900">{slot.start_time} - {slot.end_time}</div>
           <div className="text-xs text-gray-600">{slot.professional_name}</div>
@@ -535,8 +560,8 @@ export default function AppointmentsPage({
     appointmentCount: number
   }) => {
     return (
-      <div key={entry.professional.id} className="flex min-w-[270px] max-w-[270px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="sticky top-0 z-10 rounded-t-xl border-b border-slate-200 bg-sky-600 px-4 py-3 text-white">
+      <div key={entry.professional.id} className="flex min-w-270px max-w-270px flex-col pb-2  rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="sticky top-0  z-10 rounded-t-xl border-b border-slate-200 bg-sky-600 px-4 py-3 text-white">
           <div className="font-semibold text-white">{entry.professional.full_name}</div>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs text-sky-50/90">
             <span className="truncate">{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
@@ -557,7 +582,7 @@ export default function AppointmentsPage({
             return (
               <div
                 key={`${entry.professional.id}-${hourMark}`}
-                className="pointer-events-none absolute inset-x-0 border-t border-slate-200"
+                className="pointer-events-none absolute  inset-x-0 border-t border-slate-200"
                 style={{ top: `${topPosition}px` }}
               />
             )
@@ -591,13 +616,13 @@ export default function AppointmentsPage({
                 openSlotForNewAppointment(slot)
               }
             }}
-            className={`absolute left-2 right-2 overflow-hidden rounded-lg border px-2 py-1 shadow-sm ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2' : ''}`}
+            className={`absolute left-2 right-2 flex flex-col overflow-hidden rounded-lg border px-1.5 py-2 shadow-sm ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2' : ''}`}
             style={{
-              top: `${getTimelinePosition(parseTimeToMinutes(slot.start_time))}px`,
-              minHeight: `${Math.max(((parseTimeToMinutes(slot.end_time) - parseTimeToMinutes(slot.start_time)) * timelinePixelsPerMinute) - dailySlotGap, 42)}px`,
+              top: `${getSlotTopPosition(slot.start_time)}px`,
+              height: `${getSlotHeight(slot.start_time, slot.end_time)}px`,
             }}
           >
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start justify-between gap-2 ">
               <div>
                 <div className="text-[11px] font-semibold leading-none">{slot.start_time} - {slot.end_time}</div>
                 <div className="mt-0.5 text-[9px] opacity-75">{slot.duration_minutes} min · Cupo {slot.capacity}</div>
@@ -626,7 +651,7 @@ export default function AppointmentsPage({
                 const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
 
                 return (
-                  <div key={appointment.id} className="rounded-md border border-black/10 bg-white/85 px-2 py-0.5 shadow-sm">
+                  <div key={appointment.id} className="rounded-md border border-black/10 bg-white/85 px-1 shadow-sm">
                     <button
                       type="button"
                       onClick={(event) => {
@@ -634,14 +659,14 @@ export default function AppointmentsPage({
                         openExistingAppointment(appointment.id)
                       }}
                       disabled={appointmentLocked}
-                      className={`w-full text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
+                      className={`w-full  text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
                     >
                       <div className="text-[10px] font-medium leading-tight text-gray-900">{appointment.patient_name}</div>
                       {appointment.medical_service_name && <div className="mt-0.5 text-[9px] leading-tight text-gray-500">{appointment.medical_service_name}</div>}
                       {appointment.service_request_number && <div className="mt-0.5 text-[9px] text-emerald-600">Recepción: {appointment.service_request_number}</div>}
                     </button>
 
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 pb-2px">
                       <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'outline'} className="h-4 px-1.5 text-[9px]">
                         {getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}
                       </Badge>
