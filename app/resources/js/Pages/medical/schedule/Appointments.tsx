@@ -872,9 +872,17 @@ export default function AppointmentsPage({
           <p className="text-sm text-gray-500">Administrá la agenda clínica con foco en reservas, slots y seguimiento operativo.</p>
         </div>
 
+        <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as PanelView)}>
+          <TabsList className="grid w-full max-w-xl grid-cols-3">
+            <TabsTrigger value="range">Agenda del rango</TabsTrigger>
+            <TabsTrigger value="today" disabled={currentView !== 'day'}>Citas del día</TabsTrigger>
+            <TabsTrigger value="calendar">Calendario</TabsTrigger>
+          </TabsList>
+
         <Card>
-          <CardHeader>
-            <CardTitle>Panel de citas</CardTitle>
+          <CardHeader className="gap-2">
+            <CardTitle>Agenda y citas</CardTitle>
+            <p className="text-sm text-gray-500">Filtros, navegación y cambio de vista para trabajar la agenda clínica desde un solo panel.</p>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="w-full xl:max-w-xl">
@@ -947,16 +955,18 @@ export default function AppointmentsPage({
                   ))}
                 </div>
               </div>
+
+              {currentPanel === 'calendar' && (
+                <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-600">
+                  <Badge variant="outline" className="border-lime-300 bg-lime-50 text-lime-800">Slots disponibles</Badge>
+                  <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-800">Slots parciales</Badge>
+                  <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-800">Slots ocupados</Badge>
+                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Slots bloqueados</Badge>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-
-        <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as PanelView)}>
-          <TabsList className="grid w-full max-w-xl grid-cols-3">
-            <TabsTrigger value="range">Agenda del rango</TabsTrigger>
-            <TabsTrigger value="today" disabled={currentView !== 'day'}>Citas del día</TabsTrigger>
-            <TabsTrigger value="calendar">Calendario</TabsTrigger>
-          </TabsList>
 
           <TabsContent value="range" className="mt-4">
             <div className="grid gap-6 xl:grid-cols-[1.6fr,1fr]">
@@ -1107,21 +1117,11 @@ export default function AppointmentsPage({
 
           <TabsContent value="calendar" className="mt-4">
             <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle>Calendario de citas</CardTitle>
-                    <p className="text-sm text-gray-500">Vista tipo calendario con navegación por día, semana y mes. Click en una cita para editarla; click en una fecha para abrir la agenda diaria.</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                    <Badge variant="outline" className="border-lime-300 bg-lime-50 text-lime-800">Slots disponibles</Badge>
-                    <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-800">Slots parciales</Badge>
-                    <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-800">Slots ocupados</Badge>
-                    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Slots bloqueados</Badge>
-                  </div>
+              <CardContent className="pt-6">
+                <div className="mb-4 flex flex-col gap-1">
+                  <div className="text-base font-semibold text-slate-900">Calendario de citas</div>
+                  <p className="text-sm text-gray-500">Vista tipo calendario con navegación por día, semana y mes. Click en una cita para ver detalle; click en una fecha para abrir la agenda diaria.</p>
                 </div>
-              </CardHeader>
-              <CardContent>
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <FullCalendar
                     key={`${currentCalendarView}-${selectedDate}-${filterProfessionalId || 'all'}`}

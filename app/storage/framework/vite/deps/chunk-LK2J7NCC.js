@@ -1,4 +1,7 @@
 import {
+  useSize
+} from "./chunk-YCPHULQN.js";
+import {
   arrow,
   autoUpdate,
   flip,
@@ -8,14 +11,11 @@ import {
   shift,
   size,
   useFloating
-} from "./chunk-DKTH2MHA.js";
-import {
-  useSize
-} from "./chunk-YCPHULQN.js";
+} from "./chunk-ZZLNA2C6.js";
 import {
   Primitive,
   createContextScope
-} from "./chunk-OC5DBTAM.js";
+} from "./chunk-ZMREWSXW.js";
 import {
   useCallbackRef
 } from "./chunk-7BD4VYXK.js";
@@ -339,4 +339,4 @@ export {
   Content,
   Arrow2 as Arrow
 };
-//# sourceMappingURL=chunk-HE47TM3O.js.map
+//# sourceMappingURL=chunk-LK2J7NCC.js.map

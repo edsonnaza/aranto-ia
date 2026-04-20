@@ -1902,13 +1902,13 @@ var arrow3 = (options, deps) => ({
 });
 
 export {
-  isElement,
-  getComputedStyle2 as getComputedStyle,
   min,
   max,
   round,
   floor,
   evaluate,
+  isElement,
+  getComputedStyle2 as getComputedStyle,
   autoUpdate,
   detectOverflow2 as detectOverflow,
   useFloating,
@@ -1920,4 +1920,4 @@ export {
   hide3 as hide,
   arrow3 as arrow
 };
-//# sourceMappingURL=chunk-DKTH2MHA.js.map
+//# sourceMappingURL=chunk-ZZLNA2C6.js.map
