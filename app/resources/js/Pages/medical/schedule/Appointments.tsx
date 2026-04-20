@@ -1,3 +1,8 @@
+import type { DateClickArg, EventClickArg, EventContentArg, MoreLinkContentArg } from '@fullcalendar/core'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import interactionPlugin from '@fullcalendar/interaction'
+import FullCalendar from '@fullcalendar/react'
+import timeGridPlugin from '@fullcalendar/timegrid'
 import { Head, router } from '@inertiajs/react'
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -6,6 +11,7 @@ import SearchableInput from '@/components/ui/SearchableInput'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
 import { useSchedule, useSearch } from '@/hooks/medical'
@@ -87,6 +93,8 @@ interface AppointmentsPageProps {
   }
 }
 
+type PanelView = 'range' | 'today' | 'calendar'
+
 export default function AppointmentsPage({
   professionals,
   medicalServices,
@@ -99,10 +107,11 @@ export default function AppointmentsPage({
 
   const [selectedDate, setSelectedDate] = useState(filters.selected_date)
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month'>(filters.view)
-  const [currentPanel, setCurrentPanel] = useState<'range' | 'today'>(filters.view === 'day' ? 'today' : 'range')
+  const [currentPanel, setCurrentPanel] = useState<PanelView>(filters.view === 'day' ? 'today' : 'range')
   const [filterProfessionalId, setFilterProfessionalId] = useState(filters.professional_id ? String(filters.professional_id) : '')
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [calendarAppointmentDetails, setCalendarAppointmentDetails] = useState<Appointment | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{
     professionalId: number
     professionalName: string
@@ -221,6 +230,7 @@ export default function AppointmentsPage({
   }))
 
   const currentViewLabel = currentView === 'day' ? 'día' : currentView === 'week' ? 'semana' : 'mes'
+  const currentCalendarView = currentView === 'day' ? 'timeGridDay' : currentView === 'week' ? 'timeGridWeek' : 'dayGridMonth'
   const timelinePixelsPerMinute = 3.5
   const dailyTimelineTopOffset = 20
   const dailyTimelineBottomOffset = 24
@@ -295,11 +305,136 @@ export default function AppointmentsPage({
     }
   })()
 
-  const isAppointmentLocked = (
+  const formatCalendarBoundaryTime = (minutes: number) => {
+    const safeMinutes = Math.max(0, Math.min(minutes, 24 * 60))
+    const hours = Math.floor(safeMinutes / 60)
+    const remainingMinutes = safeMinutes % 60
+
+    return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}:00`
+  }
+
+  const getCalendarAppointmentColors = (status: Appointment['status']) => {
+    switch (status) {
+      case 'cancelled':
+        return {
+          backgroundColor: '#e2e8f0',
+          borderColor: '#94a3b8',
+          textColor: '#334155',
+        }
+      case 'completed':
+        return {
+          backgroundColor: '#dcfce7',
+          borderColor: '#22c55e',
+          textColor: '#14532d',
+        }
+      case 'checked_in':
+        return {
+          backgroundColor: '#dbeafe',
+          borderColor: '#3b82f6',
+          textColor: '#1e3a8a',
+        }
+      case 'no_show':
+        return {
+          backgroundColor: '#fef3c7',
+          borderColor: '#f59e0b',
+          textColor: '#78350f',
+        }
+      default:
+        return {
+          backgroundColor: '#e0f2fe',
+          borderColor: '#0ea5e9',
+          textColor: '#0f172a',
+        }
+    }
+  }
+
+  const getCalendarSlotColor = (slotStatus: SlotBoardEntry['slot_status']) => {
+    switch (slotStatus) {
+      case 'blocked':
+        return '#fcd34d'
+      case 'occupied':
+        return '#fda4af'
+      case 'partial':
+        return '#93c5fd'
+      default:
+        return '#bef264'
+    }
+  }
+
+  const calendarEvents = [
+    ...((currentCalendarView === 'dayGridMonth' ? [] : slotBoard).map((slot) => ({
+      id: `slot-${slot.professional_id}-${slot.date}-${slot.start_time}`,
+      start: `${slot.date}T${slot.start_time}`,
+      end: `${slot.date}T${slot.end_time}`,
+      display: 'background' as const,
+      backgroundColor: getCalendarSlotColor(slot.slot_status),
+      extendedProps: {
+        type: 'slot' as const,
+      },
+    }))),
+    ...appointments.map((appointment) => {
+      const colors = getCalendarAppointmentColors(appointment.status)
+
+      return {
+        id: String(appointment.id),
+        title: appointment.patient_name,
+        start: `${appointment.appointment_date}T${appointment.start_time}`,
+        end: `${appointment.appointment_date}T${appointment.end_time}`,
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
+        textColor: colors.textColor,
+        extendedProps: {
+          type: 'appointment' as const,
+          patientName: appointment.patient_name,
+          professionalName: appointment.professional_name,
+          medicalServiceName: appointment.medical_service_name,
+          startTime: appointment.start_time,
+          statusLabel: getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment)),
+          canEdit: !isAppointmentLocked(appointment),
+        },
+      }
+    }),
+  ]
+
+  const handleCalendarEventClick = (eventClickInfo: EventClickArg) => {
+    if (eventClickInfo.event.extendedProps.type !== 'appointment') {
+      return
+    }
+
+    const appointment = appointments.find((item) => item.id === Number(eventClickInfo.event.id))
+
+    if (!appointment) {
+      return
+    }
+
+    setCalendarAppointmentDetails(appointment)
+  }
+
+  const handleCalendarDateClick = (dateClickInfo: DateClickArg) => {
+    setCurrentPanel('today')
+    navigateBoard(dateClickInfo.dateStr.slice(0, 10), 'day', filterProfessionalId)
+  }
+
+  const closeCalendarAppointmentDetails = (open: boolean) => {
+    if (!open) {
+      setCalendarAppointmentDetails(null)
+    }
+  }
+
+  const openCalendarAppointmentEditor = () => {
+    if (!calendarAppointmentDetails) {
+      return
+    }
+
+    setCalendarAppointmentDetails(null)
+    openExistingAppointment(calendarAppointmentDetails.id)
+  }
+
+  function isAppointmentLocked(
     appointment:
       | Pick<Appointment, 'service_request_id' | 'service_request_status'>
       | Pick<SlotBoardEntry['appointments'][number], 'service_request_id' | 'service_request_status'>
-  ) => {
+  ) {
     return Boolean(
       appointment.service_request_id
       && appointment.service_request_status
@@ -307,7 +442,7 @@ export default function AppointmentsPage({
     )
   }
 
-  const getAppointmentStatusLabel = (status: Appointment['status'] | SlotBoardEntry['appointments'][number]['status']) => {
+  function getAppointmentStatusLabel(status: Appointment['status'] | SlotBoardEntry['appointments'][number]['status']) {
     switch (status) {
       case 'scheduled':
         return 'Agendada'
@@ -324,11 +459,11 @@ export default function AppointmentsPage({
     }
   }
 
-  const getDisplayAppointmentStatus = (
+  function getDisplayAppointmentStatus(
     appointment:
       | Pick<Appointment, 'status' | 'service_request_status'>
       | Pick<SlotBoardEntry['appointments'][number], 'status' | 'service_request_status'>
-  ) => {
+  ) {
     if (appointment.service_request_status === 'confirmed' && appointment.status === 'scheduled') {
       return 'checked_in'
     }
@@ -422,12 +557,49 @@ export default function AppointmentsPage({
     saveAppointment(payload, appointmentId, {
       onSuccess: () => {
         closeAppointmentModal(false)
+        setCalendarAppointmentDetails(null)
       },
     })
   }
 
+  const renderCalendarEventContent = (eventInfo: EventContentArg) => {
+    if (eventInfo.event.extendedProps.type !== 'appointment') {
+      return undefined
+    }
+
+    if (currentCalendarView === 'dayGridMonth') {
+      return (
+        <div className="flex items-center gap-1 truncate text-[11px] leading-tight">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full bg-sky-500"
+            aria-hidden="true"
+          />
+          <span className="shrink-0 font-medium">{eventInfo.timeText}</span>
+          <span className="truncate font-semibold">{eventInfo.event.title}</span>
+        </div>
+      )
+    }
+
+    return (
+      <div className="px-1 py-0.5 text-[11px] leading-tight">
+        <div className="font-semibold">{eventInfo.event.extendedProps.patientName}</div>
+        <div className="opacity-80">{eventInfo.timeText}</div>
+        {!filterProfessionalId && (
+          <div className="truncate opacity-75">{eventInfo.event.extendedProps.professionalName}</div>
+        )}
+        {eventInfo.event.extendedProps.medicalServiceName && (
+          <div className="truncate opacity-75">{eventInfo.event.extendedProps.medicalServiceName}</div>
+        )}
+      </div>
+    )
+  }
+
+  const renderCalendarMoreLinkContent = (moreLinkInfo: MoreLinkContentArg) => {
+    return `+ ${moreLinkInfo.num} pacientes`
+  }
+
   const renderSlotCard = (slot: SlotBoardEntry) => (
-    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-4 ${getSlotClasses(slot)}`} shadow-sm>
+    <div key={`${slot.date}-${slot.start_time}-${slot.professional_id}`} className={`rounded-lg border p-4 shadow-sm ${getSlotClasses(slot)}`}>
       <div className="mb-2 flex items-start justify-between gap-2 ">
         <div>
           <div className="font-semibold text-gray-900">{slot.start_time} - {slot.end_time}</div>
@@ -560,8 +732,8 @@ export default function AppointmentsPage({
     appointmentCount: number
   }) => {
     return (
-      <div key={entry.professional.id} className="flex min-w-270px max-w-270px flex-col pb-2  rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="sticky top-0  z-10 rounded-t-xl border-b border-slate-200 bg-sky-600 px-4 py-3 text-white">
+      <div key={entry.professional.id} className="flex min-w-[270px] max-w-[270px] flex-col rounded-xl border border-slate-200 bg-white pb-2 shadow-sm">
+        <div className="sticky top-0 z-10 rounded-t-xl border-b border-slate-200 bg-sky-600 px-4 py-3 text-white">
           <div className="font-semibold text-white">{entry.professional.full_name}</div>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs text-sky-50/90">
             <span className="truncate">{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
@@ -582,7 +754,7 @@ export default function AppointmentsPage({
             return (
               <div
                 key={`${entry.professional.id}-${hourMark}`}
-                className="pointer-events-none absolute  inset-x-0 border-t border-slate-200"
+                className="pointer-events-none absolute inset-x-0 border-t border-slate-200"
                 style={{ top: `${topPosition}px` }}
               />
             )
@@ -659,14 +831,14 @@ export default function AppointmentsPage({
                         openExistingAppointment(appointment.id)
                       }}
                       disabled={appointmentLocked}
-                      className={`w-full  text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
+                      className={`w-full text-left ${appointmentLocked ? 'cursor-not-allowed opacity-80' : 'hover:bg-slate-50'}`}
                     >
                       <div className="text-[10px] font-medium leading-tight text-gray-900">{appointment.patient_name}</div>
                       {appointment.medical_service_name && <div className="mt-0.5 text-[9px] leading-tight text-gray-500">{appointment.medical_service_name}</div>}
                       {appointment.service_request_number && <div className="mt-0.5 text-[9px] text-emerald-600">Recepción: {appointment.service_request_number}</div>}
                     </button>
 
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 pb-2px">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 pb-[2px]">
                       <Badge variant={appointment.status === 'cancelled' ? 'secondary' : 'outline'} className="h-4 px-1.5 text-[9px]">
                         {getAppointmentStatusLabel(getDisplayAppointmentStatus(appointment))}
                       </Badge>
@@ -779,10 +951,11 @@ export default function AppointmentsPage({
           </CardContent>
         </Card>
 
-        <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as 'range' | 'today')}>
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+        <Tabs value={currentPanel} onValueChange={(value) => setCurrentPanel(value as PanelView)}>
+          <TabsList className="grid w-full max-w-xl grid-cols-3">
             <TabsTrigger value="range">Agenda del rango</TabsTrigger>
             <TabsTrigger value="today" disabled={currentView !== 'day'}>Citas del día</TabsTrigger>
+            <TabsTrigger value="calendar">Calendario</TabsTrigger>
           </TabsList>
 
           <TabsContent value="range" className="mt-4">
@@ -931,6 +1104,54 @@ export default function AppointmentsPage({
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="calendar" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle>Calendario de citas</CardTitle>
+                    <p className="text-sm text-gray-500">Vista tipo calendario con navegación por día, semana y mes. Click en una cita para editarla; click en una fecha para abrir la agenda diaria.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    <Badge variant="outline" className="border-lime-300 bg-lime-50 text-lime-800">Slots disponibles</Badge>
+                    <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-800">Slots parciales</Badge>
+                    <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-800">Slots ocupados</Badge>
+                    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Slots bloqueados</Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <FullCalendar
+                    key={`${currentCalendarView}-${selectedDate}-${filterProfessionalId || 'all'}`}
+                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                    initialView={currentCalendarView}
+                    initialDate={selectedDate}
+                    locale="es"
+                    height="auto"
+                    allDaySlot={false}
+                    nowIndicator
+                    selectable={false}
+                    weekends
+                    headerToolbar={false}
+                    moreLinkClick="popover"
+                    slotMinTime={formatCalendarBoundaryTime(Math.max(dailyTimeline.startMinutes - 60, 0))}
+                    slotMaxTime={formatCalendarBoundaryTime(Math.min(dailyTimeline.endMinutes + 60, 24 * 60))}
+                    eventDisplay={currentCalendarView === 'dayGridMonth' ? 'list-item' : 'auto'}
+                    eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
+                    dayMaxEvents={currentCalendarView === 'dayGridMonth' ? 3 : undefined}
+                    dayMaxEventRows={currentCalendarView === 'dayGridMonth' ? true : 4}
+                    moreLinkContent={renderCalendarMoreLinkContent}
+                    events={calendarEvents}
+                    eventClick={handleCalendarEventClick}
+                    dateClick={handleCalendarDateClick}
+                    eventContent={renderCalendarEventContent}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         <AppointmentSlotModal
@@ -943,6 +1164,67 @@ export default function AppointmentsPage({
           onSearchPatients={searchPatients}
           onSubmit={submitAppointment}
         />
+
+        <Dialog open={Boolean(calendarAppointmentDetails)} onOpenChange={closeCalendarAppointmentDetails}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Detalle de la cita</DialogTitle>
+              <DialogDescription>
+                Resumen rápido para no recargar la vista mensual del calendario.
+              </DialogDescription>
+            </DialogHeader>
+
+            {calendarAppointmentDetails && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-lg font-semibold text-slate-900">{calendarAppointmentDetails.patient_name}</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {calendarAppointmentDetails.appointment_date} · {calendarAppointmentDetails.start_time} a {calendarAppointmentDetails.end_time}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Médico</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">{calendarAppointmentDetails.professional_name}</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Estado</div>
+                    <div className="mt-1">
+                      <Badge variant={calendarAppointmentDetails.status === 'cancelled' ? 'secondary' : 'outline'}>
+                        {getAppointmentStatusLabel(getDisplayAppointmentStatus(calendarAppointmentDetails))}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Servicio solicitado</div>
+                  <div className="mt-1 text-sm text-slate-900">{calendarAppointmentDetails.medical_service_name || 'Sin servicio vinculado'}</div>
+                  {calendarAppointmentDetails.service_request_number && (
+                    <div className="mt-2 text-xs text-emerald-600">Recepción: {calendarAppointmentDetails.service_request_number}</div>
+                  )}
+                </div>
+
+                {calendarAppointmentDetails.notes && (
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas</div>
+                    <div className="mt-1 text-sm text-slate-700">{calendarAppointmentDetails.notes}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCalendarAppointmentDetails(null)}>
+                Cerrar
+              </Button>
+              <Button type="button" onClick={openCalendarAppointmentEditor} disabled={!calendarAppointmentDetails || isAppointmentLocked(calendarAppointmentDetails)}>
+                {calendarAppointmentDetails && isAppointmentLocked(calendarAppointmentDetails) ? 'No editable' : 'Editar cita'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       </div>
