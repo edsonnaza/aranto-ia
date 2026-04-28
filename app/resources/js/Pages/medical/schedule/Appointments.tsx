@@ -1,6 +1,6 @@
-import type { DateClickArg, EventClickArg, EventContentArg, MoreLinkContentArg } from '@fullcalendar/core'
+import type { EventClickArg, EventContentArg, MoreLinkContentArg } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
-import interactionPlugin from '@fullcalendar/interaction'
+import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import { Head, router } from '@inertiajs/react'
@@ -889,7 +889,7 @@ export default function AppointmentsPage({
               <label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
               <div className="flex gap-2">
                 <SearchableInput
-                  placeholder="Prof."
+                  placeholder="Dr. Juan Pérez"
                   value={getProfessionalName(filterProfessionalId)}
                   onSelect={(professional) => {
                     const nextProfessionalId = String(professional.id)
