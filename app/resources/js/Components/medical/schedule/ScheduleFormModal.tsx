@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import SearchableInput from '@/components/ui/SearchableInput'
 import SelectItem from '@/components/ui/SelectItem'
 import { Button } from '@/components/ui/button'
@@ -85,63 +85,42 @@ const emptyWeekRuleMap = (): WeekRuleForm[] => (
   }))
 )
 
-export default function ScheduleFormModal({
-  open,
-  onOpenChange,
+const buildWeekRules = (schedule?: ScheduleConfig | null): WeekRuleForm[] => {
+  if (!schedule) {
+    return emptyWeekRuleMap()
+  }
+
+  return weekDays.map((day) => {
+    const rule = schedule.rules.find((item) => item.weekday === day.value)
+
+    return {
+      weekday: day.value,
+      enabled: Boolean(rule),
+      start_time: rule?.start_time || '08:00',
+      end_time: rule?.end_time || '12:00',
+      capacity: rule?.capacity || 1,
+    }
+  })
+}
+
+type ScheduleFormFieldsProps = Omit<ScheduleFormModalProps, 'open' | 'onOpenChange'>
+
+function ScheduleFormFields({
   professionals,
   initialRange,
   loading,
   schedule,
   onSearchProfessionals,
   onSubmit,
-}: ScheduleFormModalProps) {
-  const [scheduleProfessionalId, setScheduleProfessionalId] = useState('')
-  const [scheduleName, setScheduleName] = useState('')
-  const [scheduleStartDate, setScheduleStartDate] = useState(initialRange.startDate)
-  const [scheduleEndDate, setScheduleEndDate] = useState(initialRange.endDate)
-  const [slotDuration, setSlotDuration] = useState('30')
-  const [scheduleStatus, setScheduleStatus] = useState<'active' | 'inactive'>('active')
-  const [scheduleNotes, setScheduleNotes] = useState('')
-  const [weekRules, setWeekRules] = useState<WeekRuleForm[]>(emptyWeekRuleMap)
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    if (!schedule) {
-      setScheduleProfessionalId('')
-      setScheduleName('')
-      setScheduleStartDate(initialRange.startDate)
-      setScheduleEndDate(initialRange.endDate)
-      setSlotDuration('30')
-      setScheduleStatus('active')
-      setScheduleNotes('')
-      setWeekRules(emptyWeekRuleMap())
-      return
-    }
-
-    setScheduleProfessionalId(String(schedule.professional_id))
-    setScheduleName(schedule.name)
-    setScheduleStartDate(schedule.start_date)
-    setScheduleEndDate(schedule.end_date || '')
-    setSlotDuration(String(schedule.slot_duration_minutes))
-    setScheduleStatus(schedule.status)
-    setScheduleNotes(schedule.notes || '')
-    setWeekRules(
-      weekDays.map((day) => {
-        const rule = schedule.rules.find((item) => item.weekday === day.value)
-
-        return {
-          weekday: day.value,
-          enabled: Boolean(rule),
-          start_time: rule?.start_time || '08:00',
-          end_time: rule?.end_time || '12:00',
-          capacity: rule?.capacity || 1,
-        }
-      })
-    )
-  }, [initialRange.endDate, initialRange.startDate, open, schedule])
+}: ScheduleFormFieldsProps) {
+  const [scheduleProfessionalId, setScheduleProfessionalId] = useState(schedule ? String(schedule.professional_id) : '')
+  const [scheduleName, setScheduleName] = useState(schedule?.name || '')
+  const [scheduleStartDate, setScheduleStartDate] = useState(schedule?.start_date || initialRange.startDate)
+  const [scheduleEndDate, setScheduleEndDate] = useState(schedule?.end_date || initialRange.endDate)
+  const [slotDuration, setSlotDuration] = useState(schedule ? String(schedule.slot_duration_minutes) : '30')
+  const [scheduleStatus, setScheduleStatus] = useState<'active' | 'inactive'>(schedule?.status || 'active')
+  const [scheduleNotes, setScheduleNotes] = useState(schedule?.notes || '')
+  const [weekRules, setWeekRules] = useState<WeekRuleForm[]>(() => buildWeekRules(schedule))
 
   const getProfessionalName = (professionalId: string) => {
     if (!professionalId) {
@@ -190,6 +169,115 @@ export default function ScheduleFormModal({
   }
 
   return (
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
+          <SearchableInput
+            placeholder="Dr. Juan Pérez"
+            value={getProfessionalName(scheduleProfessionalId)}
+            onSelect={(professional) => setScheduleProfessionalId(String(professional.id))}
+            onSearch={onSearchProfessionals}
+            minSearchLength={1}
+            maxResults={10}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
+          <input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Inicio</label>
+          <input type="date" value={scheduleStartDate} onChange={(event) => setScheduleStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Fin</label>
+          <input type="date" value={scheduleEndDate || ''} onChange={(event) => setScheduleEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Duración del slot</label>
+          <SelectItem value={slotDuration} onValueChange={setSlotDuration} required>
+            {!defaultSlotDurationOptions.includes(slotDuration) && slotDuration && (
+              <option value={slotDuration}>{slotDuration} minutos</option>
+            )}
+            <option value="15">15 minutos</option>
+            <option value="30">30 minutos</option>
+            <option value="45">45 minutos</option>
+            <option value="60">60 minutos</option>
+          </SelectItem>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
+          <SelectItem value={scheduleStatus} onValueChange={(value) => setScheduleStatus(value as 'active' | 'inactive')} required>
+            <option value="active">Activa</option>
+            <option value="inactive">Inactiva</option>
+          </SelectItem>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="font-medium text-gray-900">Reglas semanales</div>
+          <div className="hidden text-[11px] uppercase tracking-wide text-gray-500 md:flex md:items-center md:gap-16">
+            <span>Desde</span>
+            <span>Hasta</span>
+            <span>Cupos</span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {weekRules.map((rule) => (
+            <div key={rule.weekday} className="grid items-center gap-2 rounded-md border border-gray-100 px-2 py-2 md:grid-cols-[140px,120px,120px,88px] md:border-0 md:px-0 md:py-0">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={rule.enabled} onChange={(event) => handleWeekRuleChange(rule.weekday, 'enabled', event.target.checked)} />
+                {weekDays.find((day) => day.value === rule.weekday)?.label}
+              </label>
+              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
+                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Desde</span>
+                <input type="time" value={rule.start_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'start_time', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              </div>
+              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
+                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Hasta</span>
+                <input type="time" value={rule.end_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'end_time', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              </div>
+              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
+                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Cupos</span>
+                <input type="number" min="1" max="20" value={rule.capacity} onChange={(event) => handleWeekRuleChange(rule.weekday, 'capacity', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
+        <textarea value={scheduleNotes} onChange={(event) => setScheduleNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} />
+      </div>
+
+      <DialogFooter>
+        <Button type="submit" disabled={loading}>
+          {schedule ? 'Guardar cambios' : 'Guardar agenda'}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+export default function ScheduleFormModal({
+  open,
+  onOpenChange,
+  professionals,
+  initialRange,
+  loading,
+  schedule,
+  onSearchProfessionals,
+  onSubmit,
+}: ScheduleFormModalProps) {
+  const formKey = schedule
+    ? `schedule-${schedule.id}-${schedule.start_date}-${schedule.end_date || ''}`
+    : `new-${initialRange.startDate}-${initialRange.endDate}`
+
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
@@ -198,85 +286,23 @@ export default function ScheduleFormModal({
             Configurá el profesional, la vigencia y las reglas semanales en un solo formulario.
           </DialogDescription>
         </DialogHeader>
+        {open && (
+          <ScheduleFormFields
+            key={formKey}
+            professionals={professionals}
+            initialRange={initialRange}
+            loading={loading}
+            schedule={schedule}
+            onSearchProfessionals={onSearchProfessionals}
+            onSubmit={onSubmit}
+          />
+        )}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
-              <SearchableInput
-                placeholder="Prof."
-                value={getProfessionalName(scheduleProfessionalId)}
-                onSelect={(professional) => setScheduleProfessionalId(String(professional.id))}
-                onSearch={onSearchProfessionals}
-                minSearchLength={1}
-                maxResults={10}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
-              <input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Inicio</label>
-              <input type="date" value={scheduleStartDate} onChange={(event) => setScheduleStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Fin</label>
-              <input type="date" value={scheduleEndDate || ''} onChange={(event) => setScheduleEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Duración del slot</label>
-              <SelectItem value={slotDuration} onValueChange={setSlotDuration} required>
-                {!defaultSlotDurationOptions.includes(slotDuration) && slotDuration && (
-                  <option value={slotDuration}>{slotDuration} minutos</option>
-                )}
-                <option value="15">15 minutos</option>
-                <option value="30">30 minutos</option>
-                <option value="45">45 minutos</option>
-                <option value="60">60 minutos</option>
-              </SelectItem>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
-              <SelectItem value={scheduleStatus} onValueChange={(value) => setScheduleStatus(value as 'active' | 'inactive')} required>
-                <option value="active">Activa</option>
-                <option value="inactive">Inactiva</option>
-              </SelectItem>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 p-4">
-            <div className="mb-3 font-medium text-gray-900">Reglas semanales</div>
-            <div className="space-y-3">
-              {weekRules.map((rule) => (
-                <div key={rule.weekday} className="grid items-center gap-3 md:grid-cols-[150px,1fr,1fr,120px]">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <input type="checkbox" checked={rule.enabled} onChange={(event) => handleWeekRuleChange(rule.weekday, 'enabled', event.target.checked)} />
-                    {weekDays.find((day) => day.value === rule.weekday)?.label}
-                  </label>
-                  <input type="time" value={rule.start_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'start_time', event.target.value)} disabled={!rule.enabled} className="rounded-md border border-gray-300 px-3 py-2" />
-                  <input type="time" value={rule.end_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'end_time', event.target.value)} disabled={!rule.enabled} className="rounded-md border border-gray-300 px-3 py-2" />
-                  <input type="number" min="1" max="20" value={rule.capacity} onChange={(event) => handleWeekRuleChange(rule.weekday, 'capacity', event.target.value)} disabled={!rule.enabled} className="rounded-md border border-gray-300 px-3 py-2" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
-            <textarea value={scheduleNotes} onChange={(event) => setScheduleNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {schedule ? 'Guardar cambios' : 'Guardar agenda'}
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
