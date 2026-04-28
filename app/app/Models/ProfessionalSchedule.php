@@ -7,6 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $professional_id
+ * @property string $name
+ * @property \Illuminate\Support\Carbon|null $start_date
+ * @property \Illuminate\Support\Carbon|null $end_date
+ * @property int $slot_duration_minutes
+ * @property string $status
+ * @property string|null $notes
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read \App\Models\Professional|null $professional
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\ProfessionalScheduleRule> $rules
+ */
 class ProfessionalSchedule extends Model
 {
     use Auditable;

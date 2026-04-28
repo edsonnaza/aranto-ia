@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type PaginatedData } from '@/components/ui/data-table'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ScheduleFormModal from '@/components/medical/schedule/ScheduleFormModal'
 import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
@@ -131,6 +132,14 @@ type SlotBoardEntry = {
 	}>
 }
 
+type BlockPreviewSlot = {
+	start_time: string
+	end_time: string
+	status: 'available' | 'partial' | 'occupied' | 'blocked'
+	block_title?: string | null
+	appointments_count?: number
+}
+
 interface SchedulePageProps {
 	professionals: ProfessionalOption[]
 	medicalServices: MedicalServiceOption[]
@@ -189,7 +198,10 @@ export default function ScheduleIndex({
 	const [selectedSchedule, setSelectedSchedule] = useState<ScheduleConfig | null>(null)
 
 	const [blockId, setBlockId] = useState<number | null>(null)
+	const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
+	const [blockScheduleContext, setBlockScheduleContext] = useState<ScheduleConfig | null>(null)
 	const [blockProfessionalId, setBlockProfessionalId] = useState('')
+	const [blockTargetDate, setBlockTargetDate] = useState(filters.selected_date)
 	const [blockType, setBlockType] = useState<'travel' | 'conference' | 'holiday' | 'vacation' | 'other'>('vacation')
 	const [blockTitle, setBlockTitle] = useState('')
 	const [blockStart, setBlockStart] = useState('')
@@ -246,6 +258,36 @@ export default function ScheduleIndex({
 		})
 	}
 
+	const applyProfessionalFilter = (professionalId: string) => {
+		setFilterProfessionalId(professionalId)
+		navigateWithFilters({
+			professional_id: professionalId || undefined,
+			date_from: dateFrom,
+			date_to: dateTo,
+			selected_date: selectedDate,
+			search: filters.search || undefined,
+			status: filters.status || undefined,
+			per_page: filters.per_page,
+		})
+	}
+
+	const clearProfessionalFilter = () => {
+		applyProfessionalFilter('')
+	}
+
+	const applyScheduleStatusFilter = (status: string) => {
+		const params = new URLSearchParams(window.location.search)
+
+		if (status !== 'all') {
+			params.set('status', status)
+		} else {
+			params.delete('status')
+		}
+
+		params.set('page', '1')
+		router.get(`${window.location.pathname}?${params.toString()}`, {}, { preserveState: true, replace: true })
+	}
+
 	const openCreateScheduleModal = () => {
 		setSelectedSchedule(null)
 		setIsScheduleModalOpen(true)
@@ -265,7 +307,9 @@ export default function ScheduleIndex({
 
 	const resetBlockForm = () => {
 		setBlockId(null)
+		setBlockScheduleContext(null)
 		setBlockProfessionalId('')
+		setBlockTargetDate(selectedDate)
 		setBlockType('vacation')
 		setBlockTitle('')
 		setBlockStart('')
@@ -275,15 +319,32 @@ export default function ScheduleIndex({
 		setBlockNotes('')
 	}
 
-	const resetAppointmentForm = () => {
-		setAppointmentId(null)
-		setSelectedAppointment(null)
-		setSelectedSlot(null)
+	const closeBlockModal = (open: boolean) => {
+		setIsBlockModalOpen(open)
+
+		if (!open) {
+			resetBlockForm()
+		}
 	}
 
-	const loadBlock = (block: ScheduleBlock) => {
+	const buildLocalDateTime = (date: string, time: string) => `${date}T${time.slice(0, 5)}`
+
+	const openBlockModalForSchedule = (schedule: ScheduleConfig) => {
+		resetBlockForm()
+		setBlockScheduleContext(schedule)
+		setBlockProfessionalId(String(schedule.professional_id))
+		setBlockTargetDate(selectedDate)
+		setBlockTitle(`Bloqueo agenda ${schedule.name}`)
+		setIsBlockModalOpen(true)
+	}
+
+	const openBlockModalForEdit = (block: ScheduleBlock) => {
+		const relatedSchedule = schedules.data.find((schedule) => schedule.professional_id === block.professional_id) || null
+
 		setBlockId(block.id)
+		setBlockScheduleContext(relatedSchedule)
 		setBlockProfessionalId(String(block.professional_id))
+		setBlockTargetDate(block.start_datetime.slice(0, 10))
 		setBlockType(block.block_type)
 		setBlockTitle(block.title)
 		setBlockStart(block.start_datetime)
@@ -291,6 +352,17 @@ export default function ScheduleIndex({
 		setBlockFullDay(block.affects_full_day)
 		setBlockStatus(block.status)
 		setBlockNotes(block.notes || '')
+		setIsBlockModalOpen(true)
+	}
+
+	const resetAppointmentForm = () => {
+		setAppointmentId(null)
+		setSelectedAppointment(null)
+		setSelectedSlot(null)
+	}
+
+	const loadBlock = (block: ScheduleBlock) => {
+		openBlockModalForEdit(block)
 	}
 
 	const loadAppointment = (appointment: Appointment) => {
@@ -402,6 +474,95 @@ export default function ScheduleIndex({
 		}
 	}
 
+	const blockPreviewSlots = useMemo<BlockPreviewSlot[]>(() => {
+		if (!blockScheduleContext) {
+			return []
+		}
+
+		const actualSlots = slotBoard
+			.filter((slot) => slot.professional_id === blockScheduleContext.professional_id && slot.date === blockTargetDate)
+			.map((slot) => ({
+				start_time: slot.start_time,
+				end_time: slot.end_time,
+				status: slot.slot_status,
+				block_title: slot.block_title,
+				appointments_count: slot.appointments.length,
+			}))
+
+		if (actualSlots.length > 0) {
+			return actualSlots
+		}
+
+		const dayOfWeek = new Date(`${blockTargetDate}T00:00:00`).getDay()
+		const relevantRules = blockScheduleContext.rules
+			.filter((rule) => rule.is_active && rule.weekday === dayOfWeek)
+			.sort((left, right) => left.start_time.localeCompare(right.start_time))
+
+		const activeBlocksForDay = blocks.filter((block) => {
+			if (block.professional_id !== blockScheduleContext.professional_id || block.status !== 'active') {
+				return false
+			}
+
+			const startDate = block.start_datetime.slice(0, 10)
+			const endDate = block.end_datetime.slice(0, 10)
+
+			return startDate <= blockTargetDate && endDate >= blockTargetDate
+		})
+
+		return relevantRules.flatMap((rule) => {
+			const previewSlots: BlockPreviewSlot[] = []
+			let cursorMinutes = Number(rule.start_time.slice(0, 2)) * 60 + Number(rule.start_time.slice(3, 5))
+			const endMinutes = Number(rule.end_time.slice(0, 2)) * 60 + Number(rule.end_time.slice(3, 5))
+			const slotDuration = Math.max(blockScheduleContext.slot_duration_minutes, 5)
+
+			while (cursorMinutes + slotDuration <= endMinutes) {
+				const slotStart = `${String(Math.floor(cursorMinutes / 60)).padStart(2, '0')}:${String(cursorMinutes % 60).padStart(2, '0')}`
+				const slotEndMinutes = cursorMinutes + slotDuration
+				const slotEnd = `${String(Math.floor(slotEndMinutes / 60)).padStart(2, '0')}:${String(slotEndMinutes % 60).padStart(2, '0')}`
+				const slotStartDate = new Date(buildLocalDateTime(blockTargetDate, slotStart))
+				const slotEndDate = new Date(buildLocalDateTime(blockTargetDate, slotEnd))
+				const overlappingBlock = activeBlocksForDay.find((block) => {
+					const blockStart = new Date(block.start_datetime)
+					const blockEnd = new Date(block.end_datetime)
+
+					return slotStartDate < blockEnd && slotEndDate > blockStart
+				})
+
+				previewSlots.push({
+					start_time: slotStart,
+					end_time: slotEnd,
+					status: overlappingBlock ? 'blocked' : 'available',
+					block_title: overlappingBlock?.title,
+				})
+
+				cursorMinutes += slotDuration
+			}
+
+			return previewSlots
+		})
+	}, [blockScheduleContext, blockTargetDate, blocks, slotBoard])
+
+	const fillBlockFromSlot = (slot: BlockPreviewSlot) => {
+		setBlockFullDay(false)
+		setBlockStart(buildLocalDateTime(blockTargetDate, slot.start_time))
+		setBlockEnd(buildLocalDateTime(blockTargetDate, slot.end_time))
+		setBlockTitle(`Bloqueo ${slot.start_time} - ${slot.end_time}`)
+		setBlockStatus('active')
+	}
+
+	const fillFullDayBlock = () => {
+		const firstSlot = blockPreviewSlots[0]
+		const lastSlot = blockPreviewSlots[blockPreviewSlots.length - 1]
+		const startTime = firstSlot?.start_time || '00:00'
+		const endTime = lastSlot?.end_time || '23:59'
+
+		setBlockFullDay(true)
+		setBlockStart(buildLocalDateTime(blockTargetDate, startTime))
+		setBlockEnd(buildLocalDateTime(blockTargetDate, endTime))
+		setBlockTitle(`Bloqueo jornada ${blockTargetDate}`)
+		setBlockStatus('active')
+	}
+
 	const submitSchedule = (payload: {
 		professional_id: number
 		name: string
@@ -479,13 +640,18 @@ export default function ScheduleIndex({
 			id: 'actions',
 			header: 'Acciones',
 			cell: ({ row }) => (
-				<Button type="button" variant="outline" size="sm" onClick={() => openEditScheduleModal(row.original)}>
-					<Pencil className="mr-2 h-4 w-4" />
-					Editar
-				</Button>
+				<div className="flex flex-wrap gap-2">
+					<Button type="button" variant="outline" size="sm" onClick={() => openEditScheduleModal(row.original)}>
+						<Pencil className="mr-2 h-4 w-4" />
+						Editar
+					</Button>
+					<Button type="button" size="sm" onClick={() => openBlockModalForSchedule(row.original)}>
+						Bloquear
+					</Button>
+				</div>
 			),
 		},
-	], [])
+	], [selectedDate])
 
 	const submitBlock = (event: React.FormEvent) => {
 		event.preventDefault()
@@ -499,7 +665,11 @@ export default function ScheduleIndex({
 			affects_full_day: blockFullDay,
 			status: blockStatus,
 			notes: blockNotes || undefined,
-		}, blockId || undefined)
+		}, blockId || undefined, {
+			onSuccess: () => {
+				closeBlockModal(false)
+			},
+		})
 	}
 
 	const submitAppointment = (payload: {
@@ -531,48 +701,6 @@ export default function ScheduleIndex({
 					<h1 className="text-2xl font-semibold text-gray-900">Agenda médica</h1>
 					<p className="text-sm text-gray-500">Configurá agendas, bloqueos, reservas y el paso a Recepción desde un solo flujo.</p>
 				</div>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Filtros de ocupación y disponibilidad</CardTitle>
-					</CardHeader>
-					<CardContent className="grid gap-4 md:grid-cols-5">
-						<div>
-							<label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
-							<div className="flex gap-2">
-								<SearchableInput
-									placeholder="Prof."
-									value={getProfessionalName(filterProfessionalId)}
-									onSelect={(professional) => setFilterProfessionalId(String(professional.id))}
-									onSearch={searchProfessionals}
-									minSearchLength={1}
-									maxResults={10}
-									className="w-full"
-								/>
-								<Button type="button" variant="outline" onClick={() => setFilterProfessionalId('')}>
-									Todos
-								</Button>
-							</div>
-						</div>
-						<div>
-							<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
-							<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-						</div>
-						<div>
-							<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
-							<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-						</div>
-						<div>
-							<label className="mb-1 block text-sm font-medium text-gray-700">Vista de disponibilidad</label>
-							<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-						</div>
-						<div className="flex items-end">
-							<Button type="button" className="w-full" onClick={applyFilters} disabled={loadingAction === 'filters'}>
-								Actualizar panel
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
 
 				<div className="grid gap-4 md:grid-cols-4">
 					<Card>
@@ -649,40 +777,86 @@ export default function ScheduleIndex({
 					<TabsContent value="agendas">
 						<Card>
 							<CardHeader>
-								<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+								<div className="flex flex-col gap-5">
 									<div>
 										<CardTitle>Agendas configuradas</CardTitle>
 										<p className="text-sm text-gray-500">Gestioná todas las agendas desde una grilla paginada y editá en modal.</p>
 									</div>
-									<Button type="button" onClick={openCreateScheduleModal}>
-										<PlusCircle className="mr-2 h-4 w-4" />
-										Nueva agenda
-									</Button>
+									<div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,180px)_minmax(0,180px)_auto_auto] xl:items-end xl:justify-start">
+										<div>
+											<label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
+											<div className="flex gap-2">
+												<SearchableInput
+													placeholder="Prof."
+													value={getProfessionalName(filterProfessionalId)}
+													onSelect={(professional) => applyProfessionalFilter(String(professional.id))}
+													onSearch={searchProfessionals}
+													minSearchLength={1}
+													maxResults={10}
+													className="w-full"
+												/>
+											</div>
+											{filterProfessionalId && (
+												<button
+													type="button"
+													onClick={clearProfessionalFilter}
+													className="mt-1 text-xs text-gray-500 hover:text-gray-700"
+												>
+													Limpiar filtro
+												</button>
+											)}
+										</div>
+										<div>
+											<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
+											<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+										</div>
+										<div>
+											<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
+											<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+										</div>
+										<Button type="button" size="sm" className="xl:w-auto" onClick={applyFilters} disabled={loadingAction === 'filters'}>
+											Aplicar
+										</Button>
+										<Button type="button" size="sm" className="xl:w-auto" onClick={openCreateScheduleModal}>
+											<PlusCircle className="mr-2 h-4 w-4" />
+											Nueva agenda
+										</Button>
+									</div>
+									<div className="flex flex-wrap items-center gap-2">
+										<Button
+											type="button"
+											size="sm"
+											variant={!filters.status ? 'default' : 'outline'}
+											onClick={() => applyScheduleStatusFilter('all')}
+										>
+											Todos
+										</Button>
+										<Button
+											type="button"
+											size="sm"
+											variant={filters.status === 'active' ? 'default' : 'outline'}
+											onClick={() => applyScheduleStatusFilter('active')}
+										>
+											Activas
+										</Button>
+										<Button
+											type="button"
+											size="sm"
+											variant={filters.status === 'inactive' ? 'default' : 'outline'}
+											onClick={() => applyScheduleStatusFilter('inactive')}
+										>
+											Inactivas
+										</Button>
+									</div>
 								</div>
 							</CardHeader>
 							<CardContent>
 								<DataTable
 									columns={scheduleColumns}
 									data={schedules}
-									searchPlaceholder="Buscar agenda o profesional..."
+									searchable={false}
 									emptyMessage="No se encontraron agendas con los filtros aplicados"
-									statusFilterable={true}
-									statusOptions={[
-										{ value: 'active', label: 'Activa' },
-										{ value: 'inactive', label: 'Inactiva' },
-									]}
-									onStatusChange={(status) => {
-										const params = new URLSearchParams(window.location.search)
-										if (status !== 'all') {
-											params.set('status', status)
-										} else {
-											params.delete('status')
-										}
-										params.set('page', '1')
-										router.get(`${window.location.pathname}?${params.toString()}`, {}, { preserveState: true, replace: true })
-									}}
 									initialSearch={filters.search || ''}
-									initialStatus={filters.status || 'all'}
 									loading={loadingAction === 'filters'}
 								/>
 							</CardContent>
@@ -693,66 +867,11 @@ export default function ScheduleIndex({
 						<div className="grid gap-6 xl:grid-cols-2">
 					<Card>
 						<CardHeader>
-							<CardTitle>{blockId ? 'Editar bloqueo' : 'Nuevo bloqueo'}</CardTitle>
+							<CardTitle>Bloqueo rápido desde Agendas</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<form className="space-y-4" onSubmit={submitBlock}>
-								<div className="grid gap-4 md:grid-cols-2">
-									<div>
-										<label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
-										<SearchableInput
-											placeholder="Prof."
-											value={getProfessionalName(blockProfessionalId)}
-											onSelect={(professional) => setBlockProfessionalId(String(professional.id))}
-											onSearch={searchProfessionals}
-											minSearchLength={1}
-											maxResults={10}
-											className="w-full"
-										/>
-									</div>
-									<div>
-										<label className="mb-1 block text-sm font-medium text-gray-700">Tipo</label>
-										<SelectItem value={blockType} onValueChange={(value) => setBlockType(value as 'travel' | 'conference' | 'holiday' | 'vacation' | 'other')} required>
-											<option value="travel">Viaje</option>
-											<option value="conference">Congreso</option>
-											<option value="holiday">Feriado</option>
-											<option value="vacation">Vacaciones</option>
-											<option value="other">Otro</option>
-										</SelectItem>
-									</div>
-									<div className="md:col-span-2">
-										<label className="mb-1 block text-sm font-medium text-gray-700">Título</label>
-										<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
-									</div>
-									<div>
-										<label className="mb-1 block text-sm font-medium text-gray-700">Inicio</label>
-										<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
-									</div>
-									<div>
-										<label className="mb-1 block text-sm font-medium text-gray-700">Fin</label>
-										<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
-									</div>
-									<div>
-										<label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
-										<SelectItem value={blockStatus} onValueChange={(value) => setBlockStatus(value as 'active' | 'cancelled')} required>
-											<option value="active">Activo</option>
-											<option value="cancelled">Cancelado</option>
-										</SelectItem>
-									</div>
-									<label className="flex items-center gap-2 pt-8 text-sm text-gray-700">
-										<input type="checkbox" checked={blockFullDay} onChange={(event) => setBlockFullDay(event.target.checked)} />
-										Bloqueo de jornada completa
-									</label>
-								</div>
-								<div>
-									<label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
-									<textarea value={blockNotes} onChange={(event) => setBlockNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} />
-								</div>
-								<div className="flex gap-3">
-									<Button type="submit" disabled={loadingAction === 'block'}>Guardar bloqueo</Button>
-									{blockId && <Button type="button" variant="outline" onClick={resetBlockForm}>Cancelar edición</Button>}
-								</div>
-							</form>
+						<CardContent className="space-y-2 text-sm text-gray-600">
+							<p>Usá el botón Bloquear en la columna Acciones de cada agenda para abrir el modal con la fecha seleccionada y ver las franjas disponibles.</p>
+							<p>Desde ese modal podés bloquear una franja puntual, completar los datos manualmente o bloquear la jornada completa.</p>
 						</CardContent>
 					</Card>
 
@@ -786,7 +905,7 @@ export default function ScheduleIndex({
 						<div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
 							<Card>
 								<CardHeader>
-									<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+									<div className="flex flex-col gap-4">
 										<div>
 											<CardTitle>Slots del día</CardTitle>
 											<p className="text-sm text-gray-500">Navegá por fecha y hacé click sobre un slot para asignar o editar una cita.</p>
@@ -813,7 +932,7 @@ export default function ScheduleIndex({
 								<CardContent>
 									{!filterProfessionalId && (
 										<div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500">
-											Seleccioná un profesional en el filtro superior para ver y asignar slots del día.
+											Seleccioná un profesional en el encabezado de Agendas configuradas para ver y asignar slots del día.
 										</div>
 									)}
 									{filterProfessionalId && slotBoard.length === 0 && (
@@ -947,6 +1066,124 @@ export default function ScheduleIndex({
 					onSearchProfessionals={searchProfessionals}
 					onSubmit={submitSchedule}
 				/>
+
+				<Dialog open={isBlockModalOpen} onOpenChange={closeBlockModal}>
+					<DialogContent className="max-w-4xl">
+						<DialogHeader>
+							<DialogTitle>{blockId ? 'Editar bloqueo' : 'Bloquear agenda'}</DialogTitle>
+							<DialogDescription>
+								{blockScheduleContext
+									? `${blockScheduleContext.professional_name} · ${blockScheduleContext.name}`
+									: 'Completá los datos del bloqueo y elegí una franja rápida si aplica.'}
+							</DialogDescription>
+						</DialogHeader>
+
+						<form className="space-y-5" onSubmit={submitBlock}>
+							<div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Fecha a bloquear</label>
+									<input
+										type="date"
+										value={blockTargetDate}
+										onChange={(event) => setBlockTargetDate(event.target.value)}
+										className="w-full rounded-md border border-gray-300 px-3 py-2"
+										required
+									/>
+								</div>
+								<div className="rounded-lg border border-gray-200 p-4">
+									<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<div className="text-sm font-medium text-gray-900">Bloqueo rápido por slot</div>
+											<div className="text-xs text-gray-500">Seleccioná una franja para precargar el formulario o bloqueá la jornada completa.</div>
+										</div>
+										<Button type="button" size="sm" variant="outline" onClick={fillFullDayBlock}>
+											Bloquear jornada completa
+										</Button>
+									</div>
+									{blockPreviewSlots.length === 0 && (
+										<p className="text-sm text-gray-500">No hay slots calculados para esta agenda en la fecha seleccionada.</p>
+									)}
+									<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+										{blockPreviewSlots.map((slot) => {
+											const isUnavailable = slot.status === 'blocked' || slot.status === 'occupied' || slot.status === 'partial'
+
+											return (
+												<button
+													key={`${slot.start_time}-${slot.end_time}`}
+													type="button"
+													onClick={() => fillBlockFromSlot(slot)}
+													disabled={isUnavailable}
+													className={`rounded-md border px-3 py-2 text-left text-sm ${
+														isUnavailable
+															? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500'
+															: 'border-emerald-300 bg-emerald-50 text-gray-800 hover:border-emerald-400 hover:bg-emerald-100'
+													}`}
+												>
+													<div className="font-medium">{slot.start_time} - {slot.end_time}</div>
+													<div className="mt-1 text-xs">
+														{slot.status === 'blocked' && (slot.block_title || 'Ya bloqueado')}
+														{slot.status === 'occupied' && 'Tiene citas asignadas'}
+														{slot.status === 'partial' && `Slot parcial con ${slot.appointments_count || 0} cita(s)`}
+														{slot.status === 'available' && 'Click para bloquear esta franja'}
+													</div>
+												</button>
+											)
+										})}
+									</div>
+								</div>
+							</div>
+
+							<div className="grid gap-4 md:grid-cols-2">
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Tipo</label>
+									<SelectItem value={blockType} onValueChange={(value) => setBlockType(value as 'travel' | 'conference' | 'holiday' | 'vacation' | 'other')} required>
+										<option value="travel">Viaje</option>
+										<option value="conference">Congreso</option>
+										<option value="holiday">Feriado</option>
+										<option value="vacation">Vacaciones</option>
+										<option value="other">Otro</option>
+									</SelectItem>
+								</div>
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
+									<SelectItem value={blockStatus} onValueChange={(value) => setBlockStatus(value as 'active' | 'cancelled')} required>
+										<option value="active">Activo</option>
+										<option value="cancelled">Cancelado</option>
+									</SelectItem>
+								</div>
+								<div className="md:col-span-2">
+									<label className="mb-1 block text-sm font-medium text-gray-700">Título</label>
+									<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
+								</div>
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Inicio</label>
+									<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
+								</div>
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Fin</label>
+									<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" required />
+								</div>
+								<label className="flex items-center gap-2 text-sm text-gray-700 md:col-span-2">
+									<input type="checkbox" checked={blockFullDay} onChange={(event) => setBlockFullDay(event.target.checked)} />
+									Bloqueo de jornada completa
+								</label>
+								<div className="md:col-span-2">
+									<label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
+									<textarea value={blockNotes} onChange={(event) => setBlockNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} />
+								</div>
+							</div>
+
+							<DialogFooter>
+								<Button type="button" variant="outline" onClick={() => closeBlockModal(false)}>
+									Cancelar
+								</Button>
+								<Button type="submit" disabled={loadingAction === 'block' || !blockProfessionalId}>
+									{blockId ? 'Guardar cambios' : 'Guardar bloqueo'}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
 
 				{error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 			</div>
