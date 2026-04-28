@@ -182,6 +182,8 @@ type AppointmentPlannerSlot = {
 	availableCapacity: number
 	status: 'available' | 'partial' | 'occupied' | 'blocked'
 	blockTitle?: string | null
+	blockType?: 'travel' | 'conference' | 'holiday' | 'vacation' | 'other' | null
+	blockNotes?: string | null
 	appointmentsCount: number
 	appointmentSummaries: Array<{
 		id: number
@@ -1024,6 +1026,8 @@ export default function ScheduleIndex({
 					availableCapacity: slot.available_capacity,
 					status: slot.slot_status,
 					blockTitle: slot.block_title,
+					blockType: slot.block_type,
+					blockNotes: slot.block_notes,
 					appointmentsCount: slot.appointments.length,
 					appointmentSummaries: slot.appointments.map((appointment) => ({
 						id: appointment.id,
@@ -1109,6 +1113,8 @@ export default function ScheduleIndex({
 						availableCapacity: Math.max(rule.capacity - appointmentsCount, 0),
 						status,
 						blockTitle: overlappingBlock?.title,
+						blockType: overlappingBlock?.block_type,
+						blockNotes: overlappingBlock?.notes,
 						appointmentsCount,
 						appointmentSummaries: overlappingAppointments.map((appointment) => ({
 							id: appointment.id,
@@ -1795,33 +1801,63 @@ export default function ScheduleIndex({
 															? 'border-amber-300 bg-amber-50 text-amber-950'
 															: 'border-rose-300 bg-rose-50 text-rose-950'
 
+													const slotContent = (
+														<>
+															<div className="flex items-center justify-between gap-2">
+																<div className="text-sm font-semibold">{slot.startTime} - {slot.endTime}</div>
+																<Badge variant={slot.status === 'partial' ? 'secondary' : 'default'}>
+																	{slot.status === 'available' ? 'Libre' : slot.status === 'partial' ? 'Parcial' : slot.status === 'blocked' ? 'Bloqueado' : 'Ocupado'}
+																</Badge>
+															</div>
+															<div className="mt-2 space-y-1 text-xs">
+																{slot.status === 'available' && <div>{slot.availableCapacity} lugar(es) disponible(s)</div>}
+																{slot.status === 'partial' && <div>{slot.availableCapacity} lugar(es) libre(s)</div>}
+																{slot.appointmentSummaries.map((appointment) => (
+																	<div key={appointment.id} className="rounded-md bg-white/70 px-2 py-1 text-[11px] leading-tight">
+																		<div className="font-semibold">{appointment.patientName}</div>
+																		<div className="opacity-80">{appointment.serviceLabel}</div>
+																	</div>
+																))}
+																{slot.status === 'blocked' && slot.blockTitle && (
+																	<TooltipProvider delayDuration={150}>
+																		<Tooltip>
+																			<TooltipTrigger asChild>
+																				<span className="block truncate underline decoration-dotted underline-offset-2">
+																					{getBlockedSlotReason(slot.blockTitle)}
+																				</span>
+																			</TooltipTrigger>
+																			<TooltipContent className="max-w-sm">
+																				<p>Tipo: {getBlockTypeLabel(slot.blockType)}</p>
+																				<p>Motivo: {getBlockedSlotReason(slot.blockTitle)}</p>
+																				{getBlockedSlotDescription(slot.blockNotes) && <p>Descripción: {getBlockedSlotDescription(slot.blockNotes)}</p>}
+																			</TooltipContent>
+																		</Tooltip>
+																	</TooltipProvider>
+																)}
+																{canSchedule && <div>Click para agendar</div>}
+															</div>
+														</>
+													)
+
 												return (
-													<button
-														key={`${slot.date}-${slot.startTime}-${slot.endTime}`}
-														type="button"
-														onClick={() => canSchedule && openAppointmentSlotModal(slot)}
-														disabled={!canSchedule || loadingAction === 'appointment'}
-														className={`rounded-lg border px-3 py-3 text-left transition ${canSchedule ? toneClasses : `${toneClasses} cursor-not-allowed opacity-80`}`}
-													>
-														<div className="flex items-center justify-between gap-2">
-															<div className="text-sm font-semibold">{slot.startTime} - {slot.endTime}</div>
-															<Badge variant={slot.status === 'partial' ? 'secondary' : 'default'}>
-																		{slot.status === 'available' ? 'Libre' : slot.status === 'partial' ? 'Parcial' : slot.status === 'blocked' ? 'Bloqueado' : 'Ocupado'}
-															</Badge>
-														</div>
-														<div className="mt-2 space-y-1 text-xs">
-																	{slot.status === 'available' && <div>{slot.availableCapacity} lugar(es) disponible(s)</div>}
-																	{slot.status === 'partial' && <div>{slot.availableCapacity} lugar(es) libre(s)</div>}
-																	{slot.appointmentSummaries.map((appointment) => (
-																		<div key={appointment.id} className="rounded-md bg-white/70 px-2 py-1 text-[11px] leading-tight">
-																			<div className="font-semibold">{appointment.patientName}</div>
-																			<div className="opacity-80">{appointment.serviceLabel}</div>
-																		</div>
-																	))}
-																	{slot.blockTitle && <div>{slot.blockTitle}</div>}
-																	{canSchedule && <div>Click para agendar</div>}
-														</div>
-													</button>
+														canSchedule ? (
+															<button
+																key={`${slot.date}-${slot.startTime}-${slot.endTime}`}
+																type="button"
+																onClick={() => openAppointmentSlotModal(slot)}
+																disabled={loadingAction === 'appointment'}
+																className={`rounded-lg border px-3 py-3 text-left transition ${toneClasses}`}
+															>
+																{slotContent}
+															</button>
+														) : (
+															<div
+																key={`${slot.date}-${slot.startTime}-${slot.endTime}`}
+																className={`rounded-lg border px-3 py-3 text-left opacity-80 ${toneClasses}`}
+															>
+																{slotContent}
+															</div>
+														)
 												)
 											})}
 										</div>
