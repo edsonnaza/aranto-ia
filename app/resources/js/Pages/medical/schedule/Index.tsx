@@ -1,11 +1,12 @@
 import { Head, router } from '@inertiajs/react'
 import { useMemo, useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
-import { ChevronRight, Pencil, PlusCircle } from 'lucide-react'
+import { ChevronRight, MoreHorizontal, PlusCircle } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
 import SearchableInput from '@/components/ui/SearchableInput'
 import SelectItem from '@/components/ui/SelectItem'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { DataTable, type PaginatedData } from '@/components/ui/data-table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
 import ScheduleFormModal from '@/components/medical/schedule/ScheduleFormModal'
 import { useSchedule, useSearch } from '@/hooks/medical'
 
@@ -168,6 +170,26 @@ type ScheduleAvailabilitySummary = {
 	freePercentage: number
 }
 
+type AppointmentPlannerSlot = {
+	professionalId: number
+	professionalName: string
+	date: string
+	startTime: string
+	endTime: string
+	durationMinutes: number
+	capacity: number
+	occupiedCount: number
+	availableCapacity: number
+	status: 'available' | 'partial' | 'occupied' | 'blocked'
+	blockTitle?: string | null
+	appointmentsCount: number
+	appointmentSummaries: Array<{
+		id: number
+		patientName: string
+		serviceLabel: string
+	}>
+}
+
 interface SchedulePageProps {
 	professionals: ProfessionalOption[]
 	medicalServices: MedicalServiceOption[]
@@ -187,18 +209,9 @@ interface SchedulePageProps {
 	}
 }
 
-const weekDays = [
-	{ value: 1, label: 'Lunes' },
-	{ value: 2, label: 'Martes' },
-	{ value: 3, label: 'Miércoles' },
-	{ value: 4, label: 'Jueves' },
-	{ value: 5, label: 'Viernes' },
-	{ value: 6, label: 'Sábado' },
-	{ value: 0, label: 'Domingo' },
-]
-
 export default function ScheduleIndex({
 	professionals,
+	medicalServices,
 	schedules,
 	blocks,
 	appointments,
@@ -206,13 +219,14 @@ export default function ScheduleIndex({
 	slotBoard,
 	filters,
 }: SchedulePageProps) {
-		const { searchProfessionals } = useSearch()
+		const { searchPatients, searchProfessionals } = useSearch()
 	const {
 		loadingAction,
 		error,
 		navigateWithFilters,
 		saveSchedule,
 		saveBlock,
+		saveAppointment,
 	} = useSchedule()
 
 	const [filterProfessionalId, setFilterProfessionalId] = useState(filters.professional_id ? String(filters.professional_id) : '')
@@ -222,6 +236,23 @@ export default function ScheduleIndex({
 	const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
 	const [selectedSchedule, setSelectedSchedule] = useState<ScheduleConfig | null>(null)
 	const [isOccupancyBoardOpen, setIsOccupancyBoardOpen] = useState(false)
+	const [isAppointmentPlannerOpen, setIsAppointmentPlannerOpen] = useState(false)
+	const [appointmentScheduleContext, setAppointmentScheduleContext] = useState<ScheduleConfig | null>(null)
+	const [appointmentPlannerStartDate, setAppointmentPlannerStartDate] = useState(filters.date_from)
+	const [appointmentPlannerEndDate, setAppointmentPlannerEndDate] = useState(filters.date_to)
+	const [appointmentPlannerDayFilter, setAppointmentPlannerDayFilter] = useState<'available' | 'without-schedule' | 'all'>('available')
+	const [appointmentPlannerQuickFilter, setAppointmentPlannerQuickFilter] = useState<'all' | 'available' | 'occupied'>('all')
+	const [appointmentPlannerSelectedDate, setAppointmentPlannerSelectedDate] = useState<string | null>(null)
+	const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
+	const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+	const [selectedAppointmentSlot, setSelectedAppointmentSlot] = useState<{
+		professionalId: number
+		professionalName: string
+		date: string
+		startTime: string
+		endTime: string
+		durationMinutes: number
+	} | null>(null)
 	const [scheduleStatusDialog, setScheduleStatusDialog] = useState<{
 		open: boolean
 		schedule: ScheduleConfig | null
@@ -373,6 +404,35 @@ export default function ScheduleIndex({
 		setIsScheduleModalOpen(true)
 	}
 
+	const clampScheduleDate = (schedule: ScheduleConfig, date: string) => {
+		if (date < schedule.start_date) {
+			return schedule.start_date
+		}
+
+		if (schedule.end_date && date > schedule.end_date) {
+			return schedule.end_date
+		}
+
+		return date
+	}
+
+	const getSchedulePlanningRange = (schedule: ScheduleConfig) => {
+		const clampedStart = schedule.start_date
+		const clampedEnd = schedule.end_date || schedule.start_date
+
+		if (clampedEnd < clampedStart) {
+			return {
+				start: clampedStart,
+				end: clampedStart,
+			}
+		}
+
+		return {
+			start: clampedStart,
+			end: clampedEnd,
+		}
+	}
+
 	const buildSchedulePayloadFromConfig = (schedule: ScheduleConfig, overrides?: Partial<Pick<ScheduleConfig, 'status'>>) => ({
 		professional_id: schedule.professional_id,
 		name: schedule.name,
@@ -427,6 +487,26 @@ export default function ScheduleIndex({
 		}
 	}
 
+	const closeAppointmentPlanner = (open: boolean) => {
+		setIsAppointmentPlannerOpen(open)
+
+		if (!open) {
+			setAppointmentScheduleContext(null)
+			setAppointmentPlannerDayFilter('available')
+			setAppointmentPlannerQuickFilter('all')
+			setAppointmentPlannerSelectedDate(null)
+		}
+	}
+
+	const closeAppointmentModal = (open: boolean) => {
+		setIsAppointmentModalOpen(open)
+
+		if (!open) {
+			setSelectedAppointment(null)
+			setSelectedAppointmentSlot(null)
+		}
+	}
+
 	const resetBlockForm = () => {
 		setBlockId(null)
 		setBlockScheduleContext(null)
@@ -454,6 +534,32 @@ export default function ScheduleIndex({
 	}
 
 	const buildLocalDateTime = (date: string, time: string) => `${date}T${time.slice(0, 5)}`
+
+	const buildDateRange = (start: string, end: string) => {
+		const orderedStart = start <= end ? start : end
+		const orderedEnd = start <= end ? end : start
+		const dates: string[] = []
+		const cursor = new Date(`${orderedStart}T00:00:00`)
+		const finish = new Date(`${orderedEnd}T00:00:00`)
+
+		while (cursor <= finish) {
+			dates.push(cursor.toISOString().split('T')[0])
+			cursor.setDate(cursor.getDate() + 1)
+		}
+
+		return dates
+	}
+
+	const openAppointmentPlannerForSchedule = (schedule: ScheduleConfig) => {
+		const range = getSchedulePlanningRange(schedule)
+		setAppointmentScheduleContext(schedule)
+		setAppointmentPlannerStartDate(range.start)
+		setAppointmentPlannerEndDate(range.end)
+		setAppointmentPlannerDayFilter('available')
+		setAppointmentPlannerQuickFilter('all')
+		setAppointmentPlannerSelectedDate(null)
+		setIsAppointmentPlannerOpen(true)
+	}
 
 	const openBlockModalForSchedule = (schedule: ScheduleConfig) => {
 		resetBlockForm()
@@ -766,6 +872,14 @@ export default function ScheduleIndex({
 
 	const getBlockedSlotDescription = (blockNotes?: string | null) => blockNotes?.trim() || null
 
+	const getAppointmentServiceLabel = (appointment: Pick<Appointment, 'medical_service_names' | 'medical_service_name'>) => {
+		if (appointment.medical_service_names?.length) {
+			return appointment.medical_service_names.join(', ')
+		}
+
+		return appointment.medical_service_name?.trim() || 'Consulta general'
+	}
+
 	const getBlockTypeLabel = (blockType?: 'travel' | 'conference' | 'holiday' | 'vacation' | 'other' | null) => {
 		switch (blockType) {
 			case 'travel':
@@ -821,6 +935,289 @@ export default function ScheduleIndex({
 			},
 		})
 	}
+
+	const openAppointmentsForSchedule = (schedule: ScheduleConfig, date: string) => {
+		router.get('/medical/appointments', {
+			selected_date: clampScheduleDate(schedule, date),
+			view: 'day',
+			professional_id: schedule.professional_id,
+		})
+	}
+
+	const openAppointmentSlotModal = (slot: AppointmentPlannerSlot) => {
+		setSelectedAppointment(null)
+		setSelectedAppointmentSlot({
+			professionalId: slot.professionalId,
+			professionalName: slot.professionalName,
+			date: slot.date,
+			startTime: slot.startTime,
+			endTime: slot.endTime,
+			durationMinutes: slot.durationMinutes,
+		})
+		setIsAppointmentModalOpen(true)
+	}
+
+	const submitAppointment = (payload: {
+		professional_id: number
+		patient_id: number
+		medical_service_id?: number
+		medical_service_ids?: number[]
+		appointment_date: string
+		start_time: string
+		duration_minutes?: number
+		status: 'scheduled' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
+		source: 'agenda' | 'reception' | 'manual'
+		notes?: string
+		cancellation_reason?: string
+	}, appointmentId?: number) => {
+		saveAppointment(payload, appointmentId, {
+			onSuccess: () => {
+				closeAppointmentModal(false)
+				router.reload({
+					onSuccess: () => {
+						setIsAppointmentPlannerOpen(true)
+					},
+				})
+			},
+		})
+	}
+
+	const orderedAppointmentPlannerRange = useMemo(() => {
+		if (appointmentPlannerEndDate < appointmentPlannerStartDate) {
+			return {
+				start: appointmentPlannerEndDate,
+				end: appointmentPlannerStartDate,
+			}
+		}
+
+		return {
+			start: appointmentPlannerStartDate,
+			end: appointmentPlannerEndDate,
+		}
+	}, [appointmentPlannerEndDate, appointmentPlannerStartDate])
+
+	const appointmentPlannerDates = useMemo(() => {
+		if (!appointmentScheduleContext) {
+			return []
+		}
+
+		return buildDateRange(orderedAppointmentPlannerRange.start, orderedAppointmentPlannerRange.end)
+	}, [appointmentScheduleContext, orderedAppointmentPlannerRange])
+
+	const appointmentPlannerSlots = useMemo<AppointmentPlannerSlot[]>(() => {
+		if (!appointmentScheduleContext) {
+			return []
+		}
+
+		return appointmentPlannerDates.flatMap((date) => {
+			const actualSlotsForDay = slotBoard
+				.filter((slot) => slot.date === date && scheduleContainsSlot(appointmentScheduleContext, slot))
+				.map((slot) => ({
+					professionalId: slot.professional_id,
+					professionalName: slot.professional_name,
+					date,
+					startTime: slot.start_time,
+					endTime: slot.end_time,
+					durationMinutes: slot.duration_minutes,
+					capacity: slot.capacity,
+					occupiedCount: slot.occupied_count,
+					availableCapacity: slot.available_capacity,
+					status: slot.slot_status,
+					blockTitle: slot.block_title,
+					appointmentsCount: slot.appointments.length,
+					appointmentSummaries: slot.appointments.map((appointment) => ({
+						id: appointment.id,
+						patientName: appointment.patient_name,
+						serviceLabel: appointment.medical_service_names?.length
+							? appointment.medical_service_names.join(', ')
+							: appointment.medical_service_name?.trim() || 'Consulta general',
+					})),
+				}))
+
+			if (actualSlotsForDay.length > 0) {
+				return actualSlotsForDay
+			}
+
+			const dayOfWeek = new Date(`${date}T00:00:00`).getDay()
+			const relevantRules = appointmentScheduleContext.rules
+				.filter((rule) => rule.is_active && rule.weekday === dayOfWeek)
+				.sort((left, right) => left.start_time.localeCompare(right.start_time))
+
+			const activeBlocksForDay = blocks.filter((block) => {
+				if (block.professional_id !== appointmentScheduleContext.professional_id || block.status !== 'active') {
+					return false
+				}
+
+				const startDate = block.start_datetime.slice(0, 10)
+				const endDate = block.end_datetime.slice(0, 10)
+
+				return startDate <= date && endDate >= date
+			})
+
+			const appointmentsForDay = appointments.filter((appointment) => (
+				appointment.professional_id === appointmentScheduleContext.professional_id
+				&& appointment.appointment_date === date
+				&& appointment.status !== 'cancelled'
+				&& appointment.status !== 'no_show'
+			))
+
+			return relevantRules.flatMap((rule) => {
+				const previewSlots: AppointmentPlannerSlot[] = []
+				let cursorMinutes = Number(rule.start_time.slice(0, 2)) * 60 + Number(rule.start_time.slice(3, 5))
+				const endMinutes = Number(rule.end_time.slice(0, 2)) * 60 + Number(rule.end_time.slice(3, 5))
+				const slotDuration = Math.max(appointmentScheduleContext.slot_duration_minutes, 5)
+
+				while (cursorMinutes + slotDuration <= endMinutes) {
+					const startTime = `${String(Math.floor(cursorMinutes / 60)).padStart(2, '0')}:${String(cursorMinutes % 60).padStart(2, '0')}`
+					const endTimeMinutes = cursorMinutes + slotDuration
+					const endTime = `${String(Math.floor(endTimeMinutes / 60)).padStart(2, '0')}:${String(endTimeMinutes % 60).padStart(2, '0')}`
+					const slotStartDate = new Date(buildLocalDateTime(date, startTime))
+					const slotEndDate = new Date(buildLocalDateTime(date, endTime))
+					const overlappingBlock = activeBlocksForDay.find((block) => {
+						const blockStart = new Date(block.start_datetime)
+						const blockEnd = new Date(block.end_datetime)
+
+						return slotStartDate < blockEnd && slotEndDate > blockStart
+					})
+					const overlappingAppointments = appointmentsForDay.filter((appointment) => {
+						const appointmentStart = new Date(buildLocalDateTime(date, appointment.start_time))
+						const appointmentEnd = new Date(buildLocalDateTime(date, appointment.end_time))
+
+						return slotStartDate < appointmentEnd && slotEndDate > appointmentStart
+					})
+					const appointmentsCount = overlappingAppointments.length
+
+					let status: AppointmentPlannerSlot['status'] = 'available'
+
+					if (overlappingBlock) {
+						status = 'blocked'
+					} else if (appointmentsCount >= rule.capacity) {
+						status = 'occupied'
+					} else if (appointmentsCount > 0) {
+						status = 'partial'
+					}
+
+					previewSlots.push({
+						professionalId: appointmentScheduleContext.professional_id,
+						professionalName: appointmentScheduleContext.professional_name,
+						date,
+						startTime,
+						endTime,
+						durationMinutes: slotDuration,
+						capacity: rule.capacity,
+						occupiedCount: appointmentsCount,
+						availableCapacity: Math.max(rule.capacity - appointmentsCount, 0),
+						status,
+						blockTitle: overlappingBlock?.title,
+						appointmentsCount,
+						appointmentSummaries: overlappingAppointments.map((appointment) => ({
+							id: appointment.id,
+							patientName: appointment.patient_name,
+							serviceLabel: getAppointmentServiceLabel(appointment),
+						})),
+					})
+
+					cursorMinutes += slotDuration
+				}
+
+				return previewSlots
+			})
+		})
+	}, [appointmentPlannerDates, appointmentScheduleContext, appointments, blocks, slotBoard])
+
+	const appointmentPreviewDays = useMemo(() => {
+		if (!appointmentScheduleContext) {
+			return []
+		}
+
+		return appointmentPlannerDates.map((date) => {
+			const dayOfWeek = new Date(`${date}T00:00:00`).getDay()
+			const hasRules = appointmentScheduleContext.rules.some((rule) => rule.is_active && rule.weekday === dayOfWeek)
+			const slots = appointmentPlannerSlots
+				.filter((slot) => slot.date === date)
+				.sort((left, right) => left.startTime.localeCompare(right.startTime))
+			const availableSlots = slots.filter((slot) => slot.status === 'available' || slot.status === 'partial')
+			const blockedSlots = slots.filter((slot) => slot.status === 'blocked')
+			const occupiedSlots = slots.filter((slot) => slot.status === 'occupied')
+			const totalCapacity = slots.reduce((sum, slot) => sum + slot.capacity, 0)
+			const bookedCapacity = slots.reduce((sum, slot) => sum + slot.occupiedCount, 0)
+			const firstAvailableSlot = availableSlots[0] || null
+
+			let statusLabel = 'Sin agenda'
+			let statusTone = 'muted'
+
+			if (slots.length === 0 && hasRules) {
+				statusLabel = 'Sin slots'
+			} else if (availableSlots.length > 0) {
+				statusLabel = 'Disponible'
+				statusTone = 'available'
+			} else if (slots.length > 0 && blockedSlots.length === slots.length) {
+				statusLabel = 'Bloqueado'
+				statusTone = 'blocked'
+			} else if (slots.length > 0 && (occupiedSlots.length > 0 || bookedCapacity > 0)) {
+				statusLabel = 'Completo'
+				statusTone = 'occupied'
+			}
+
+			return {
+				date,
+				label: new Intl.DateTimeFormat('es-PY', {
+					weekday: 'long',
+					day: '2-digit',
+					month: 'short',
+				}).format(new Date(`${date}T00:00:00`)),
+				totalSlots: slots.length,
+				availableSlots: availableSlots.length,
+				blockedSlots: blockedSlots.length,
+				occupiedSlots: occupiedSlots.length,
+				bookedCapacity,
+				totalCapacity,
+				firstAvailableSlot,
+				slots,
+				hasRules,
+				statusLabel,
+				statusTone,
+			}
+		})
+	}, [appointmentPlannerDates, appointmentPlannerSlots, appointmentScheduleContext])
+
+	const firstAvailableAppointmentDay = useMemo(() => (
+		appointmentPreviewDays.find((day) => day.availableSlots > 0)
+	), [appointmentPreviewDays])
+
+	const filteredAppointmentPreviewDays = useMemo(() => {
+		if (appointmentPlannerDayFilter === 'available') {
+			return appointmentPreviewDays.filter((day) => day.availableSlots > 0)
+		}
+
+		if (appointmentPlannerDayFilter === 'without-schedule') {
+			return appointmentPreviewDays.filter((day) => day.statusLabel === 'Sin agenda')
+		}
+
+		return appointmentPreviewDays
+	}, [appointmentPlannerDayFilter, appointmentPreviewDays])
+
+	const selectedAppointmentPlannerDay = useMemo(() => (
+		appointmentPlannerSelectedDate
+			? appointmentPreviewDays.find((day) => day.date === appointmentPlannerSelectedDate) || null
+			: null
+	), [appointmentPlannerSelectedDate, appointmentPreviewDays])
+
+	const filteredSelectedAppointmentPlannerSlots = useMemo(() => {
+		if (!selectedAppointmentPlannerDay) {
+			return []
+		}
+
+		if (appointmentPlannerQuickFilter === 'available') {
+			return selectedAppointmentPlannerDay.slots.filter((slot) => slot.status === 'available' || slot.status === 'partial')
+		}
+
+		if (appointmentPlannerQuickFilter === 'occupied') {
+			return selectedAppointmentPlannerDay.slots.filter((slot) => slot.status === 'occupied')
+		}
+
+		return selectedAppointmentPlannerDay.slots
+	}, [appointmentPlannerQuickFilter, selectedAppointmentPlannerDay])
 
 	const getScheduleStatusLabel = (status: ScheduleConfig['status']) => (status === 'active' ? 'Activa' : 'Inactiva')
 
@@ -959,22 +1356,6 @@ export default function ScheduleIndex({
 			},
 		},
 		{
-			id: 'rules_summary',
-			header: 'Reglas',
-			cell: ({ row }) => (
-				<div className="flex flex-wrap gap-1">
-					{row.original.rules.slice(0, 2).map((rule) => (
-						<span key={`${row.original.id}-${rule.weekday}-${rule.start_time}`} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">
-							{weekDays.find((day) => day.value === rule.weekday)?.label}: {rule.start_time}-{rule.end_time}
-						</span>
-					))}
-					{row.original.rules.length > 2 && (
-						<span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">+{row.original.rules.length - 2} más</span>
-					)}
-				</div>
-			),
-		},
-		{
 			accessorKey: 'status',
 			header: 'Estado',
 			cell: ({ row }) => (
@@ -996,21 +1377,24 @@ export default function ScheduleIndex({
 			id: 'actions',
 			header: 'Acciones',
 			cell: ({ row }) => (
-				<div className="flex flex-wrap gap-2">
-					<Button type="button" variant="outline" size="sm" onClick={() => openEditScheduleModal(row.original)}>
-						<Pencil className="mr-2 h-4 w-4" />
-						Editar
-					</Button>
-					{row.original.status === 'active' ? (
-						<Button type="button" size="sm" onClick={() => openBlockModalForSchedule(row.original)}>
-							Bloquear
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" variant="outline" size="icon" className="h-9 w-9">
+							<MoreHorizontal className="h-4 w-4" />
 						</Button>
-					) : (
-						<Button type="button" size="sm" disabled>
-							Agenda inactiva
-						</Button>
-					)}
-				</div>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-44">
+						<DropdownMenuItem onClick={() => openAppointmentPlannerForSchedule(row.original)} disabled={row.original.status !== 'active'}>
+							Agendar
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => openEditScheduleModal(row.original)}>
+							Editar agenda
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => openBlockModalForSchedule(row.original)} disabled={row.original.status !== 'active'}>
+							{row.original.status === 'active' ? 'Bloquear agenda' : 'Agenda inactiva'}
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			),
 		},
 	]
@@ -1173,7 +1557,7 @@ export default function ScheduleIndex({
 									<label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
 									<div className="flex gap-2">
 										<SearchableInput
-											placeholder="Prof."
+											placeholder="Dr. Juan Pérez"
 											value={getProfessionalName(filterProfessionalId)}
 											onSelect={(professional) => applyProfessionalFilter(String(professional.id))}
 											onSearch={searchProfessionals}
@@ -1282,103 +1666,323 @@ export default function ScheduleIndex({
 					</AlertDialogContent>
 				</AlertDialog>
 
-				<Dialog open={isBlockModalOpen} onOpenChange={closeBlockModal}>
-					<DialogContent className="h-[92vh] w-[98vw] max-w-[98vw] overflow-hidden p-0 sm:w-[96vw] sm:max-w-[96vw] 2xl:w-450 2xl:max-w-450">
-						<div className="flex h-full flex-col overflow-hidden p-6">
-							<DialogHeader>
-								<DialogTitle>{blockId ? 'Editar bloqueo' : isBlockMode ? 'Bloquear agenda' : 'Desbloquear agenda'}</DialogTitle>
-								<DialogDescription>
-									{blockScheduleContext ? `${blockScheduleContext.professional_name} · ${blockScheduleContext.name}` : 'Completá los datos del bloqueo y elegí los slots desde la grilla.'}
-								</DialogDescription>
-							</DialogHeader>
-							<form className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden" onSubmit={submitBlock}>
-								<div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-									<div className="grid gap-4">
+				<Dialog open={isAppointmentPlannerOpen} onOpenChange={closeAppointmentPlanner}>
+					<DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-5xl">
+						<DialogHeader className="sticky top-0 z-20 shrink-0 border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+							<DialogTitle>Planificar cita por fecha</DialogTitle>
+							<DialogDescription>
+								{appointmentScheduleContext
+									? `${appointmentScheduleContext.professional_name} · ${appointmentScheduleContext.name}. Revisá qué días tienen lugar y entrá a la agenda diaria con un click.`
+									: 'Elegí una agenda para revisar fechas y disponibilidad.'}
+							</DialogDescription>
+						</DialogHeader>
+						<div className="shrink-0 border-b border-gray-200 bg-white px-6 py-5">
+							<div className="space-y-5">
+								<div className="grid gap-3 md:grid-cols-[180px_180px_auto] md:items-end">
+									<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
+									<input
+										type="date"
+										value={appointmentPlannerStartDate}
+										onChange={(event) => setAppointmentPlannerStartDate(appointmentScheduleContext ? clampScheduleDate(appointmentScheduleContext, event.target.value) : event.target.value)}
+										className="w-full rounded-md border border-gray-300 px-3 py-2"
+										disabled={!appointmentScheduleContext}
+									/>
+								</div>
+								<div>
+									<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
+									<input
+										type="date"
+										value={appointmentPlannerEndDate}
+										onChange={(event) => setAppointmentPlannerEndDate(appointmentScheduleContext ? clampScheduleDate(appointmentScheduleContext, event.target.value) : event.target.value)}
+										className="w-full rounded-md border border-gray-300 px-3 py-2"
+										disabled={!appointmentScheduleContext}
+									/>
+								</div>
+								<div className="flex flex-wrap gap-2">
+									{firstAvailableAppointmentDay && appointmentScheduleContext && (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => openAppointmentsForSchedule(appointmentScheduleContext, firstAvailableAppointmentDay.date)}
+										>
+											Ir al primer día con lugar
+										</Button>
+									)}
+								</div>
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								<Button
+									type="button"
+									size="sm"
+									variant={appointmentPlannerDayFilter === 'available' ? 'default' : 'outline'}
+									onClick={() => setAppointmentPlannerDayFilter('available')}
+								>
+									Disponibles
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									variant={appointmentPlannerDayFilter === 'without-schedule' ? 'default' : 'outline'}
+									onClick={() => setAppointmentPlannerDayFilter('without-schedule')}
+								>
+									Sin agenda
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									variant={appointmentPlannerDayFilter === 'all' ? 'default' : 'outline'}
+									onClick={() => setAppointmentPlannerDayFilter('all')}
+								>
+									Todos
+								</Button>
+							</div>
+							<div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+								La secretaria puede revisar rápidamente qué fechas tienen disponibilidad, cuáles están completas o bloqueadas, y entrar directo al día exacto para asignar paciente y consulta.
+							</div>
+						</div>
+						</div>
+						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+							<div className="space-y-5">
+							{selectedAppointmentPlannerDay && (
+								<div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+									<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 										<div>
-											<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
-											<input type="date" value={blockRangeStartDate} onChange={(event) => setBlockRangeStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+											<div className="text-sm font-semibold text-sky-950 capitalize">Turnos del día: {selectedAppointmentPlannerDay.label}</div>
+											<div className="text-xs text-sky-800">Elegí un horario con lugar y se abrirá el formulario para asignar paciente y consulta.</div>
 										</div>
-										<div>
-											<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
-											<input type="date" value={blockRangeEndDate} onChange={(event) => setBlockRangeEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+										<div className="flex flex-wrap items-center gap-2">
+											<Button
+												type="button"
+												size="sm"
+												variant={appointmentPlannerQuickFilter === 'all' ? 'default' : 'outline'}
+												onClick={() => setAppointmentPlannerQuickFilter('all')}
+											>
+												Todos
+											</Button>
+											<Button
+												type="button"
+												size="sm"
+												variant={appointmentPlannerQuickFilter === 'available' ? 'default' : 'outline'}
+												onClick={() => setAppointmentPlannerQuickFilter('available')}
+											>
+												Disponibles
+											</Button>
+											<Button
+												type="button"
+												size="sm"
+												variant={appointmentPlannerQuickFilter === 'occupied' ? 'default' : 'outline'}
+												onClick={() => setAppointmentPlannerQuickFilter('occupied')}
+											>
+												Ocupados
+											</Button>
+											<Button type="button" variant="outline" size="sm" onClick={() => setAppointmentPlannerSelectedDate(null)}>
+												Volver a fechas
+											</Button>
 										</div>
-										<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
-											Este rango solo define qué días y turnos cargar en pantalla. Después elegís los slots que querés bloquear o desbloquear.
-										</div>
-										{!blockId && (
-											<div className="rounded-lg border border-gray-200 bg-white p-3">
-												<div className="mb-2 text-xs text-gray-500">Acción</div>
-												<div className="flex gap-2">
-													<Button type="button" size="sm" variant={isBlockMode ? 'default' : 'outline'} onClick={() => setBlockMode('block')} disabled={isScheduleInteractionLocked}>Bloquear</Button>
-													<Button type="button" size="sm" variant={!isBlockMode ? 'default' : 'outline'} onClick={() => setBlockMode('unblock')} disabled={isScheduleInteractionLocked}>Desbloquear</Button>
-												</div>
-												<div className="mt-2 text-xs text-gray-500">La grilla solo habilita slots compatibles con el modo activo.</div>
-											</div>
-										)}
 									</div>
-									<div className="rounded-lg border border-gray-200 bg-white p-4">
-										<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-											<div>
-												<div className="text-sm font-medium text-gray-900">Slots del rango</div>
-												<div className="text-xs text-gray-500">Seleccioná los slots que querés afectar desde la grilla.</div>
-											</div>
-											<div className="flex flex-wrap items-center gap-2">
-												{selectedPreviewSlots.length > 0 && <div className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{selectedPreviewSlots.length} slot(s) marcados{!isBlockMode ? ` · ${selectedBlockedIds.length} bloqueo(s) a quitar` : ''}</div>}
-												{selectedBlockSlotKeys.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={clearBlockSelection} disabled={isScheduleInteractionLocked}>Limpiar selección</Button>}
-											</div>
-										</div>
-										{blockPreviewDays.every((day) => day.slots.length === 0) && <p className="text-sm text-gray-500">No hay slots calculados para esta agenda en la fecha seleccionada.</p>}
-										<div className="max-h-[42vh] overflow-auto pr-1">
-											<div className="min-w-180 space-y-4">
-												{blockPreviewDays.map((day) => (
-													<div key={day.date} className="rounded-lg border border-gray-100 p-3">
-														<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-															<div>
-																<div className="text-sm font-medium text-gray-900 capitalize">{day.label}</div>
-																<div className="text-xs text-gray-500">{day.date}</div>
-															</div>
-															<Button type="button" size="sm" variant="outline" onClick={() => toggleDaySelection(day)} disabled={isScheduleInteractionLocked || loadingAction === 'block' || day.slots.every((slot) => slot.status !== selectableStatus || (!isBlockMode && !slot.block_id))}>
-																{day.slots.filter((slot) => slot.status === selectableStatus && (isBlockMode || Boolean(slot.block_id))).every((slot) => selectedBlockSlotKeys.includes(getBlockSlotKey(slot))) ? (isBlockMode ? 'Quitar día' : 'Quitar bloqueados') : (isBlockMode ? 'Seleccionar día' : 'Seleccionar bloqueados')}
-															</Button>
+									{filteredSelectedAppointmentPlannerSlots.length === 0 ? (
+										<p className="text-sm text-sky-900">No hay slots configurados para este día en la agenda.</p>
+									) : (
+										<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+											{filteredSelectedAppointmentPlannerSlots.map((slot) => {
+												const canSchedule = slot.status === 'available' || slot.status === 'partial'
+												const toneClasses = slot.status === 'available'
+													? 'border-emerald-300 bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
+													: slot.status === 'partial'
+														? 'border-sky-300 bg-sky-50 text-sky-950 hover:bg-sky-100'
+														: slot.status === 'blocked'
+															? 'border-amber-300 bg-amber-50 text-amber-950'
+															: 'border-rose-300 bg-rose-50 text-rose-950'
+
+												return (
+													<button
+														key={`${slot.date}-${slot.startTime}-${slot.endTime}`}
+														type="button"
+														onClick={() => canSchedule && openAppointmentSlotModal(slot)}
+														disabled={!canSchedule || loadingAction === 'appointment'}
+														className={`rounded-lg border px-3 py-3 text-left transition ${canSchedule ? toneClasses : `${toneClasses} cursor-not-allowed opacity-80`}`}
+													>
+														<div className="flex items-center justify-between gap-2">
+															<div className="text-sm font-semibold">{slot.startTime} - {slot.endTime}</div>
+															<Badge variant={slot.status === 'partial' ? 'secondary' : 'default'}>
+																		{slot.status === 'available' ? 'Libre' : slot.status === 'partial' ? 'Parcial' : slot.status === 'blocked' ? 'Bloqueado' : 'Ocupado'}
+															</Badge>
 														</div>
-														{day.slots.length === 0 ? (
-															<p className="text-sm text-gray-500">No hay slots configurados para este día.</p>
-														) : (
-															<div className="grid gap-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
-																{day.slots.map((slot) => {
-																	const isSelected = selectedBlockSlotKeys.includes(getBlockSlotKey(slot))
-																	const isDisabledForMode = isScheduleInteractionLocked || loadingAction === 'block' || (isBlockMode ? slot.status === 'blocked' : slot.status !== 'blocked' || !slot.block_id)
-																	return (
-																		<button key={`${slot.date}-${slot.start_time}-${slot.end_time}`} type="button" onClick={() => toggleBlockSlotSelection(slot)} disabled={isDisabledForMode} className={`rounded-md border px-2 py-1.5 text-left text-xs leading-tight transition ${slot.status === 'blocked' ? (isSelected ? 'border-blue-700 bg-blue-600 text-white shadow-sm' : isBlockMode ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500' : 'border-blue-300 bg-blue-50 text-blue-800 hover:border-blue-400 hover:bg-blue-100') : slot.status === 'occupied' ? 'border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300' : slot.status === 'partial' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300' : isSelected ? 'border-emerald-700 bg-emerald-600 text-white shadow-sm' : 'border-emerald-300 bg-emerald-50 text-gray-800 hover:border-emerald-400 hover:bg-emerald-100'}`}>
-																			<div className="font-medium">{slot.start_time} - {slot.end_time}</div>
-																			<div className="mt-0.5 text-[11px]">
-																				{slot.status === 'blocked' && (
-																					<TooltipProvider delayDuration={150}>
-																						<Tooltip>
-																							<TooltipTrigger asChild><span className="block truncate">{getBlockedSlotReason(slot.block_title)}</span></TooltipTrigger>
-																							<TooltipContent className="max-w-sm">
-																								<p>Tipo: {getBlockTypeLabel(slot.block_type)}</p>
-																								<p>Motivo: {getBlockedSlotReason(slot.block_title)}</p>
-																								{getBlockedSlotDescription(slot.block_notes) && <p>Descripción: {getBlockedSlotDescription(slot.block_notes)}</p>}
-																							</TooltipContent>
-																						</Tooltip>
-																					</TooltipProvider>
-																				)}
-																				{slot.status === 'occupied' && `Tiene ${slot.appointments_count || 0} cita(s). Click para precargar el formulario manual.`}
-																				{slot.status === 'partial' && `Parcial con ${slot.appointments_count || 0} cita(s). Click para precargar el formulario manual.`}
-																				{slot.status === 'available' && (isSelected ? 'Seleccionado para bloquear' : 'Click para seleccionar')}
-																				{slot.status === 'blocked' && !isBlockMode && (isSelected ? 'Seleccionado para desbloquear' : 'Click para desbloquear')}
-																			</div>
-																		</button>
-																	)
-																})}
-															</div>
-														)}
+														<div className="mt-2 space-y-1 text-xs">
+																	{slot.status === 'available' && <div>{slot.availableCapacity} lugar(es) disponible(s)</div>}
+																	{slot.status === 'partial' && <div>{slot.availableCapacity} lugar(es) libre(s)</div>}
+																	{slot.appointmentSummaries.map((appointment) => (
+																		<div key={appointment.id} className="rounded-md bg-white/70 px-2 py-1 text-[11px] leading-tight">
+																			<div className="font-semibold">{appointment.patientName}</div>
+																			<div className="opacity-80">{appointment.serviceLabel}</div>
+																		</div>
+																	))}
+																	{slot.blockTitle && <div>{slot.blockTitle}</div>}
+																	{canSchedule && <div>Click para agendar</div>}
+														</div>
+													</button>
+												)
+											})}
+										</div>
+									)}
+								</div>
+							)}
+							{filteredAppointmentPreviewDays.length === 0 ? (
+								<p className="text-sm text-gray-500">No hay fechas disponibles dentro del rango seleccionado para esta agenda.</p>
+							) : (
+								<div className="grid gap-3 pr-1 md:grid-cols-2 xl:grid-cols-3">
+									{filteredAppointmentPreviewDays.map((day) => {
+										const toneClasses = day.statusTone === 'available'
+											? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+											: day.statusTone === 'blocked'
+												? 'border-amber-200 bg-amber-50 text-amber-900'
+												: day.statusTone === 'occupied'
+													? 'border-rose-200 bg-rose-50 text-rose-900'
+													: 'border-gray-200 bg-white text-gray-800'
+
+										return (
+											<div key={day.date} className={`rounded-xl border p-4 ${toneClasses}`}>
+												<div className="flex items-start justify-between gap-3">
+													<div>
+														<div className="text-sm font-semibold capitalize">{day.label}</div>
+														<div className="text-xs opacity-80">{day.date}</div>
 													</div>
-												))}
+													<Badge variant={day.statusTone === 'muted' ? 'secondary' : 'default'}>{day.statusLabel}</Badge>
+												</div>
+												<div className="mt-4 space-y-1 text-sm">
+													<div>{day.availableSlots} slot(s) con lugar de {day.totalSlots || 0}</div>
+													<div>{day.bookedCapacity} reservas de {day.totalCapacity || 0} cupos</div>
+													<div>{day.blockedSlots} bloqueados · {day.occupiedSlots} completos</div>
+													{day.firstAvailableSlot && <div>Primer turno utilizable: {day.firstAvailableSlot.startTime}</div>}
+													{!day.hasRules && <div>Ese día no forma parte de la agenda configurada.</div>}
+												</div>
+												<div className="mt-4 flex flex-wrap gap-2">
+													<Button type="button" variant={day.totalSlots > 0 ? 'default' : 'outline'} onClick={() => setAppointmentPlannerSelectedDate(day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
+														Ver turnos del día
+													</Button>
+													<Button type="button" variant="ghost" onClick={() => appointmentScheduleContext && openAppointmentsForSchedule(appointmentScheduleContext, day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
+														Abrir agenda diaria
+													</Button>
+												</div>
 											</div>
+										)
+									})}
+								</div>
+							)}
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			<AppointmentSlotModal
+				open={isAppointmentModalOpen}
+				onOpenChange={closeAppointmentModal}
+				loading={loadingAction === 'appointment'}
+				medicalServices={medicalServices}
+				slot={selectedAppointmentSlot}
+				appointment={selectedAppointment}
+				onSearchPatients={searchPatients}
+				onSubmit={submitAppointment}
+			/>
+
+			<Dialog open={isBlockModalOpen} onOpenChange={closeBlockModal}>
+				<DialogContent className="h-[92vh] w-[98vw] max-w-[98vw] overflow-hidden p-0 sm:w-[96vw] sm:max-w-[96vw] 2xl:w-450 2xl:max-w-450">
+					<div className="flex h-full flex-col overflow-hidden p-6">
+						<DialogHeader>
+							<DialogTitle>{blockId ? 'Editar bloqueo' : isBlockMode ? 'Bloquear agenda' : 'Desbloquear agenda'}</DialogTitle>
+							<DialogDescription>
+								{blockScheduleContext ? `${blockScheduleContext.professional_name} · ${blockScheduleContext.name}` : 'Completá los datos del bloqueo y elegí los slots desde la grilla.'}
+							</DialogDescription>
+						</DialogHeader>
+						<form className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden" onSubmit={submitBlock}>
+							<div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+								<div className="grid gap-4">
+									<div>
+										<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
+										<input type="date" value={blockRangeStartDate} onChange={(event) => setBlockRangeStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+									</div>
+									<div>
+										<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
+										<input type="date" value={blockRangeEndDate} onChange={(event) => setBlockRangeEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+									</div>
+									<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
+										Este rango solo define qué días y turnos cargar en pantalla. Después elegís los slots que querés bloquear o desbloquear.
+									</div>
+									{!blockId && (
+										<div className="rounded-lg border border-gray-200 bg-white p-3">
+											<div className="mb-2 text-xs text-gray-500">Acción</div>
+											<div className="flex gap-2">
+												<Button type="button" size="sm" variant={isBlockMode ? 'default' : 'outline'} onClick={() => setBlockMode('block')} disabled={isScheduleInteractionLocked}>Bloquear</Button>
+												<Button type="button" size="sm" variant={!isBlockMode ? 'default' : 'outline'} onClick={() => setBlockMode('unblock')} disabled={isScheduleInteractionLocked}>Desbloquear</Button>
+											</div>
+											<div className="mt-2 text-xs text-gray-500">La grilla solo habilita slots compatibles con el modo activo.</div>
+										</div>
+									)}
+								</div>
+								<div className="rounded-lg border border-gray-200 bg-white p-4">
+									<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+										<div>
+											<div className="text-sm font-medium text-gray-900">Slots del rango</div>
+											<div className="text-xs text-gray-500">Seleccioná los slots que querés afectar desde la grilla.</div>
+										</div>
+										<div className="flex flex-wrap items-center gap-2">
+											{selectedPreviewSlots.length > 0 && <div className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{selectedPreviewSlots.length} slot(s) marcados{!isBlockMode ? ` · ${selectedBlockedIds.length} bloqueo(s) a quitar` : ''}</div>}
+											{selectedBlockSlotKeys.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={clearBlockSelection} disabled={isScheduleInteractionLocked}>Limpiar selección</Button>}
 										</div>
 									</div>
+									{blockPreviewDays.every((day) => day.slots.length === 0) && <p className="text-sm text-gray-500">No hay slots calculados para esta agenda en la fecha seleccionada.</p>}
+									<div className="max-h-[42vh] overflow-auto pr-1">
+										<div className="min-w-180 space-y-4">
+											{blockPreviewDays.map((day) => (
+												<div key={day.date} className="rounded-lg border border-gray-100 p-3">
+													<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+														<div>
+															<div className="text-sm font-medium text-gray-900 capitalize">{day.label}</div>
+															<div className="text-xs text-gray-500">{day.date}</div>
+														</div>
+														<Button type="button" size="sm" variant="outline" onClick={() => toggleDaySelection(day)} disabled={isScheduleInteractionLocked || loadingAction === 'block' || day.slots.every((slot) => slot.status !== selectableStatus || (!isBlockMode && !slot.block_id))}>
+															{day.slots.filter((slot) => slot.status === selectableStatus && (isBlockMode || Boolean(slot.block_id))).every((slot) => selectedBlockSlotKeys.includes(getBlockSlotKey(slot))) ? (isBlockMode ? 'Quitar día' : 'Quitar bloqueados') : (isBlockMode ? 'Seleccionar día' : 'Seleccionar bloqueados')}
+														</Button>
+													</div>
+													{day.slots.length === 0 ? (
+														<p className="text-sm text-gray-500">No hay slots configurados para este día.</p>
+													) : (
+														<div className="grid gap-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+															{day.slots.map((slot) => {
+																const isSelected = selectedBlockSlotKeys.includes(getBlockSlotKey(slot))
+																const isDisabledForMode = isScheduleInteractionLocked || loadingAction === 'block' || (isBlockMode ? slot.status === 'blocked' : slot.status !== 'blocked' || !slot.block_id)
+																return (
+																	<button key={`${slot.date}-${slot.start_time}-${slot.end_time}`} type="button" onClick={() => toggleBlockSlotSelection(slot)} disabled={isDisabledForMode} className={`rounded-md border px-2 py-1.5 text-left text-xs leading-tight transition ${slot.status === 'blocked' ? (isSelected ? 'border-blue-700 bg-blue-600 text-white shadow-sm' : isBlockMode ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500' : 'border-blue-300 bg-blue-50 text-blue-800 hover:border-blue-400 hover:bg-blue-100') : slot.status === 'occupied' ? 'border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300' : slot.status === 'partial' ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300' : isSelected ? 'border-emerald-700 bg-emerald-600 text-white shadow-sm' : 'border-emerald-300 bg-emerald-50 text-gray-800 hover:border-emerald-400 hover:bg-emerald-100'}`}>
+																	<div className="font-medium">{slot.start_time} - {slot.end_time}</div>
+																	<div className="mt-0.5 text-[11px]">
+																		{slot.status === 'blocked' && (
+																			<TooltipProvider delayDuration={150}>
+																				<Tooltip>
+																					<TooltipTrigger asChild><span className="block truncate">{getBlockedSlotReason(slot.block_title)}</span></TooltipTrigger>
+																					<TooltipContent className="max-w-sm">
+																						<p>Tipo: {getBlockTypeLabel(slot.block_type)}</p>
+																						<p>Motivo: {getBlockedSlotReason(slot.block_title)}</p>
+																						{getBlockedSlotDescription(slot.block_notes) && <p>Descripción: {getBlockedSlotDescription(slot.block_notes)}</p>}
+																					</TooltipContent>
+																				</Tooltip>
+																			</TooltipProvider>
+																		)}
+																		{slot.status === 'occupied' && `Tiene ${slot.appointments_count || 0} cita(s). Click para precargar el formulario manual.`}
+																		{slot.status === 'partial' && `Parcial con ${slot.appointments_count || 0} cita(s). Click para precargar el formulario manual.`}
+																		{slot.status === 'available' && (isSelected ? 'Seleccionado para bloquear' : 'Click para seleccionar')}
+																		{slot.status === 'blocked' && !isBlockMode && (isSelected ? 'Seleccionado para desbloquear' : 'Click para desbloquear')}
+																	</div>
+																</button>
+															)
+														})}
+														</div>
+													)}
+												</div>
+											))}
+										</div>
+									</div>
+								</div>
 								</div>
 								<div className="overflow-y-auto pr-1">
 									<div className="grid gap-4 md:grid-cols-2">
