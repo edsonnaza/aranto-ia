@@ -312,6 +312,34 @@ class ScheduleController extends Controller
 
     public function storeBlock(Request $request): RedirectResponse
     {
+        if ($request->filled('cancel_block_ids')) {
+            $validated = $request->validate([
+                'cancel_block_ids' => ['required', 'array', 'min:1'],
+                'cancel_block_ids.*' => ['integer', 'exists:professional_schedule_blocks,id'],
+            ]);
+
+            ProfessionalScheduleBlock::query()
+                ->whereIn('id', $validated['cancel_block_ids'])
+                ->update(['status' => ProfessionalScheduleBlock::STATUS_CANCELLED]);
+
+            return back()->with('message', 'Bloqueos quitados correctamente.');
+        }
+
+        if ($request->filled('blocks')) {
+            $validated = $request->validate([
+                'blocks' => ['required', 'array', 'min:1'],
+            ]);
+
+            DB::transaction(function () use ($validated) {
+                foreach ($validated['blocks'] as $blockPayload) {
+                    validator($blockPayload, $this->blockValidationRules())->validate();
+                    ProfessionalScheduleBlock::create($blockPayload);
+                }
+            });
+
+            return back()->with('message', 'Bloqueos registrados correctamente.');
+        }
+
         $validated = $this->validateBlock($request);
 
         ProfessionalScheduleBlock::create($validated);
@@ -392,7 +420,12 @@ class ScheduleController extends Controller
 
     private function validateBlock(Request $request): array
     {
-        return $request->validate([
+        return $request->validate($this->blockValidationRules());
+    }
+
+    private function blockValidationRules(): array
+    {
+        return [
             'professional_id' => ['required', 'exists:professionals,id'],
             'block_type' => ['required', Rule::in(['travel', 'conference', 'holiday', 'vacation', 'other'])],
             'title' => ['required', 'string', 'max:120'],
@@ -401,7 +434,7 @@ class ScheduleController extends Controller
             'affects_full_day' => ['required', 'boolean'],
             'status' => ['required', Rule::in([ProfessionalScheduleBlock::STATUS_ACTIVE, ProfessionalScheduleBlock::STATUS_CANCELLED])],
             'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ];
     }
 
     private function validateAppointment(Request $request, ?ScheduleAppointment $appointment = null): array

@@ -33,6 +33,14 @@ interface BlockPayload {
   notes?: string
 }
 
+interface BlockBatchPayload {
+  blocks: BlockPayload[]
+}
+
+interface BlockCancelBatchPayload {
+  cancel_block_ids: number[]
+}
+
 interface AppointmentPayload {
   professional_id: number
   patient_id: number
@@ -155,31 +163,46 @@ export const useSchedule = () => {
     })
   }, [clearLoading, resolveErrorMessage, withLoading])
 
-  const saveBlock = useCallback((data: BlockPayload, blockId?: number, options: VisitOptions = {}) => {
+  const saveBlock = useCallback((data: BlockPayload | BlockBatchPayload | BlockCancelBatchPayload, blockId?: number, options: VisitOptions = {}) => {
     withLoading('block', () => {
+      const isBatchCreate = !blockId && 'blocks' in data
+      const isBatchCancel = !blockId && 'cancel_block_ids' in data
       const url = blockId ? scheduleRoutes.blockUpdate(blockId) : scheduleRoutes.blockStore
-      const successMessage = blockId ? 'Bloqueo actualizado correctamente.' : 'Bloqueo registrado correctamente.'
+      const successMessage = blockId
+        ? 'Bloqueo actualizado correctamente.'
+        : isBatchCancel
+          ? 'Bloqueos quitados correctamente.'
+        : isBatchCreate
+          ? 'Bloqueos registrados correctamente.'
+          : 'Bloqueo registrado correctamente.'
+      const {
+        onSuccess,
+        onError,
+        onFinish,
+        onCancel,
+        ...restOptions
+      } = options
       const requestOptions: VisitOptions = {
         preserveScroll: true,
         onSuccess: (page) => {
           toast.success(successMessage)
-          options.onSuccess?.(page)
+          onSuccess?.(page)
         },
         onError: (errors) => {
           const message = resolveErrorMessage(errors)
           setError(message)
           toast.error(message)
-          options.onError?.(errors)
+          onError?.(errors)
         },
         onFinish: (visit) => {
           clearLoading()
-          options.onFinish?.(visit)
+          onFinish?.(visit)
         },
         onCancel: () => {
           clearLoading()
-          options.onCancel?.()
+          onCancel?.()
         },
-        ...options,
+        ...restOptions,
       }
 
       if (blockId) {

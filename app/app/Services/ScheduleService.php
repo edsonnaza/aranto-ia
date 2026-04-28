@@ -206,7 +206,10 @@ class ScheduleService
                             'occupied_count' => $occupiedCount,
                             'available_capacity' => $availableCapacity,
                             'slot_status' => $slotStatus,
+                            'block_id' => $overlappingBlock?->id,
+                            'block_type' => $overlappingBlock?->block_type,
                             'block_title' => $overlappingBlock?->title,
+                            'block_notes' => $overlappingBlock?->notes,
                             'appointments' => $slotAppointments->map(fn (ScheduleAppointment $appointment) => $this->serializeSlotAppointment($appointment, $serviceLookup))->all(),
                         ];
 
