@@ -1831,7 +1831,7 @@ export default function ScheduleIndex({
 							{filteredAppointmentPreviewDays.length === 0 ? (
 								<p className="text-sm text-gray-500">No hay fechas disponibles dentro del rango seleccionado para esta agenda.</p>
 							) : (
-								<div className="grid gap-3 pr-1 md:grid-cols-2 xl:grid-cols-3">
+								<div className="grid gap-2 pr-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 									{filteredAppointmentPreviewDays.map((day) => {
 										const toneClasses = day.statusTone === 'available'
 											? 'border-emerald-200 bg-emerald-50 text-emerald-900'
@@ -1842,27 +1842,41 @@ export default function ScheduleIndex({
 													: 'border-gray-200 bg-white text-gray-800'
 
 										return (
-											<div key={day.date} className={`rounded-xl border p-4 ${toneClasses}`}>
-												<div className="flex items-start justify-between gap-3">
+											<div key={day.date} className={`rounded-lg border p-3 ${toneClasses}`}>
+												<div className="flex items-start justify-between gap-2">
 													<div>
-														<div className="text-sm font-semibold capitalize">{day.label}</div>
-														<div className="text-xs opacity-80">{day.date}</div>
+														<div className="text-sm font-semibold capitalize leading-tight">{day.label}</div>
+														<div className="text-[11px] opacity-80">{day.date}</div>
 													</div>
-													<Badge variant={day.statusTone === 'muted' ? 'secondary' : 'default'}>{day.statusLabel}</Badge>
+													<Badge className="px-2 py-0 text-[10px]" variant={day.statusTone === 'muted' ? 'secondary' : 'default'}>{day.statusLabel}</Badge>
 												</div>
-												<div className="mt-4 space-y-1 text-sm">
-													<div>{day.availableSlots} slot(s) con lugar de {day.totalSlots || 0}</div>
-													<div>{day.bookedCapacity} reservas de {day.totalCapacity || 0} cupos</div>
-													<div>{day.blockedSlots} bloqueados · {day.occupiedSlots} completos</div>
-													{day.firstAvailableSlot && <div>Primer turno utilizable: {day.firstAvailableSlot.startTime}</div>}
-													{!day.hasRules && <div>Ese día no forma parte de la agenda configurada.</div>}
+												<div className="mt-3 grid grid-cols-2 gap-2 text-xs leading-tight">
+													<div className="rounded-md bg-white/60 px-2 py-1.5">
+														<div className="text-[10px] uppercase tracking-wide opacity-100">Disponibles</div>
+														<div className="mt-0.5 font-semibold">{day.availableSlots} / {day.totalSlots || 0}</div>
+													</div>
+													<div className="rounded-md bg-white/60 px-2 py-1.5">
+														<div className="text-[10px] uppercase tracking-wide opacity-100">Agendados</div>
+														<div className="mt-0.5 font-semibold">{day.bookedCapacity || 0 }</div>
+													</div>
+													<div className="rounded-md bg-white/60 px-2 py-1.5">
+														<div className="text-[10px] uppercase tracking-wide opacity-100">Bloqueados</div>
+														<div className="mt-0.5 font-semibold">{day.blockedSlots}</div>
+													</div>
+													
+													{day.firstAvailableSlot && (
+														<div className="col-span-2 rounded-md bg-white/45 px-2 py-1.5 text-[11px]">
+															<span className="opacity-70">Primer turno:</span> <span className="font-semibold">{day.firstAvailableSlot.startTime}</span>
+														</div>
+													)}
+													{!day.hasRules && <div className="col-span-2 text-[11px] opacity-80">Ese día no forma parte de la agenda configurada.</div>}
 												</div>
-												<div className="mt-4 flex flex-wrap gap-2">
-													<Button type="button" variant={day.totalSlots > 0 ? 'default' : 'outline'} onClick={() => setAppointmentPlannerSelectedDate(day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
-														Ver turnos del día
+												<div className="mt-3 flex flex-wrap gap-1.5">
+													<Button type="button" size="sm" variant={day.totalSlots > 0 ? 'default' : 'outline'} onClick={() => setAppointmentPlannerSelectedDate(day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
+														Ver turnos
 													</Button>
-													<Button type="button" variant="ghost" onClick={() => appointmentScheduleContext && openAppointmentsForSchedule(appointmentScheduleContext, day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
-														Abrir agenda diaria
+													<Button type="button" size="sm" variant="ghost" onClick={() => appointmentScheduleContext && openAppointmentsForSchedule(appointmentScheduleContext, day.date)} disabled={!appointmentScheduleContext || day.totalSlots === 0}>
+														Abrir día
 													</Button>
 												</div>
 											</div>
@@ -1872,6 +1886,16 @@ export default function ScheduleIndex({
 							)}
 						</div>
 					</div>
+					<DialogFooter className="shrink-0 border-t border-gray-200 bg-white px-6 py-4 sm:justify-between">
+						<div className="text-xs text-gray-500">
+							{selectedAppointmentPlannerDay
+								? `Día seleccionado: ${selectedAppointmentPlannerDay.label}`
+								: 'Seleccioná una fecha para ver los turnos del día.'}
+						</div>
+						<Button type="button" variant="outline" onClick={() => closeAppointmentPlanner(false)}>
+							Cerrar
+						</Button>
+					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
