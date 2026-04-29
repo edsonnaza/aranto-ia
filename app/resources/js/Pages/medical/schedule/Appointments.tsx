@@ -231,11 +231,12 @@ export default function AppointmentsPage({
 
   const currentViewLabel = currentView === 'day' ? 'día' : currentView === 'week' ? 'semana' : 'mes'
   const currentCalendarView = currentView === 'day' ? 'timeGridDay' : currentView === 'week' ? 'timeGridWeek' : 'dayGridMonth'
-  const timelinePixelsPerMinute = 1.9
-  const dailyTimelineTopOffset = 0
-  const dailyTimelineBottomOffset = 6
+  const timelinePixelsPerMinute = 1.2
+  const dailyTimelineTopOffset = 1
+  const dailyTimelineBottomOffset = 3
   const dailySlotGap = 1
   const dailyHourDividerGap = 0
+  const dailyHourLabelOffset = 20
 
   const parseTimeToMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
@@ -1125,8 +1126,8 @@ export default function AppointmentsPage({
                                   style={{ top: `${topPosition}px` }}
                                 />
                                 <div
-                                  className="absolute left-0 right-0 -translate-y-1/2 px-2 text-center text-[11px] font-medium text-slate-500"
-                                  style={{ top: `${topPosition}px` }}
+                                  className="absolute left-0 right-0 px-2 text-center text-[11px] font-medium text-slate-500"
+                                  style={{ top: `${topPosition + dailyHourLabelOffset}px` }}
                                 >
                                   {formatMinutesToLabel(hourMark)}
                                 </div>
