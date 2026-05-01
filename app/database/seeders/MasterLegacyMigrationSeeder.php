@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Artisan;
 use Carbon\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -36,9 +35,9 @@ class MasterLegacyMigrationSeeder extends Seeder
         $legacyExists = DB::select("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'db_legacy_infomed'");
         
         if (empty($legacyExists)) {
-            $this->warn('⚠️  Base de datos legacy (db_legacy_infomed) no existe');
-            $this->line('Ejecutando seeding SIN migraciones de legacy...');
-            $this->line('');
+            $this->command->warn('⚠️  Base de datos legacy (db_legacy_infomed) no existe');
+            $this->command->line('Ejecutando seeding SIN migraciones de legacy...');
+            $this->command->line('');
             
             try {
                 // FASE 1: Configuración Base
@@ -67,7 +66,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                     $this->call(CashRegisterUsersSeeder::class);
                 });
 
-                $this->info('✅ Seeding completado SIN datos de legacy');
+                $this->command->info('✅ Seeding completado SIN datos de legacy');
             } catch (\Exception $e) {
                 $this->printError($e);
                 throw $e;

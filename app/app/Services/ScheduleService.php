@@ -85,47 +85,10 @@ class ScheduleService
         $startDate = $dateFrom->copy()->startOfDay();
         $endDate = $dateTo->copy()->endOfDay();
 
-        $schedules = ProfessionalSchedule::query()
-            ->with(['professional', 'rules'])
-            ->active()
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->whereDate('start_date', '<=', $dateTo->toDateString())
-            ->where(function ($query) use ($dateFrom) {
-                $query->whereNull('end_date')
-                    ->orWhereDate('end_date', '>=', $dateFrom->toDateString());
-            })
-            ->get();
-
-        $blocks = ProfessionalScheduleBlock::query()
-            ->active()
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->where('start_datetime', '<=', $endDate)
-            ->where('end_datetime', '>=', $startDate)
-            ->get();
-
-        $appointments = ScheduleAppointment::query()
-            ->with(['patient', 'medicalService', 'serviceRequest'])
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->whereDate('appointment_date', '>=', $dateFrom->toDateString())
-            ->whereDate('appointment_date', '<=', $dateTo->toDateString())
-            ->whereNotIn('status', [ScheduleAppointment::STATUS_CANCELLED, ScheduleAppointment::STATUS_NO_SHOW])
-            ->get();
-
-        $serviceLookup = MedicalService::query()
-            ->whereIn('id', $appointments->flatMap(function (ScheduleAppointment $appointment) {
-                return collect($appointment->medical_service_ids ?? [])
-                    ->when($appointment->medical_service_id, fn ($collection) => $collection->prepend((int) $appointment->medical_service_id))
-                    ->filter()
-                    ->map(fn ($serviceId) => (int) $serviceId)
-                    ->all();
-            })->unique()->values()->all())
-            ->pluck('name', 'id');
+        $schedules = $this->fetchSchedules($professionalId, $dateFrom, $dateTo);
+        $blocks = $this->fetchBlocks($professionalId, $startDate, $endDate);
+        $appointments = $this->fetchAppointments($professionalId, $dateFrom, $dateTo);
+        $serviceLookup = $this->buildServiceLookup($appointments);
 
         $slots = [];
 
@@ -210,7 +173,7 @@ class ScheduleService
                             'block_type' => $overlappingBlock?->block_type,
                             'block_title' => $overlappingBlock?->title,
                             'block_notes' => $overlappingBlock?->notes,
-                            'appointments' => $slotAppointments->map(fn (ScheduleAppointment $appointment) => $this->serializeSlotAppointment($appointment, $serviceLookup))->all(),
+                            'appointments' => $slotAppointments->map(fn (ScheduleAppointment $a) => $this->serializeSlotAppointment($a, $serviceLookup))->all(),
                         ];
 
                         $cursor = $slotEnd;
@@ -219,11 +182,59 @@ class ScheduleService
             }
         }
 
-        usort($slots, static function (array $left, array $right) {
-            return [$left['date'], $left['start_time']] <=> [$right['date'], $right['start_time']];
-        });
+        usort($slots, static fn (array $l, array $r) => [$l['date'], $l['start_time']] <=> [$r['date'], $r['start_time']]);
 
         return $slots;
+    }
+
+    private function fetchSchedules(?int $professionalId, Carbon $dateFrom, Carbon $dateTo): Collection
+    {
+        return ProfessionalSchedule::query()
+            ->with(['professional', 'rules'])
+            ->active()
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->whereDate('start_date', '<=', $dateTo->toDateString())
+            ->where(function ($q) use ($dateFrom) {
+                $q->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', $dateFrom->toDateString());
+            })
+            ->get();
+    }
+
+    private function fetchBlocks(?int $professionalId, Carbon $startDate, Carbon $endDate): Collection
+    {
+        return ProfessionalScheduleBlock::query()
+            ->active()
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->where('start_datetime', '<=', $endDate)
+            ->where('end_datetime', '>=', $startDate)
+            ->get();
+    }
+
+    private function fetchAppointments(?int $professionalId, Carbon $dateFrom, Carbon $dateTo): Collection
+    {
+        return ScheduleAppointment::query()
+            ->with(['patient', 'medicalService', 'serviceRequest'])
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->whereDate('appointment_date', '>=', $dateFrom->toDateString())
+            ->whereDate('appointment_date', '<=', $dateTo->toDateString())
+            ->whereNotIn('status', [ScheduleAppointment::STATUS_CANCELLED, ScheduleAppointment::STATUS_NO_SHOW])
+            ->get();
+    }
+
+    private function buildServiceLookup(Collection $appointments): Collection
+    {
+        $serviceIds = $appointments->flatMap(function (ScheduleAppointment $appointment) {
+            return collect($appointment->medical_service_ids ?? [])
+                ->when($appointment->medical_service_id, fn ($c) => $c->prepend((int) $appointment->medical_service_id))
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        })->unique()->values()->all();
+
+        return MedicalService::query()
+            ->whereIn('id', $serviceIds)
+            ->pluck('name', 'id');
     }
 
     private function serializeSlotAppointment(ScheduleAppointment $appointment, Collection $serviceLookup): array

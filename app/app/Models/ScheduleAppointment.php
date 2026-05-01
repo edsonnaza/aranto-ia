@@ -6,6 +6,32 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $professional_id
+ * @property int $patient_id
+ * @property int|null $medical_service_id
+ * @property array|null $medical_service_ids
+ * @property int|null $service_request_id
+ * @property \Illuminate\Support\Carbon $appointment_date
+ * @property string $start_time
+ * @property string $end_time
+ * @property int $duration_minutes
+ * @property string $status
+ * @property string $source
+ * @property string|null $notes
+ * @property string|null $cancellation_reason
+ * @property \Illuminate\Support\Carbon|null $checked_in_at
+ * @property \Illuminate\Support\Carbon|null $completed_at
+ * @property \Illuminate\Support\Carbon|null $cancelled_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read \App\Models\Professional|null $professional
+ * @property-read \App\Models\Patient|null $patient
+ * @property-read \App\Models\MedicalService|null $medicalService
+ * @property-read \App\Models\ServiceRequest|null $serviceRequest
+ */
 class ScheduleAppointment extends Model
 {
     use Auditable;

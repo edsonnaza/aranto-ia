@@ -9,6 +9,7 @@ use App\Models\ProfessionalScheduleBlock;
 use App\Models\ScheduleAppointment;
 use App\Services\ScheduleService;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,127 +42,17 @@ class ScheduleController extends Controller
             ? Carbon::parse((string) $request->get('selected_date'))->startOfDay()
             : $dateFrom->copy();
 
-        $professionalId = $request->filled('professional_id')
-            ? (int) $request->get('professional_id')
-            : null;
+        $professionalId = $request->filled('professional_id') ? (int) $request->get('professional_id') : null;
         $scheduleSearch = trim((string) $request->get('search', ''));
         $scheduleStatus = $request->filled('status') ? (string) $request->get('status') : null;
 
-        $professionals = Professional::query()
-            ->active()
-            ->orderBy('first_name')
-            ->orderBy('last_name')
-            ->get()
-            ->map(function (Professional $professional) {
-                return [
-                    'id' => $professional->id,
-                    'full_name' => $professional->full_name,
-                    'specialties' => $professional->specialties->pluck('name')->values()->all(),
-                ];
-            })
-            ->values()
-            ->all();
-
-        $medicalServices = MedicalService::query()
-            ->active()
-            ->requiresAppointment()
-            ->orderBy('name')
-            ->get()
-            ->map(function (MedicalService $service) {
-                return [
-                    'id' => $service->id,
-                    'name' => $service->name,
-                    'duration_minutes' => $service->duration_minutes,
-                ];
-            })
-            ->values()
-            ->all();
-
+        $professionals = $this->getProfessionalsList();
+        $medicalServices = $this->getMedicalServicesList();
         $medicalServicesLookup = collect($medicalServices)->keyBy('id');
 
-        $schedules = ProfessionalSchedule::query()
-            ->with(['professional', 'rules'])
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->when($scheduleStatus, function ($query) use ($scheduleStatus) {
-                $query->where('status', $scheduleStatus);
-            })
-            ->when($scheduleSearch !== '', function ($query) use ($scheduleSearch) {
-                $query->where(function ($innerQuery) use ($scheduleSearch) {
-                    $innerQuery->where('name', 'like', '%' . $scheduleSearch . '%')
-                        ->orWhereHas('professional', function ($professionalQuery) use ($scheduleSearch) {
-                            $professionalQuery->whereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ['%' . $scheduleSearch . '%'])
-                                ->orWhereRaw("CONCAT(last_name, ' ', first_name) LIKE ?", ['%' . $scheduleSearch . '%']);
-                        });
-                });
-            })
-            ->orderByDesc('created_at')
-            ->paginate($perPage)
-            ->withQueryString()
-            ->through(function (ProfessionalSchedule $schedule) {
-                return [
-                    'id' => $schedule->id,
-                    'professional_id' => $schedule->professional_id,
-                    'professional_name' => $schedule->professional?->full_name,
-                    'name' => $schedule->name,
-                    'start_date' => $schedule->start_date ? Carbon::parse((string) $schedule->start_date)->format('Y-m-d') : null,
-                    'end_date' => $schedule->end_date ? Carbon::parse((string) $schedule->end_date)->format('Y-m-d') : null,
-                    'slot_duration_minutes' => $schedule->slot_duration_minutes,
-                    'status' => $schedule->status,
-                    'notes' => $schedule->notes,
-                    'rules' => $schedule->rules->map(function ($rule) {
-                        return [
-                            'id' => $rule->id,
-                            'weekday' => $rule->weekday,
-                            'start_time' => substr((string) $rule->start_time, 0, 5),
-                            'end_time' => substr((string) $rule->end_time, 0, 5),
-                            'capacity' => $rule->capacity,
-                            'is_active' => $rule->is_active,
-                        ];
-                    })->values()->all(),
-                ];
-            });
-
-        $blocks = ProfessionalScheduleBlock::query()
-            ->with('professional')
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->where('start_datetime', '<=', $dateTo->copy()->endOfDay())
-            ->where('end_datetime', '>=', $dateFrom->copy()->startOfDay())
-            ->orderBy('start_datetime')
-            ->get()
-            ->map(function (ProfessionalScheduleBlock $block) {
-                return [
-                    'id' => $block->id,
-                    'professional_id' => $block->professional_id,
-                    'professional_name' => $block->professional?->full_name,
-                    'block_type' => $block->block_type,
-                    'title' => $block->title,
-                    'start_datetime' => $block->start_datetime?->format('Y-m-d\TH:i'),
-                    'end_datetime' => $block->end_datetime?->format('Y-m-d\TH:i'),
-                    'affects_full_day' => $block->affects_full_day,
-                    'status' => $block->status,
-                    'notes' => $block->notes,
-                ];
-            })
-            ->values()
-            ->all();
-
-        $appointments = ScheduleAppointment::query()
-            ->with(['professional', 'patient', 'medicalService', 'serviceRequest'])
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->whereDate('appointment_date', '>=', $dateFrom->toDateString())
-            ->whereDate('appointment_date', '<=', $dateTo->toDateString())
-            ->orderBy('appointment_date')
-            ->orderBy('start_time')
-            ->get()
-            ->map(fn (ScheduleAppointment $appointment) => $this->serializeAppointment($appointment, $medicalServicesLookup))
-            ->values()
-            ->all();
+        $schedules = $this->getSchedulesPaginated($professionalId, $scheduleSearch, $scheduleStatus, $perPage);
+        $blocks = $this->getBlocksList($professionalId, $dateFrom, $dateTo);
+        $appointments = $this->getAppointmentsList($professionalId, $dateFrom, $dateTo, $medicalServicesLookup);
 
         $occupancy = $this->scheduleService->getOccupancyReport($dateFrom, $dateTo, $professionalId);
         $slotBoard = $professionalId
@@ -188,6 +79,117 @@ class ScheduleController extends Controller
         ]);
     }
 
+    private function getProfessionalsList(): array
+    {
+        return Professional::query()
+            ->active()
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (Professional $p) => [
+                'id' => $p->id,
+                'full_name' => $p->full_name,
+                'specialties' => $p->specialties->pluck('name')->values()->all(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function getMedicalServicesList(): array
+    {
+        return MedicalService::query()
+            ->active()
+            ->requiresAppointment()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (MedicalService $s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'duration_minutes' => $s->duration_minutes,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function getSchedulesPaginated(?int $professionalId, string $search, ?string $status, int $perPage): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    {
+        return ProfessionalSchedule::query()
+            ->with(['professional', 'rules'])
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('name', 'like', '%' . $search . '%')
+                        ->orWhereHas('professional', function ($pq) use ($search) {
+                            $pq->whereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ['%' . $search . '%'])
+                                ->orWhereRaw("CONCAT(last_name, ' ', first_name) LIKE ?", ['%' . $search . '%']);
+                        });
+                });
+            })
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (ProfessionalSchedule $schedule) => [
+                'id' => $schedule->id,
+                'professional_id' => $schedule->professional_id,
+                'professional_name' => $schedule->professional?->full_name,
+                'name' => $schedule->name,
+                'start_date' => $schedule->start_date ? Carbon::parse((string) $schedule->start_date)->format('Y-m-d') : null,
+                'end_date' => $schedule->end_date ? Carbon::parse((string) $schedule->end_date)->format('Y-m-d') : null,
+                'slot_duration_minutes' => $schedule->slot_duration_minutes,
+                'status' => $schedule->status,
+                'notes' => $schedule->notes,
+                'rules' => $schedule->rules->map(fn ($r) => [
+                    'id' => $r->id,
+                    'weekday' => $r->weekday,
+                    'start_time' => substr((string) $r->start_time, 0, 5),
+                    'end_time' => substr((string) $r->end_time, 0, 5),
+                    'capacity' => $r->capacity,
+                    'is_active' => $r->is_active,
+                ])->values()->all(),
+            ]);
+    }
+
+    private function getBlocksList(?int $professionalId, Carbon $dateFrom, Carbon $dateTo): array
+    {
+        return ProfessionalScheduleBlock::query()
+            ->with('professional')
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->where('start_datetime', '<=', $dateTo->copy()->endOfDay())
+            ->where('end_datetime', '>=', $dateFrom->copy()->startOfDay())
+            ->orderBy('start_datetime')
+            ->get()
+            ->map(fn (ProfessionalScheduleBlock $block) => [
+                'id' => $block->id,
+                'professional_id' => $block->professional_id,
+                'professional_name' => $block->professional?->full_name,
+                'block_type' => $block->block_type,
+                'title' => $block->title,
+                'start_datetime' => $block->start_datetime?->format('Y-m-d\TH:i'),
+                'end_datetime' => $block->end_datetime?->format('Y-m-d\TH:i'),
+                'affects_full_day' => $block->affects_full_day,
+                'status' => $block->status,
+                'notes' => $block->notes,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function getAppointmentsList(?int $professionalId, Carbon $dateFrom, Carbon $dateTo, \Illuminate\Support\Collection $medicalServicesLookup): array
+    {
+        return ScheduleAppointment::query()
+            ->with(['professional', 'patient', 'medicalService', 'serviceRequest'])
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->whereDate('appointment_date', '>=', $dateFrom->toDateString())
+            ->whereDate('appointment_date', '<=', $dateTo->toDateString())
+            ->orderBy('appointment_date')
+            ->orderBy('start_time')
+            ->get()
+            ->map(fn (ScheduleAppointment $a) => $this->serializeAppointment($a, $medicalServicesLookup))
+            ->values()
+            ->all();
+    }
+
     public function appointmentsIndex(Request $request): Response
     {
         $selectedDate = $request->filled('selected_date')
@@ -198,58 +200,15 @@ class ScheduleController extends Controller
             ? (string) $request->get('view')
             : 'day';
 
-        $professionalId = $request->filled('professional_id')
-            ? (int) $request->get('professional_id')
-            : null;
+        $professionalId = $request->filled('professional_id') ? (int) $request->get('professional_id') : null;
 
         [$rangeStart, $rangeEnd] = $this->resolveAppointmentsRange($selectedDate, $view);
 
-        $professionals = Professional::query()
-            ->active()
-            ->orderBy('first_name')
-            ->orderBy('last_name')
-            ->get()
-            ->map(function (Professional $professional) {
-                return [
-                    'id' => $professional->id,
-                    'full_name' => $professional->full_name,
-                    'specialties' => $professional->specialties->pluck('name')->values()->all(),
-                ];
-            })
-            ->values()
-            ->all();
-
-        $medicalServices = MedicalService::query()
-            ->active()
-            ->requiresAppointment()
-            ->orderBy('name')
-            ->get()
-            ->map(function (MedicalService $service) {
-                return [
-                    'id' => $service->id,
-                    'name' => $service->name,
-                    'duration_minutes' => $service->duration_minutes,
-                ];
-            })
-            ->values()
-            ->all();
-
+        $professionals = $this->getProfessionalsList();
+        $medicalServices = $this->getMedicalServicesList();
         $medicalServicesLookup = collect($medicalServices)->keyBy('id');
 
-        $appointments = ScheduleAppointment::query()
-            ->with(['professional', 'patient', 'medicalService', 'serviceRequest'])
-            ->when($professionalId, function ($query) use ($professionalId) {
-                $query->where('professional_id', $professionalId);
-            })
-            ->whereDate('appointment_date', '>=', $rangeStart->toDateString())
-            ->whereDate('appointment_date', '<=', $rangeEnd->toDateString())
-            ->orderBy('appointment_date')
-            ->orderBy('start_time')
-            ->get()
-            ->map(fn (ScheduleAppointment $appointment) => $this->serializeAppointment($appointment, $medicalServicesLookup))
-            ->values()
-            ->all();
-
+        $appointments = $this->getAppointmentsList($professionalId, $rangeStart, $rangeEnd, $medicalServicesLookup);
         $slotBoard = $this->scheduleService->getSlotBoardForRange($professionalId, $rangeStart, $rangeEnd);
 
         return Inertia::render('medical/schedule/Appointments', [
@@ -568,12 +527,12 @@ class ScheduleController extends Controller
     {
         return match ($view) {
             'week' => [
-                $selectedDate->copy()->startOfWeek(Carbon::MONDAY),
-                $selectedDate->copy()->endOfWeek(Carbon::SUNDAY)->startOfDay(),
+                $selectedDate->copy()->startOfWeek(CarbonInterface::MONDAY),
+                $selectedDate->copy()->endOfWeek(CarbonInterface::SUNDAY)->startOfDay(),
             ],
             'month' => [
-                $selectedDate->copy()->startOfMonth()->startOfWeek(Carbon::MONDAY),
-                $selectedDate->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY)->startOfDay(),
+                $selectedDate->copy()->startOfMonth()->startOfWeek(CarbonInterface::MONDAY),
+                $selectedDate->copy()->endOfMonth()->endOfWeek(CarbonInterface::SUNDAY)->startOfDay(),
             ],
             default => [$selectedDate->copy()->startOfDay(), $selectedDate->copy()->startOfDay()],
         };

@@ -397,7 +397,7 @@ export default function AppointmentsPage({
     const dailyAppointmentsHeaderClasses = `sticky z-10 grid ${dailyAppointmentsGridColumns} gap-2 border-b border-slate-300 bg-slate-100/95 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm backdrop-blur`
 
     return (
-      <div key={entry.professional.id} className={hasSingleProfessionalColumn ? 'grid min-w-0 flex-1 border border-slate-200 bg-white' : 'grid min-w-[580px] max-w-[580px] border border-slate-200 bg-white'} style={{ gridTemplateRows: `${dailyProfessionalHeaderHeight}px auto 1fr` }}>
+      <div key={entry.professional.id} className={hasSingleProfessionalColumn ? 'grid min-w-0 flex-1 border border-slate-200 bg-white' : 'grid min-w-145 max-w-145 border border-slate-200 bg-white'} style={{ gridTemplateRows: `${dailyProfessionalHeaderHeight}px auto 1fr` }}>
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-sky-600 px-4 py-3.5 text-white shadow-sm" style={{ height: `${dailyProfessionalHeaderHeight}px` }}>
           <div className="font-semibold text-white">{entry.professional.full_name}</div>
           <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-sky-50/90">
@@ -565,7 +565,7 @@ export default function AppointmentsPage({
                   <ChevronLeft className="mr-1 h-4 w-4" />
                   Día anterior
                 </Button>
-                <div className="min-w-[180px] rounded-md border border-slate-200 bg-white px-3 py-1.5 text-center">
+                <div className="min-w-45 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-center">
                   <input
                     type="date"
                     value={selectedDate}
@@ -612,7 +612,7 @@ export default function AppointmentsPage({
             ) : (
               <div className="overflow-x-auto pb-2">
                 <div className={slotColumnsByProfessionalForSelectedDate.length === 1 ? 'flex w-full gap-0' : 'flex min-w-max gap-4'}>
-                  <div className="sticky left-0 z-10 grid min-w-[84px] border border-slate-200 bg-white" style={{ gridTemplateRows: `${dailyTimelineSidebarHeaderHeight}px auto 1fr` }}>
+                  <div className="sticky left-0 z-10 grid min-w-21 border border-slate-200 bg-white" style={{ gridTemplateRows: `${dailyTimelineSidebarHeaderHeight}px auto 1fr` }}>
                     <div className="sticky top-0 z-20 flex items-center justify-center border-b border-slate-200 bg-slate-100 px-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm" style={{ height: `${dailyTimelineSidebarHeaderHeight}px` }}>
                       Escala
                     </div>

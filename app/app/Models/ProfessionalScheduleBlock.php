@@ -6,6 +6,21 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $professional_id
+ * @property string $block_type
+ * @property string $title
+ * @property \Illuminate\Support\Carbon $start_datetime
+ * @property \Illuminate\Support\Carbon $end_datetime
+ * @property bool $affects_full_day
+ * @property string $status
+ * @property string|null $notes
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read \App\Models\Professional|null $professional
+ */
 class ProfessionalScheduleBlock extends Model
 {
     use Auditable;
