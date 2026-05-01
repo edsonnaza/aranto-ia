@@ -112,6 +112,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     ]);
     Route::get('patients-search', [PatientController::class, 'search'])
         ->name('patients.search');
+    Route::get('patients/{patient}/summary', [PatientController::class, 'summary'])
+        ->name('patients.summary');
     
     // Patient Insurance Management
     Route::post('patients/{patient}/insurances', [PatientController::class, 'addInsurance'])

@@ -19,6 +19,11 @@ use App\Traits\Auditable;
  * @property string|null $phone
  * @property string|null $email
  * @property string|null $address
+ * @property string|null $city
+ * @property string|null $state
+ * @property string|null $postal_code
+ * @property string|null $gender
+ * @property string|null $notes
  * @property string|null $emergency_contact_name
  * @property string|null $emergency_contact_phone
  * @property int|null $insurance_type_id

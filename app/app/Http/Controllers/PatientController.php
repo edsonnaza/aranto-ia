@@ -311,6 +311,45 @@ class PatientController extends Controller
     }
 
     /**
+     * Return a lightweight JSON summary of a patient for the quick-view modal.
+     */
+    public function summary(Patient $patient): \Illuminate\Http\JsonResponse
+    {
+        $patient->load(['insuranceType', 'insurances']);
+        $primaryInsurance = $patient->getPrimaryInsuranceInfo();
+
+        $genderMap = ['M' => 'Masculino', 'F' => 'Femenino', 'OTHER' => 'Otro'];
+
+        $birthDate = $patient->birth_date
+            ? \Carbon\Carbon::parse((string) $patient->birth_date)
+            : null;
+
+        return response()->json([
+            'id' => $patient->id,
+            'full_name' => $patient->full_name,
+            'document_type' => $patient->document_type,
+            'document_number' => $patient->document_number,
+            'status' => $patient->status,
+            'birth_date' => $birthDate?->format('Y-m-d'),
+            'birth_date_formatted' => $birthDate ? $birthDate->translatedFormat('d \d\e F \d\e Y') : null,
+            'age' => $birthDate ? $birthDate->age : null,
+            'gender' => $genderMap[$patient->gender ?? ''] ?? null,
+            'phone' => $patient->phone,
+            'email' => $patient->email,
+            'address' => $patient->address,
+            'city' => $patient->city,
+            'emergency_contact_name' => $patient->emergency_contact_name,
+            'emergency_contact_phone' => $patient->emergency_contact_phone,
+            'primary_insurance' => $primaryInsurance ? [
+                'name' => $primaryInsurance->name ?? null,
+                'coverage_percentage' => $primaryInsurance->coverage_percentage ?? null,
+                'number' => $primaryInsurance->number ?? null,
+            ] : null,
+            'created_at' => \Carbon\Carbon::parse((string) $patient->created_at)->format('d/m/Y'),
+        ]);
+    }
+
+    /**
      * Search patients for autocomplete.
      */
     public function search(Request $request)
@@ -331,7 +370,7 @@ class PatientController extends Controller
             ->with('insuranceType')
             ->limit(5)
             ->get()
-            ->map(function ($patient) {
+            ->map(function (Patient $patient) {
                 return [
                     'id' => $patient->id,
                     'label' => $patient->full_name,

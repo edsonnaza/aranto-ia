@@ -1480,7 +1480,7 @@ export default function ScheduleIndex({
 					</Card>
 					<Card>
 						<CardContent className="pt-6">
-							<div className="text-sm text-gray-500">Slots ocupados</div>
+							<div className="text-sm text-gray-500">Turnos ocupados</div>
 							<div className="text-3xl font-semibold">{occupancy.total_booked}</div>
 						</CardContent>
 					</Card>

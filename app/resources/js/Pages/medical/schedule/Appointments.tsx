@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
+import PatientSummaryModal from '@/components/medical/schedule/PatientSummaryModal'
 import { useSchedule, useSearch } from '@/hooks/medical'
 
 type ProfessionalOption = {
@@ -94,7 +95,7 @@ export default function AppointmentsPage({
   professionalsWithAgendaIds,
   filters,
 }: AppointmentsPageProps) {
-  const { searchPatients, searchProfessionals } = useSearch()
+  const { searchPatients } = useSearch()
   const { saveAppointment, goToReceptionFromAppointment, loadingAction, error } = useSchedule()
   const fallbackProfessionalId = (() => {
     const professionalIdFromFilters = filters.professional_id ? String(filters.professional_id) : ''
@@ -114,6 +115,8 @@ export default function AppointmentsPage({
   const [filterProfessionalId, setFilterProfessionalId] = useState(fallbackProfessionalId)
   const [showAllProfessionals, setShowAllProfessionals] = useState(false)
   const [professionalsDropdownSearch, setProfessionalsDropdownSearch] = useState('')
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
+  const [patientSummaryId, setPatientSummaryId] = useState<number | null>(null)
   const professionalsDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -126,7 +129,6 @@ export default function AppointmentsPage({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showAllProfessionals])
-  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{
     professionalId: number
@@ -143,14 +145,6 @@ export default function AppointmentsPage({
     { href: '/medical/appointments', title: 'Citas' },
   ]
   const activeProfessionalId = filterProfessionalId || fallbackProfessionalId
-
-  const getProfessionalName = (professionalId: string) => {
-    if (!professionalId) {
-      return ''
-    }
-
-    return professionals.find((professional) => String(professional.id) === professionalId)?.full_name || ''
-  }
 
   const navigateBoard = (nextDate: string, nextProfessionalId = activeProfessionalId) => {
     setSelectedDate(nextDate)
@@ -365,7 +359,7 @@ export default function AppointmentsPage({
 
 
   const openPatientRecord = (patientId: number) => {
-    router.get(`/medical/patients/${patientId}`)
+    setPatientSummaryId(patientId)
   }
 
   const getSlotAppointmentTimeRange = (appointmentId: number, slot: Pick<SlotBoardEntry, 'start_time' | 'end_time'>) => {
@@ -735,6 +729,18 @@ export default function AppointmentsPage({
           appointment={selectedAppointment}
           onSearchPatients={searchPatients}
           onSubmit={submitAppointment}
+        />
+
+        <PatientSummaryModal
+          patientId={patientSummaryId}
+          open={patientSummaryId !== null}
+          onOpenChange={(open) => { if (!open) setPatientSummaryId(null) }}
+        />
+
+        <PatientSummaryModal
+          patientId={patientSummaryId}
+          open={patientSummaryId !== null}
+          onOpenChange={(open) => { if (!open) setPatientSummaryId(null) }}
         />
 
         {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
