@@ -237,7 +237,7 @@ function ScheduleFormFields({
 
       <div className="rounded-lg border border-gray-200 p-3">
         <div className="mb-3">
-          <div className="font-medium text-gray-900">Rango de horas semanales</div>
+          <div className="font-medium text-gray-900">Rango de horas días/semanales</div>
         </div>
         <div className="space-y-1.5">
           {weekRules.map((rule) => {
