@@ -1,8 +1,7 @@
 import { Head, router } from '@inertiajs/react'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
-import SearchableInput from '@/components/ui/SearchableInput'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -77,6 +76,7 @@ interface AppointmentsPageProps {
   medicalServices: MedicalServiceOption[]
   appointments: Appointment[]
   slotBoard: SlotBoardEntry[]
+  professionalsWithAgendaIds: number[]
   filters: {
     professional_id?: number | null
     selected_date: string
@@ -91,6 +91,7 @@ export default function AppointmentsPage({
   medicalServices,
   appointments,
   slotBoard,
+  professionalsWithAgendaIds,
   filters,
 }: AppointmentsPageProps) {
   const { searchPatients, searchProfessionals } = useSearch()
@@ -110,8 +111,21 @@ export default function AppointmentsPage({
   })()
 
   const [selectedDate, setSelectedDate] = useState(filters.selected_date)
-  const [isDailyFiltersOpen, setIsDailyFiltersOpen] = useState(false)
   const [filterProfessionalId, setFilterProfessionalId] = useState(fallbackProfessionalId)
+  const [showAllProfessionals, setShowAllProfessionals] = useState(false)
+  const [professionalsDropdownSearch, setProfessionalsDropdownSearch] = useState('')
+  const professionalsDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showAllProfessionals) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (professionalsDropdownRef.current && !professionalsDropdownRef.current.contains(event.target as Node)) {
+        setShowAllProfessionals(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAllProfessionals])
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{
@@ -200,6 +214,7 @@ export default function AppointmentsPage({
     appointmentCount: selectedDateAppointments.filter((appointment) => appointment.professional_id === professional.id).length,
   }))
   const visibleDailyAppointments = slotColumnsByProfessionalForSelectedDate.reduce((total, column) => total + column.appointmentCount, 0)
+  const professionalsWithSlotsToday = new Set(professionalsWithAgendaIds)
   const dailyProfessionalHeaderHeight = 88
   const dailyTimelineSidebarHeaderHeight = 88
   const timelinePixelsPerMinute = 1.55
@@ -548,15 +563,6 @@ export default function AppointmentsPage({
                 <CardTitle>Agenda diaria por profesional</CardTitle>
                 <p className="text-sm text-gray-500">Vista operativa para secretaría en {formattedSelectedDate}.</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{slotColumnsByProfessionalForSelectedDate.length} médicos</Badge>
-                <Badge variant="secondary" className="bg-slate-100 text-slate-700">
-                  {getProfessionalName(activeProfessionalId)}
-                </Badge>
-                <Button type="button" size="sm" variant="outline" onClick={() => setIsDailyFiltersOpen((current) => !current)}>
-                  {isDailyFiltersOpen ? 'Ocultar filtros' : 'Mostrar filtros'}
-                </Button>
-              </div>
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -582,26 +588,102 @@ export default function AppointmentsPage({
               <div className="text-sm text-slate-500">{visibleDailyAppointments} citas visibles en la jornada.</div>
             </div>
 
-            {isDailyFiltersOpen && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Profesional</label>
-                  <SearchableInput
-                    placeholder="Dr. Juan Pérez"
-                    value={getProfessionalName(activeProfessionalId)}
-                    onSelect={(professional) => {
-                      const nextProfessionalId = String(professional.id)
-                      setFilterProfessionalId(nextProfessionalId)
-                      navigateBoard(selectedDate, nextProfessionalId)
-                    }}
-                    onSearch={searchProfessionals}
-                    minSearchLength={1}
-                    maxResults={10}
-                    className="w-full"
-                  />
+            {professionals.some((professional) => professionalsWithSlotsToday.has(professional.id)) && (() => {
+              const profsWithAgenda = professionals.filter((professional) => professionalsWithSlotsToday.has(professional.id))
+              // El seleccionado siempre visible: lo ponemos primero, luego los demás hasta completar 3
+              const selectedProf = profsWithAgenda.find((p) => String(p.id) === activeProfessionalId)
+              const rest = profsWithAgenda.filter((p) => String(p.id) !== activeProfessionalId)
+              const ordered = selectedProf ? [selectedProf, ...rest] : profsWithAgenda
+              const first3 = ordered.slice(0, 3)
+              const hiddenProfs = ordered.slice(3)
+              const hiddenCount = hiddenProfs.length
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  {first3.map((professional) => {
+                    const isSelected = String(professional.id) === activeProfessionalId
+                    return (
+                      <button
+                        key={professional.id}
+                        type="button"
+                        onClick={() => {
+                          setFilterProfessionalId(String(professional.id))
+                          navigateBoard(selectedDate, String(professional.id))
+                        }}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'border-sky-500 bg-sky-500 text-white shadow-sm'
+                            : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                        }`}
+                      >
+                        <span className={`h-2 w-2 shrink-0 rounded-full transition-all ${isSelected ? 'bg-white' : 'bg-gray-300'}`} />
+                        {professional.full_name}
+                      </button>
+                    )
+                  })}
+                  {hiddenCount > 0 && (
+                    <div className="relative" ref={professionalsDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                        setShowAllProfessionals((prev) => !prev)
+                        setProfessionalsDropdownSearch('')
+                      }}
+                        className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                          showAllProfessionals
+                            ? 'border-gray-400 bg-gray-100 text-gray-700'
+                            : 'border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
+                        }`}
+                      >
+                        +{hiddenCount} más
+                      </button>
+                      {showAllProfessionals && (
+                        <div className="absolute left-0 top-full z-30 mt-1.5 w-60 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                          <div className="border-b border-gray-100 p-2">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Buscar profesional..."
+                              value={professionalsDropdownSearch}
+                              onChange={(e) => setProfessionalsDropdownSearch(e.target.value)}
+                              className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 placeholder-gray-400 focus:border-sky-400 focus:outline-none"
+                            />
+                          </div>
+                          <div className="max-h-52 overflow-y-auto py-1">
+                            {hiddenProfs
+                              .filter((p) => p.full_name.toLowerCase().includes(professionalsDropdownSearch.toLowerCase()))
+                              .map((professional) => {
+                              const isSelected = String(professional.id) === activeProfessionalId
+                              return (
+                                <button
+                                  key={professional.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFilterProfessionalId(String(professional.id))
+                                    navigateBoard(selectedDate, String(professional.id))
+                                    setShowAllProfessionals(false)
+                                    setProfessionalsDropdownSearch('')
+                                  }}
+                                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-gray-50 ${
+                                    isSelected ? 'font-medium text-sky-600' : 'text-gray-700'
+                                  }`}
+                                >
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${isSelected ? 'bg-sky-500' : 'bg-gray-300'}`} />
+                                  {professional.full_name}
+                                </button>
+                              )
+                            })}
+                            {hiddenProfs.filter((p) => p.full_name.toLowerCase().includes(professionalsDropdownSearch.toLowerCase())).length === 0 && (
+                              <p className="px-3 py-2 text-sm text-gray-400">Sin resultados</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
+
           </CardHeader>
 
           <CardContent className="pt-0">

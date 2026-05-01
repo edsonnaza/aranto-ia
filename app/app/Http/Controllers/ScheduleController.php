@@ -211,11 +211,19 @@ class ScheduleController extends Controller
         $appointments = $this->getAppointmentsList($professionalId, $rangeStart, $rangeEnd, $medicalServicesLookup);
         $slotBoard = $this->scheduleService->getSlotBoardForRange($professionalId, $rangeStart, $rangeEnd);
 
+        $allProfessionalsSlots = $this->scheduleService->getSlotBoardForRange(null, $selectedDate, $selectedDate);
+        $professionalsWithAgendaIds = collect($allProfessionalsSlots)
+            ->pluck('professional_id')
+            ->unique()
+            ->values()
+            ->all();
+
         return Inertia::render('medical/schedule/Appointments', [
             'professionals' => $professionals,
             'medicalServices' => $medicalServices,
             'appointments' => $appointments,
             'slotBoard' => $slotBoard,
+            'professionalsWithAgendaIds' => $professionalsWithAgendaIds,
             'filters' => [
                 'professional_id' => $professionalId,
                 'selected_date' => $selectedDate->format('Y-m-d'),

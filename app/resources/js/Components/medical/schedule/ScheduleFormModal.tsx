@@ -143,6 +143,25 @@ function ScheduleFormFields({
     }))
   }
 
+  const handleTimeInput = (weekday: number, field: 'start_time' | 'end_time', raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 4)
+    let formatted = digits
+    if (digits.length >= 3) {
+      formatted = digits.slice(0, 2) + ':' + digits.slice(2)
+    }
+    handleWeekRuleChange(weekday, field, formatted)
+  }
+
+  const calcSlots = (startTime: string, endTime: string): number => {
+    const [sh, sm] = startTime.split(':').map(Number)
+    const [eh, em] = endTime.split(':').map(Number)
+    if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0
+    const duration = Number(slotDuration)
+    if (!duration) return 0
+    const totalMinutes = (eh * 60 + em) - (sh * 60 + sm)
+    return totalMinutes > 0 ? Math.floor(totalMinutes / duration) : 0
+  }
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
 
@@ -217,35 +236,51 @@ function ScheduleFormFields({
       </div>
 
       <div className="rounded-lg border border-gray-200 p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="font-medium text-gray-900">Reglas semanales</div>
-          <div className="hidden text-[11px] uppercase tracking-wide text-gray-500 md:flex md:items-center md:gap-16">
-            <span>Desde</span>
-            <span>Hasta</span>
-            <span>Cupos</span>
-          </div>
+        <div className="mb-3">
+          <div className="font-medium text-gray-900">Rango de horas semanales</div>
         </div>
-        <div className="space-y-2">
-          {weekRules.map((rule) => (
-            <div key={rule.weekday} className="grid items-center gap-2 rounded-md border border-gray-100 px-2 py-2 md:grid-cols-[140px,120px,120px,88px] md:border-0 md:px-0 md:py-0">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input type="checkbox" checked={rule.enabled} onChange={(event) => handleWeekRuleChange(rule.weekday, 'enabled', event.target.checked)} />
-                {weekDays.find((day) => day.value === rule.weekday)?.label}
-              </label>
-              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
-                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Desde</span>
-                <input type="time" value={rule.start_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'start_time', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+        <div className="space-y-1.5">
+          {weekRules.map((rule) => {
+            const slots = calcSlots(rule.start_time, rule.end_time)
+            return (
+              <div key={rule.weekday} className="flex items-center gap-3 rounded-md px-1 py-1.5">
+                <label className="flex w-32 shrink-0 items-center gap-2 text-sm font-medium text-gray-700">
+                  <input type="checkbox" checked={rule.enabled} onChange={(event) => handleWeekRuleChange(rule.weekday, 'enabled', event.target.checked)} />
+                  {weekDays.find((day) => day.value === rule.weekday)?.label}
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="08:00"
+                  maxLength={5}
+                  value={rule.start_time}
+                  onChange={(event) => handleTimeInput(rule.weekday, 'start_time', event.target.value)}
+                  disabled={!rule.enabled}
+                  className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-center text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                <span className="text-xs text-gray-400">→</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="17:00"
+                  maxLength={5}
+                  value={rule.end_time}
+                  onChange={(event) => handleTimeInput(rule.weekday, 'end_time', event.target.value)}
+                  disabled={!rule.enabled}
+                  className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-center text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                <div className="w-20 text-center">
+                  {rule.enabled && slots > 0 ? (
+                    <span className="inline-block rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700">
+                      {slots} turnos
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-300">—</span>
+                  )}
+                </div>
               </div>
-              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
-                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Hasta</span>
-                <input type="time" value={rule.end_time} onChange={(event) => handleWeekRuleChange(rule.weekday, 'end_time', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-              </div>
-              <div className="grid grid-cols-[44px,1fr] items-center gap-2 md:block">
-                <span className="text-[11px] uppercase tracking-wide text-gray-500 md:hidden">Cupos</span>
-                <input type="number" min="1" max="20" value={rule.capacity} onChange={(event) => handleWeekRuleChange(rule.weekday, 'capacity', event.target.value)} disabled={!rule.enabled} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
