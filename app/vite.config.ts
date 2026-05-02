@@ -5,7 +5,6 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-    cacheDir: 'storage/framework/vite',
     server: {
         host: 'localhost',
         port: 5173,
