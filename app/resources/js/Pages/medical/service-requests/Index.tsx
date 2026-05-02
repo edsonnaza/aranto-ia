@@ -308,7 +308,7 @@ export default function ServiceRequestsIndex({
                         <div className="flex items-center justify-center space-x-2">
                           <button
                             onClick={() => navigateToShow(request.id)}
-                            className="text-gray-400 hover:text-gray-600"
+                            className="text-gray-400 hover:text-gray-600 cursor-pointer"
                             title="Ver detalles"
                           >
                             <EyeIcon className="h-4 w-4" />

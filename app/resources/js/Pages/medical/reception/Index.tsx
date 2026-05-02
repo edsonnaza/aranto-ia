@@ -360,7 +360,7 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
         <div className="flex space-x-2">
           <button
             onClick={() => handleViewDetails(row.original.id)}
-            className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
             title="Ver detalles"
           >
             <EyeIcon className="h-4 w-4" />

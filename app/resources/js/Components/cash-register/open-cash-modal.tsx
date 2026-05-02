@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { toast } from 'sonner';
 
@@ -19,12 +19,21 @@ import { formatCurrency } from '@/services/currency';
 interface OpenCashModalProps {
     isOpen: boolean;
     onClose: () => void;
+    suggestedInitialAmount?: number;
 }
 
-export const OpenCashModal: React.FC<OpenCashModalProps> = ({ isOpen, onClose }) => {
-    const [initialAmount, setInitialAmount] = useState<number>(0);
+export const OpenCashModal: React.FC<OpenCashModalProps> = ({ isOpen, onClose, suggestedInitialAmount = 0 }) => {
+    const [initialAmount, setInitialAmount] = useState<number>(suggestedInitialAmount);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Sincronizar valor sugerido cuando el modal se abre
+    React.useEffect(() => {
+        if (isOpen) {
+            setInitialAmount(suggestedInitialAmount);
+            setErrors({});
+        }
+    }, [isOpen, suggestedInitialAmount]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,7 +77,7 @@ export const OpenCashModal: React.FC<OpenCashModalProps> = ({ isOpen, onClose })
 
     const handleClose = () => {
         if (!isLoading) {
-            setInitialAmount(0);
+            setInitialAmount(suggestedInitialAmount);
             setErrors({});
             onClose();
         }

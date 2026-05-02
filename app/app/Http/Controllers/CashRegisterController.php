@@ -133,12 +133,20 @@ class CashRegisterController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
+        // Saldo calculado de la última sesión cerrada del usuario (para pre-rellenar apertura)
+        $lastClosedSession = CashRegisterSession::where('user_id', $user->id)
+            ->where('status', 'closed')
+            ->orderBy('closing_date', 'desc')
+            ->first();
+        $suggestedInitialAmount = $lastClosedSession ? $lastClosedSession->calculateBalance() : 0;
+
         // Render dashboard with computed values
         return Inertia::render('CashRegister/Dashboard', [
             'activeSession' => $activeSession,
             'todayTransactions' => $todayTransactions,
             'balance' => $balance,
             'approvedCommissionLiquidations' => $approvedCommissionLiquidations,
+            'suggestedInitialAmount' => $suggestedInitialAmount,
         ]);
     }
 

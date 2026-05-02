@@ -282,7 +282,7 @@ class CommissionService
                 CashRegisterSession::findOrFail($cashRegisterSessionId),
                 $liquidation->professional_id,
                 $liquidation->commission_amount,
-                "Liquidación de comisiones - Período: {$liquidation->period_start} a {$liquidation->period_end}",
+                "Liquidación de comisiones - Período: " . Carbon::parse($liquidation->period_start)->format('d-m-Y') . " a " . Carbon::parse($liquidation->period_end)->format('d-m-Y'),
                 $liquidation->id
             );
 

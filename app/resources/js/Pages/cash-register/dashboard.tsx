@@ -33,6 +33,7 @@ interface CashRegisterDashboardProps {
     todayTransactions: Transaction[];
     balance: CashRegisterBalance;
     approvedCommissionLiquidations?: CommissionLiquidation[];
+    suggestedInitialAmount?: number;
 }
 
 export default function CashRegisterDashboard({
@@ -40,6 +41,7 @@ export default function CashRegisterDashboard({
     todayTransactions = [],
     balance,
     approvedCommissionLiquidations = [],
+    suggestedInitialAmount = 0,
 }: CashRegisterDashboardProps) {
     const [isOpenModalVisible, setIsOpenModalVisible] = useState(false);
     const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
@@ -414,6 +416,7 @@ export default function CashRegisterDashboard({
             <OpenCashModal 
                 isOpen={isOpenModalVisible}
                 onClose={() => setIsOpenModalVisible(false)}
+                suggestedInitialAmount={suggestedInitialAmount}
             />
 
             {/* Modal for income transactions */}

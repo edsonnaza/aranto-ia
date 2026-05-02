@@ -88,7 +88,7 @@ export default function MedicalServicesIndex({
   ]
 
   // Debounce timer for search
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSearch = (search: string) => {
     // Update local state immediately to show input value
@@ -263,14 +263,14 @@ export default function MedicalServicesIndex({
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => router.get(`/medical/medical-services/${service.id}`)}
-              className="text-indigo-600 hover:text-indigo-900 p-1"
+              className="text-indigo-600 hover:text-indigo-900 p-1 cursor-pointer"
               title="Ver detalles"
             >
               <Eye className="h-4 w-4" />
             </button>
             <button
               onClick={() => router.get(`/medical/medical-services/${service.id}/edit`)}
-              className="text-yellow-600 hover:text-yellow-900 p-1"
+              className="text-yellow-600 hover:text-yellow-900 p-1 cursor-pointer"
               title="Editar"
             >
               <Pencil className="h-4 w-4" />
