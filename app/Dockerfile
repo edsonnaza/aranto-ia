@@ -23,6 +23,11 @@ RUN composer install --optimize-autoloader --no-dev --no-interaction
 # Install JS dependencies and build assets
 RUN npm ci && npm run build && rm -rf node_modules
 
+# Verify Vite manifest was generated
+RUN test -f /var/www/html/public/build/manifest.json \
+    && echo "✓ Vite manifest found" \
+    || (echo "✗ Vite manifest MISSING - build failed" && exit 1)
+
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
