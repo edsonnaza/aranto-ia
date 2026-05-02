@@ -92,6 +92,7 @@ export function getPaymentStatusBadgeConfig(status: string): { label: string; cl
     pending: { label: 'Pendiente', className: 'bg-red-50 text-red-700', variant: 'pending' },
     partial: { label: 'Parcial', className: 'bg-yellow-50 text-yellow-700', variant: 'secondary' },
     paid: { label: 'Pagado', className: 'bg-green-50 text-green-700', variant: 'paid' },
+    cancelled: { label: 'Cancelado', className: 'bg-red-50 text-red-700', variant: 'destructive' },
   }
   
   return statusConfig[status] || { label: status, className: 'bg-gray-50 text-gray-700', variant: 'outline' }
