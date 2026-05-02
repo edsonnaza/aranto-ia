@@ -21,15 +21,15 @@ COPY . /var/www/html
 RUN composer install --optimize-autoloader --no-dev --no-interaction
 
 # Verify auth pages are present in the build context before bundling
-RUN test -f /var/www/html/resources/js/pages/auth/login.tsx \
+RUN test -f /var/www/html/resources/js/Pages/auth/login.tsx \
     && echo "✓ Auth login page found in build context" \
-    || (echo "✗ Missing resources/js/pages/auth/login.tsx in build context" && exit 1)
+    || (echo "✗ Missing resources/js/Pages/auth/login.tsx in build context" && exit 1)
 
 # Install JS dependencies and build assets
 RUN npm ci && npm run build && rm -rf node_modules
 
 # Verify the client bundle includes the auth page map used by Inertia
-RUN grep -R "pages/auth/login" /var/www/html/public/build/assets >/dev/null \
+RUN grep -R "Pages/auth/login" /var/www/html/public/build/assets >/dev/null \
     && echo "✓ Auth login page found in built assets" \
     || (echo "✗ Auth login page missing from built assets" && exit 1)
 
