@@ -211,9 +211,9 @@ export default function AppointmentsPage({
   const professionalsWithSlotsToday = new Set(professionalsWithAgendaIds)
   const dailyProfessionalHeaderHeight = 88
   const dailyTimelineSidebarHeaderHeight = 88
-  const timelinePixelsPerMinute = 1.55
+  const timelinePixelsPerMinute = 3
   const dailyTimelineTopOffset = 8
-  const dailyTimelineBottomOffset = 12
+  const dailyTimelineBottomOffset = 52
   const dailySlotGap = 1
   const dailyHourDividerGap = 0
   const dailyHourLabelOffset = 28
@@ -254,7 +254,7 @@ export default function AppointmentsPage({
       - (dailySlotGap * 2)
       - startDividerGap
       - endDividerGap,
-      124,
+      88,
     )
   }
 
@@ -412,8 +412,8 @@ export default function AppointmentsPage({
           <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-sky-50/90">
             <span className="truncate">{entry.professional.specialties.join(', ') || 'Sin especialidad'}</span>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.slots.length} slots</Badge>
-              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.appointmentCount} citas</Badge>
+              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.slots.length} turnos</Badge>
+              <Badge variant="secondary" className="border-white/20 bg-white/15 text-white">{entry.appointmentCount} cita(s)</Badge>
             </div>
           </div>
         </div>
@@ -458,7 +458,7 @@ export default function AppointmentsPage({
                 openSlotForNewAppointment(slot)
               }
             }}
-            className={`absolute left-0 right-0 flex flex-col overflow-hidden px-2 py-1.5 ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-inset' : ''}`}
+            className={`absolute left-0 right-0 flex flex-col overflow-hidden px-2 py-2 ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-inset' : ''}`}
             style={{
               top: `${getSlotTopPosition(slot.start_time)}px`,
               height: `${getSlotHeight(slot.start_time, slot.end_time)}px`,
@@ -480,7 +480,7 @@ export default function AppointmentsPage({
                 const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
 
                 return (
-                  <div key={appointment.id} className={`grid ${dailyAppointmentsGridColumns} items-center gap-3 rounded-sm bg-white px-0 py-0`}>
+                  <div key={appointment.id} className={`grid ${dailyAppointmentsGridColumns} items-center gap-3 rounded-sm border-b border-slate-100 bg-white px-2 py-2.5 last:border-b-0`}>
                     <div className="min-w-0 whitespace-nowrap text-[10px] font-semibold text-slate-700">
                       {getSlotAppointmentTimeRange(appointment.id, slot)}
                     </div>
