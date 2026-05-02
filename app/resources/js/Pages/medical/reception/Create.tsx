@@ -221,7 +221,7 @@ export default function ReceptionCreate({
   }
 
   const updateService = useCallback((id: string, field: keyof ServiceItem, value: string | number) => {
-    setServices(services.map(service => {
+    setServices(prev => prev.map(service => {
       if (service.id === id) {
         const updated = { ...service, [field]: value }
         
@@ -251,14 +251,13 @@ export default function ReceptionCreate({
       }
       return service
     }))
-  }, [services, flatServices, getServicePriceFromData])
+  }, [flatServices, getServicePriceFromData])
 
   const calculateServiceTotal = (service: ServiceItem) => {
     const unitPrice = service.unit_price || 0
     const quantity = service.quantity || 1
     const subtotal = unitPrice * quantity
-    const discountFromPercentage = (subtotal * (service.discount_percentage || 0)) / 100
-    const totalDiscount = discountFromPercentage + (service.discount_amount || 0)
+    const totalDiscount = service.discount_amount || 0
     return Math.max(0, subtotal - totalDiscount)
   }
 
@@ -272,12 +271,7 @@ export default function ReceptionCreate({
 
   const calculateTotalDiscount = () => {
     return services.reduce((total, service) => {
-      const unitPrice = service.unit_price || 0
-      const quantity = service.quantity || 1
-      const subtotal = unitPrice * quantity
-      const discountFromPercentage = (subtotal * (service.discount_percentage || 0)) / 100
-      const totalDiscount = discountFromPercentage + (service.discount_amount || 0)
-      return total + totalDiscount
+      return total + (service.discount_amount || 0)
     }, 0)
   }
 
