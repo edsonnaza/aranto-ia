@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { DollarSign, TrendingUp, TrendingDown, Archive, CheckCircle2, ArrowUpCircle, ArrowDownCircle, History, Lock } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Archive, CheckCircle2, ArrowUpCircle, ArrowDownCircle, History, Lock, Eye } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import AppLayout from '@/layouts/app-layout'
@@ -50,6 +50,7 @@ interface RecentTransaction {
   payment_method: string | null
   created_at: string
   user_name: string
+  service_request_id: number | null
 }
 
 interface Props {
@@ -112,13 +113,69 @@ const breadcrumbs = [
 const METHOD_LABELS: Record<string, string> = {
   CASH: 'Efectivo',
   CARD: 'Tarjeta',
+  CREDIT: 'Tarjeta de Crédito',
+  CREDIT_CARD: 'Tarjeta de Crédito',
+  DEBIT: 'Tarjeta de Débito',
+  DEBIT_CARD: 'Tarjeta de Débito',
   TRANSFER: 'Transferencia',
   CHECK: 'Cheque',
+  DIGITAL: 'Pago Digital / QR',
+  OTHER: 'Otro',
 }
 const methodLabel = (key: string) => METHOD_LABELS[key?.toUpperCase()] ?? key ?? 'Sin método'
 
+// Grupo de transacciones agrupadas por servicio o individuales
+interface TxGroup {
+  key: string
+  type: 'INCOME' | 'EXPENSE'
+  totalAmount: number
+  concept: string
+  user_name: string
+  created_at: string
+  splits: RecentTransaction[]
+}
+
+function groupTransactions(txs: RecentTransaction[]): TxGroup[] {
+  const groups: TxGroup[] = []
+  const byServiceRequest: Record<number, RecentTransaction[]> = {}
+
+  for (const tx of txs) {
+    if (tx.service_request_id) {
+      if (!byServiceRequest[tx.service_request_id]) byServiceRequest[tx.service_request_id] = []
+      byServiceRequest[tx.service_request_id].push(tx)
+    } else {
+      groups.push({
+        key: `tx-${tx.id}`,
+        type: tx.type,
+        totalAmount: tx.amount,
+        concept: tx.concept,
+        user_name: tx.user_name,
+        created_at: tx.created_at,
+        splits: [tx],
+      })
+    }
+  }
+
+  for (const [srId, srTxs] of Object.entries(byServiceRequest)) {
+    const first = srTxs[0]
+    groups.push({
+      key: `sr-${srId}`,
+      type: first.type,
+      totalAmount: srTxs.reduce((sum, t) => sum + t.amount, 0),
+      concept: first.concept,
+      user_name: first.user_name,
+      created_at: first.created_at,
+      splits: srTxs,
+    })
+  }
+
+  // Ordenar por fecha desc
+  return groups.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+}
+
 export default function TreasuryIndex({ stats, open_sessions, recent_transactions, closing_history }: Props) {
   const [detailEntry, setDetailEntry] = useState<ClosingEntry | null>(null)
+  const [detailGroup, setDetailGroup] = useState<TxGroup | null>(null)
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Tesorería" />
@@ -258,7 +315,7 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
                       <th className="pb-2 pr-4 text-right">Ingresos</th>
                       <th className="pb-2 pr-4 text-right">Egresos</th>
                       <th className="pb-2 pr-4 text-right">Saldo actual</th>
-                      <th className="pb-2 text-right">Txs</th>
+                      <th className="pb-2 text-right">Cobros</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -408,23 +465,43 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
               </div>
             ) : (
               <div className="space-y-2">
-                {recent_transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5">
+                {groupTransactions(recent_transactions).map((group) => (
+                  <div key={group.key} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5">
                     <div className="flex items-center gap-3">
-                      {tx.type === 'INCOME'
+                      {group.type === 'INCOME'
                         ? <ArrowUpCircle className="h-5 w-5 shrink-0 text-green-500" />
                         : <ArrowDownCircle className="h-5 w-5 shrink-0 text-red-400" />
                       }
                       <div>
-                        <p className="text-sm font-medium text-gray-800">{formatConceptDates(tx.concept)}</p>
-                        <p className="text-[11px] text-slate-500">{tx.user_name}{tx.payment_method ? ` · ${tx.payment_method}` : ''}</p>
+                        <p className="text-sm font-medium text-gray-800">{formatConceptDates(group.concept)}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] text-slate-500">{group.user_name}</span>
+                          {group.splits.length > 1 ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                              {group.splits.length} métodos
+                            </span>
+                          ) : group.splits[0].payment_method ? (
+                            <span className="text-[11px] text-slate-500">· {methodLabel(group.splits[0].payment_method)}</span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-semibold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
-                        {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
-                      </p>
-                      <p className="text-[11px] text-slate-400">{formatRelativeDate(tx.created_at)} {formatTime(tx.created_at)}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${group.type === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
+                          {group.type === 'INCOME' ? '+' : '-'}{formatCurrency(group.totalAmount)}
+                        </p>
+                        <p className="text-[11px] text-slate-400">{formatRelativeDate(group.created_at)} {formatTime(group.created_at)}</p>
+                      </div>
+                      {group.splits.length > 1 && (
+                        <button
+                          onClick={() => setDetailGroup(group)}
+                          className="ml-1 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Ver detalle"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -432,6 +509,51 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
             )}
           </CardContent>
         </Card>
+
+        {/* Modal detalle de cobro con múltiples métodos */}
+        {detailGroup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailGroup(null)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Detalle del cobro</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{formatConceptDates(detailGroup.concept)}</p>
+                </div>
+                <button onClick={() => setDetailGroup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">{'×'}</button>
+              </div>
+
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 pb-1 border-b">
+                  <span>Método</span>
+                  <span className="text-right">Monto</span>
+                  <span className="text-right">Hora</span>
+                </div>
+                {detailGroup.splits.map((tx) => (
+                  <div key={tx.id} className="grid grid-cols-3 text-sm items-center">
+                    <span className="font-medium text-gray-700">{tx.payment_method ? methodLabel(tx.payment_method) : 'Sin método'}</span>
+                    <span className={`text-right font-semibold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
+                      {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
+                    </span>
+                    <span className="text-right text-[11px] text-slate-400">{formatTime(tx.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 border-t pt-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Total cobrado</span>
+                  <p className="text-base font-bold text-green-600">{formatCurrency(detailGroup.totalAmount)}</p>
+                </div>
+                <button
+                  onClick={() => setDetailGroup(null)}
+                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   )

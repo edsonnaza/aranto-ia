@@ -34,12 +34,14 @@ class CashRegisterController extends Controller
         }
 
         // Registrar cierre
+        $calculatedBalance = $activeSession->calculateBalance();
         $activeSession->status = 'closed';
         $activeSession->closing_date = now();
+        $activeSession->calculated_balance = $calculatedBalance;
         if ($request->has('final_physical_amount')) {
             $activeSession->final_physical_amount = $request->input('final_physical_amount');
         }
-        $activeSession->difference = $activeSession->final_physical_amount - $activeSession->calculateBalance();
+        $activeSession->difference = ($activeSession->final_physical_amount ?? 0) - $calculatedBalance;
         $activeSession->save();
 
         if ($request->header('X-Inertia')) {
@@ -405,12 +407,32 @@ class CashRegisterController extends Controller
      */
     public function processServicePayment(Request $request)
     {
-        $request->validate([
-            'service_request_id' => 'required|exists:service_requests,id',
-            'payment_method' => 'required|string',
-            'amount' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:255',
-        ]);
+        // Soporta formato mixto (payments[]) y formato legacy (payment_method + amount)
+        if ($request->has('payments')) {
+            $request->validate([
+                'service_request_id'             => 'required|exists:service_requests,id',
+                'notes'                          => 'nullable|string|max:255',
+                'payments'                       => 'required|array|min:1',
+                'payments.*.payment_method'      => 'required|string',
+                'payments.*.amount'              => 'required|numeric|min:0.01',
+                'payments.*.pos_number'          => 'nullable|string|max:100',
+            ]);
+            $payments = $request->payments;
+        } else {
+            $request->validate([
+                'service_request_id' => 'required|exists:service_requests,id',
+                'payment_method'     => 'required|string',
+                'amount'             => 'required|numeric|min:0',
+                'notes'              => 'nullable|string|max:255',
+            ]);
+            $payments = [[
+                'payment_method' => $request->payment_method,
+                'amount'         => $request->amount,
+                'pos_number'     => $request->pos_number ?? null,
+            ]];
+        }
+
+        $totalAmount = collect($payments)->sum('amount');
 
         try {
             $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
@@ -427,13 +449,13 @@ class CashRegisterController extends Controller
             // Calculate remaining amount
             $remainingAmount = $serviceRequest->total_amount - $serviceRequest->paid_amount;
             
-            // Validate payment amount doesn't exceed remaining
-            if ($request->amount > $remainingAmount) {
+            // Validate total of all splits doesn't exceed remaining
+            if ($totalAmount > $remainingAmount) {
                 if ($request->header('X-Inertia')) {
-                    return response()->json(['success' => false, 'message' => 'El monto del pago no puede exceder el pendiente.'], 422);
+                    return response()->json(['success' => false, 'message' => 'El monto total del pago no puede exceder el pendiente.'], 422);
                 }
 
-                return redirect()->back()->with('error', 'El monto del pago no puede exceder el pendiente.');
+                return redirect()->back()->with('error', 'El monto total del pago no puede exceder el pendiente.');
             }
 
             // Get active cash register session
@@ -458,40 +480,42 @@ class CashRegisterController extends Controller
             try {
                 // Get professional_id from service request details
                 $professionalId = $serviceRequest->details()->first()?->professional_id;
-                
-                // Create income transaction (add payment_method only if the column exists)
-                $transactionData = [
-                    'cash_register_session_id' => $activeSession->id,
-                    'type' => 'INCOME',
-                    'category' => $category,
-                    'amount' => $request->amount,
-                    'concept' => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
-                    'patient_name' => $serviceRequest->patient->full_name,
-                    'patient_id' => $serviceRequest->patient_id,
-                    'professional_id' => $professionalId,
-                    'notes' => $request->notes,
-                    'user_id' => Auth::id(),
-                    'service_request_id' => $serviceRequest->id,
-                ];
+                $hasPaymentMethod = Schema::hasColumn('transactions', 'payment_method');
+                $lastTransaction = null;
 
-                if (Schema::hasColumn('transactions', 'payment_method')) {
-                    $transactionData['payment_method'] = $request->payment_method;
+                // Create one transaction per payment split
+                foreach ($payments as $split) {
+                    $transactionData = [
+                        'cash_register_session_id' => $activeSession->id,
+                        'type'                     => 'INCOME',
+                        'category'                 => $category,
+                        'amount'                   => $split['amount'],
+                        'concept'                  => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
+                        'patient_name'             => $serviceRequest->patient->full_name,
+                        'patient_id'               => $serviceRequest->patient_id,
+                        'professional_id'          => $professionalId,
+                        'notes'                    => $request->notes,
+                        'user_id'                  => Auth::id(),
+                        'service_request_id'       => $serviceRequest->id,
+                    ];
+                    if ($hasPaymentMethod) {
+                        $transactionData['payment_method'] = $split['payment_method'];
+                    }
+                    $lastTransaction = Transaction::create($transactionData);
                 }
 
-                $transaction = Transaction::create($transactionData);
-
                 // Update service request payment status
-                $newPaidAmount = $serviceRequest->paid_amount + $request->amount;
+                $newPaidAmount = $serviceRequest->paid_amount + $totalAmount;
                 $isFullyPaid = $newPaidAmount >= $serviceRequest->total_amount;
                 
                 $serviceRequest->update([
-                    'paid_amount' => $newPaidAmount,
-                    'payment_status' => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
-                    'payment_date' => $isFullyPaid ? now() : $serviceRequest->payment_date,
-                    'payment_transaction_id' => $isFullyPaid ? $transaction->id : $serviceRequest->payment_transaction_id,
+                    'paid_amount'            => $newPaidAmount,
+                    'payment_status'         => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
+                    'payment_date'           => $isFullyPaid ? now() : $serviceRequest->payment_date,
+                    'payment_transaction_id' => $isFullyPaid ? $lastTransaction->id : $serviceRequest->payment_transaction_id,
                 ]);
                 // Update session totals
-                $activeSession->increment('total_income', $request->amount);
+                $activeSession->increment('total_income', $totalAmount);
 
                 DB::commit();
 

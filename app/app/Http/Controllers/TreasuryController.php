@@ -38,7 +38,10 @@ class TreasuryController extends Controller
                     'current_balance' => $currentBalance,
                     'total_income' => $totalIncome,
                     'total_expenses' => $totalExpenses,
-                    'transaction_count' => $transactions->count(),
+                    // Cobros agrupados: service_requests únicos + transacciones sin service_request
+                    'transaction_count' =>
+                        $transactions->whereNotNull('service_request_id')->pluck('service_request_id')->unique()->count()
+                        + $transactions->whereNull('service_request_id')->count(),
                 ];
             });
 
@@ -55,16 +58,17 @@ class TreasuryController extends Controller
             ->where('status', 'active')
             ->whereDate('created_at', $today)
             ->orderBy('created_at', 'desc')
-            ->limit(10)
+            ->limit(50)
             ->get()
             ->map(fn($t) => [
-                'id' => $t->id,
-                'type' => $t->type,
-                'amount' => $t->amount,
-                'concept' => $t->concept,
-                'payment_method' => $t->payment_method,
-                'created_at' => $t->created_at,
-                'user_name' => $t->cashRegisterSession?->user?->name ?? '—',
+                'id'                 => $t->id,
+                'type'               => $t->type,
+                'amount'             => $t->amount,
+                'concept'            => $t->concept,
+                'payment_method'     => $t->payment_method,
+                'created_at'         => $t->created_at,
+                'user_name'          => $t->cashRegisterSession?->user?->name ?? '—',
+                'service_request_id' => $t->service_request_id,
             ]);
 
         // Resumen de cajas cerradas hoy
@@ -86,7 +90,7 @@ class TreasuryController extends Controller
             $lastClosingBalance = [
                 'user_name'      => $lastClosedSession->user?->name ?? '—',
                 'closing_date'   => $lastClosedSession->closing_date,
-                'calculated_balance' => $lastClosedSession->calculated_balance ?? $lastClosedSession->calculateBalance(),
+                'calculated_balance' => $lastClosedSession->calculateBalance(),
                 'final_physical_amount' => $lastClosedSession->final_physical_amount,
             ];
         }
@@ -101,6 +105,14 @@ class TreasuryController extends Controller
                 $transactions = Transaction::where('cash_register_session_id', $s->id)
                     ->where('status', 'active')
                     ->get();
+                $incomeTransactions = $transactions->where('type', 'INCOME');
+                $expenseTransactions = $transactions->where('type', 'EXPENSE')
+                    ->filter(fn($tx) => $tx->category !== 'SERVICE_REFUND');
+                $totalIncome   = $incomeTransactions->sum('amount');
+                $totalExpenses = $expenseTransactions->sum('amount');
+                // Recalcular siempre desde transacciones para evitar datos obsoletos en DB
+                $realCalculatedBalance = $s->initial_amount + $totalIncome - $totalExpenses;
+
                 $byMethod = $transactions->groupBy('payment_method')->map(function ($txs) {
                     return [
                         'income'   => $txs->where('type', 'INCOME')->sum('amount'),
@@ -114,20 +126,22 @@ class TreasuryController extends Controller
                     'opening_date'       => $s->opening_date,
                     'closing_date'       => $s->closing_date,
                     'initial_amount'     => $s->initial_amount,
-                    'calculated_balance' => $s->calculated_balance ?? 0,
-                    'total_income'       => $s->total_income ?? 0,
-                    'total_expenses'     => $s->total_expenses ?? 0,
+                    'calculated_balance' => $realCalculatedBalance,
+                    'total_income'       => $totalIncome,
+                    'total_expenses'     => $totalExpenses,
                     'by_payment_method'  => $byMethod,
                 ];
             });
 
-        // Saldo global de tesorería = suma del último calculated_balance por cajero (sesiones cerradas)
-        // Representa cuánto debería haber físicamente en cada caja basado en el último cierre
+        // Saldo global de tesorería = suma del balance real del último cierre por cajero
+        // Se recalcula desde transacciones para evitar valores obsoletos en la columna DB
         $globalTreasuryBalance = CashRegisterSession::where('status', 'closed')
             ->orderBy('closing_date', 'desc')
-            ->get()
+            ->get(['id', 'user_id', 'initial_amount', 'closing_date'])
             ->unique('user_id')
-            ->sum('calculated_balance');
+            ->sum(function (CashRegisterSession $s) {
+                return $s->calculateBalance();
+            });
 
         // Totales acumulados históricos
         $allTimeIncome  = Transaction::where('status', 'active')->where('type', 'INCOME')->sum('amount');

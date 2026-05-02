@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, Banknote, Building2, Smartphone } from 'lucide-react';
+import { CreditCard, Banknote, Building2, Smartphone, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
 import { ReceiptPrint } from '@/components/ui/ReceiptPrint';
 
@@ -71,12 +71,18 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     }
     const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
     const receiptRef = React.useRef<HTMLDivElement>(null);
-    const [paymentMethod, setPaymentMethod] = useState('');
-    const [amount, setAmount] = useState(0);
+
+    interface PaymentSplit {
+      id: number;
+      payment_method: string;
+      amount: number;
+      pos_number: string;
+    }
+    const [splits, setSplits] = useState<PaymentSplit[]>([{ id: 1, payment_method: '', amount: 0, pos_number: '' }]);
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentCompleted, setPaymentCompleted] = useState(false);
-    const [posNumber, setPosNumber] = useState('');
+
   // Calcular montos para pagos parciales
   const totalAmount = serviceRequest?.total_cost || 0;
   const paidAmount = serviceRequest?.paid_amount || 0;
@@ -84,82 +90,97 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
   const isPartialPayment = paidAmount > 0;
   const paymentStatus = serviceRequest?.payment_status || 'pending';
 
-  // No establecer monto automáticamente - obligar al cajero a ingresar el monto
-  // React.useEffect(() => {
-  //   if (serviceRequest && !isPartialPayment) {
-  //     setAmount(totalAmount);
-  //   } else if (serviceRequest && isPartialPayment) {
-  //     setAmount(remainingAmount);
-  //   }
-  // }, [serviceRequest, totalAmount, remainingAmount, isPartialPayment]);
-   
+  const totalSplits = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+  const leftover = remainingAmount - totalSplits;
 
-  // Importar el hook para refrescar
-  // import { useServiceRequests } from '@/hooks/medical/useServiceRequests'
-  // const { refreshCurrentPage } = useServiceRequests()
-  // Si ya tienes el hook en el padre, pásalo por props
+  const addSplit = () => {
+    setSplits(prev => [...prev, { id: Date.now(), payment_method: '', amount: 0, pos_number: '' }]);
+  };
+
+  const removeSplit = (id: number) => {
+    setSplits(prev => prev.filter(s => s.id !== id));
+  };
+
+  const updateSplit = (id: number, field: keyof PaymentSplit, value: string | number) => {
+    setSplits(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
 
   const handlePayment = async () => {
-    if (!serviceRequest || !paymentMethod) return;
+    if (!serviceRequest) return;
+    if (splits.some(s => !s.payment_method || s.amount <= 0)) {
+      toast.error('Completa todos los métodos y montos de pago.');
+      return;
+    }
+    if (totalSplits <= 0) {
+      toast.error('El monto total debe ser mayor a cero.');
+      return;
+    }
+    if (totalSplits > remainingAmount + 0.01) {
+      toast.error('El total de los pagos supera el monto pendiente.');
+      return;
+    }
 
     setIsProcessing(true);
-    
-      await router.post('/cash-register/process-service-payment', {
-        service_request_id: serviceRequest.id,
-        payment_method: paymentMethod,
-        amount: amount,
-        notes: notes
-      }, {
-        preserveScroll: true,
-        preserveState: true,
-        onSuccess: () => {
-          // Solo ejecutar si no hay errores
-          setReceiptData({
-            companyName,
-            serviceNumber: serviceRequest.service_number,
-            patientName: serviceRequest.patient_name,
-            professionalName: serviceRequest.professional_name,
-            serviceName: serviceRequest.service_name,
-            amount,
-            paymentMethod,
-            posNumber: posNumber || undefined,
-            date: new Date().toLocaleString('es-PY'),
-            notes,
-          });
-          setShowReceipt(true);
-          onPaymentProcessed();
-          toast.success('Pago procesado correctamente');
-          // Refrescar los datos para que el modal de detalles tenga el payment_transaction_id actualizado
-          if (typeof window !== 'undefined' && window.location) {
-            setTimeout(() => {
-              window.location.reload();
-            }, 500);
-          }
-          // Disparar impresión automática tras pago
-          setTimeout(() => {
-            if (receiptRef.current) {
-              const printContents = receiptRef.current.innerHTML;
-              const printWindow = window.open('', '', 'width=400,height=600');
-              printWindow?.document.write('<html><head><title>Comprobante de Pago</title></head><body>' + printContents + '</body></html>');
-              printWindow?.document.close();
-              printWindow?.focus();
-              printWindow?.print();
-            }
-          }, 300);
-          setPaymentCompleted(true);
-        },
-        onError: (errors) => {
-          console.error('Errores en el pago:', errors);
-          // Aquí puedes mostrar errores al usuario si es necesario
+
+    const paymentsPayload = splits.map(s => ({
+      payment_method: s.payment_method,
+      amount: s.amount,
+      pos_number: s.pos_number || null,
+    }));
+
+    await router.post('/cash-register/process-service-payment', {
+      service_request_id: serviceRequest.id,
+      payments: paymentsPayload,
+      notes: notes,
+    }, {
+      preserveScroll: true,
+      preserveState: true,
+      onSuccess: () => {
+        const methodLabel = splits.length === 1
+          ? (paymentMethods.find(m => m.value === splits[0].payment_method)?.label ?? splits[0].payment_method)
+          : 'Pago Mixto';
+        setReceiptData({
+          companyName,
+          serviceNumber: serviceRequest.service_number,
+          patientName: serviceRequest.patient_name,
+          professionalName: serviceRequest.professional_name,
+          serviceName: serviceRequest.service_name,
+          amount: totalSplits,
+          paymentMethod: methodLabel,
+          posNumber: splits.length === 1 ? (splits[0].pos_number || undefined) : undefined,
+          date: new Date().toLocaleString('es-PY'),
+          notes,
+        });
+        setShowReceipt(true);
+        onPaymentProcessed();
+        toast.success('Pago procesado correctamente');
+        if (typeof window !== 'undefined' && window.location) {
+          setTimeout(() => { window.location.reload(); }, 500);
         }
-      });
+        setTimeout(() => {
+          if (receiptRef.current) {
+            const printContents = receiptRef.current.innerHTML;
+            const printWindow = window.open('', '', 'width=400,height=600');
+            printWindow?.document.write('<html><head><title>Comprobante de Pago</title></head><body>' + printContents + '</body></html>');
+            printWindow?.document.close();
+            printWindow?.focus();
+            printWindow?.print();
+          }
+        }, 300);
+        setPaymentCompleted(true);
+      },
+      onError: (errors) => {
+        console.error('Errores en el pago:', errors);
+        setIsProcessing(false);
+      }
+    });
   };
 
   const resetForm = () => {
-    setPaymentMethod('');
-    setAmount(serviceRequest?.total_cost || 0);
+    setSplits([{ id: Date.now(), payment_method: '', amount: 0, pos_number: '' }]);
     setNotes('');
     setPaymentCompleted(false);
+    setIsProcessing(false);
   };
 
   const handleClose = () => {
@@ -168,25 +189,34 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     onClose();
   };
 
-  const getReceptionTypeBadge = (type: string) => {
-    const variants = {
-      'ambulatory': 'default',
-      'emergency': 'destructive',
-      'hospitalization': 'secondary'
-    } as const;
+  const RECEPTION_TYPE_LABELS: Record<string, string> = {
+    // valores del backend
+    'RECEPTION_SCHEDULED':  'Consulta agendada',
+    'RECEPTION_WALK_IN':    'Sin cita / Orden de llegada',
+    'INPATIENT_DISCHARGE':  'Alta de internación',
+    'EMERGENCY':            'Emergencia',
+    // valores legacy / alternativos
+    'walk_in':              'Sin cita / Orden de llegada',
+    'scheduled':            'Consulta agendada',
+    'ambulatory':           'Ambulatorio',
+    'emergency':            'Emergencia',
+    'hospitalization':      'Internación',
+    'inpatient':            'Internación',
+  }
 
-    const labels = {
-      'ambulatory': 'Ambulatorio',
-      'emergency': 'Emergencia',
-      'hospitalization': 'Internación'
-    };
+  const RECEPTION_TYPE_VARIANTS: Record<string, 'default' | 'destructive' | 'secondary' | 'outline'> = {
+    'EMERGENCY': 'destructive',
+    'emergency': 'destructive',
+    'INPATIENT_DISCHARGE': 'secondary',
+    'hospitalization': 'secondary',
+    'inpatient': 'secondary',
+  }
 
-    return (
-      <Badge variant={variants[type as keyof typeof variants] || 'default'}>
-        {labels[type as keyof typeof labels] || type}
-      </Badge>
-    );
-  };
+  const getReceptionTypeBadge = (type: string) => (
+    <Badge variant={RECEPTION_TYPE_VARIANTS[type] ?? 'default'}>
+      {RECEPTION_TYPE_LABELS[type] ?? type}
+    </Badge>
+  );
 
   if (!serviceRequest) return null;
   return (
@@ -201,12 +231,12 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
           }
         }}
       >
-        <DialogContent className="lg:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex flex-col lg:max-w-2xl max-h-[90vh] overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Procesar Pago de Servicio</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-6">
             {/* Service Details */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
@@ -295,91 +325,144 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
               </div>
             )}
 
-            {/* Payment Form */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="payment-method">Método de Pago</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar método de pago" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        <div className="flex items-center gap-2">
-                          <method.icon className="h-4 w-4" />
-                          {method.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Payment Form - Pago Mixto */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Métodos de Pago</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSplit}
+                  className="gap-1 text-xs"
+                >
+                  <Plus className="h-3 w-3" /> Agregar método
+                </Button>
               </div>
-              {/* Si método no es efectivo, mostrar campo POS */}
-              {paymentMethod && paymentMethod !== 'cash' && (
-                <div className="space-y-2">
-                  <Label htmlFor="pos-number">N° Comprobante POS</Label>
-                  <input
-                    type="text"
-                    id="pos-number"
-                    className="w-full border rounded px-2 py-1"
-                    value={posNumber}
-                    onChange={e => setPosNumber(e.target.value)}
-                    placeholder="Ej: 123456"
-                  />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="amount">
-                  Monto a Cobrar 
-                  {isPartialPayment && (
-                    <span className="text-sm text-muted-foreground ml-2">
-                      (máximo pendiente: {formatCurrency(remainingAmount)})
-                    </span>
+
+              {splits.map((split, idx) => (
+                <div key={split.id} className="flex gap-2 items-start rounded-lg border p-3 bg-gray-50">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Select
+                          value={split.payment_method}
+                          onValueChange={(val) => updateSplit(split.id, 'payment_method', val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Método" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {paymentMethods.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                <div className="flex items-center gap-2">
+                                  <m.icon className="h-3 w-3" />
+                                  {m.label}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1">
+                        <CurrencyInput
+                          value={split.amount}
+                          onChange={(val) => updateSplit(split.id, 'amount', val)}
+                          placeholder="Monto"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                    {split.payment_method && split.payment_method !== 'cash' && (
+                      <input
+                        type="text"
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        value={split.pos_number}
+                        onChange={(e) => updateSplit(split.id, 'pos_number', e.target.value)}
+                        placeholder="N° Comprobante POS (opcional)"
+                      />
+                    )}
+                  </div>
+                  {splits.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => removeSplit(split.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   )}
-                </Label>
-                <CurrencyInput
-                  value={amount}
-                  onChange={setAmount}
-                  placeholder="0.00"
-                  max={remainingAmount}
-                />
-                {amount > remainingAmount && (
-                  <p className="text-sm text-red-600">
-                    El monto no puede ser mayor al pendiente ({formatCurrency(remainingAmount)})
-                  </p>
+                  {idx === 0 && splits.length === 1 && <div className="w-8" />}
+                </div>
+              ))}
+
+              {/* Totales */}
+              <div className="rounded-lg border p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total a pagar ahora:</span>
+                  <span className={`font-semibold ${totalSplits > remainingAmount ? 'text-red-600' : 'text-foreground'}`}>
+                    {formatCurrency(totalSplits)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Monto pendiente:</span>
+                  <span className="font-medium text-orange-600">{formatCurrency(remainingAmount)}</span>
+                </div>
+                {leftover > 0.01 && (
+                  <div className="flex justify-between text-blue-600 border-t pt-1">
+                    <span>Quedará pendiente:</span>
+                    <span className="font-medium">{formatCurrency(leftover)}</span>
+                  </div>
                 )}
-                {amount > 0 && amount < remainingAmount && (
-                  <p className="text-sm text-blue-600">
-                    Pago parcial - quedará pendiente {formatCurrency(remainingAmount - amount)}
-                  </p>
+                {leftover < -0.01 && (
+                  <div className="flex justify-between text-red-600 border-t pt-1">
+                    <span>Excede por:</span>
+                    <span className="font-medium">{formatCurrency(Math.abs(leftover))}</span>
+                  </div>
+                )}
+                {Math.abs(leftover) <= 0.01 && totalSplits > 0 && (
+                  <div className="flex justify-between text-green-600 border-t pt-1">
+                    <span>Pago completo</span>
+                    <span className="font-medium">✓</span>
+                  </div>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="notes">Notas (opcional)</Label>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Observaciones adicionales..."
-                  rows={3}
+                  rows={2}
                 />
               </div>
             </div>
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-2">
+
+            </div>
+
+            {/* Footer fijo — siempre visible */}
+            <div className="shrink-0 flex justify-end gap-2 border-t pt-4">
               <Button variant="outline" onClick={handleClose} disabled={isProcessing}>
                 Cancelar
               </Button>
-              <Button 
+              <Button
                 onClick={handlePayment}
-                disabled={!paymentMethod || isProcessing || paymentCompleted || amount <= 0 || amount > remainingAmount}
-                className="min-w-120px"
+                disabled={
+                  isProcessing ||
+                  paymentCompleted ||
+                  totalSplits <= 0 ||
+                  totalSplits > remainingAmount + 0.01 ||
+                  splits.some(s => !s.payment_method || s.amount <= 0)
+                }
+                className="min-w-[120px]"
               >
-                {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' : 
-                 amount === remainingAmount ? 'Pagar' : 'Pago Parcial'}
+                {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' :
+                  Math.abs(leftover) <= 0.01 ? 'Pagar' : 'Pago Parcial'}
               </Button>
             </div>
-          </div>
         </DialogContent>
       </Dialog>
       {/* Modal de ticket de impresión */}
