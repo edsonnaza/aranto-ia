@@ -457,7 +457,7 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                   totalSplits > remainingAmount + 0.01 ||
                   splits.some(s => !s.payment_method || s.amount <= 0)
                 }
-                className="min-w-[120px]"
+                className="min-w-120px"
               >
                 {isProcessing ? 'Procesando...' : paymentCompleted ? 'Pago realizado' :
                   Math.abs(leftover) <= 0.01 ? 'Pagar' : 'Pago Parcial'}
