@@ -48,22 +48,7 @@
 
 
 # =========================
-# 1. BUILD FRONTEND (NODE)
-# =========================
-FROM node:20-alpine AS node_build
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-
-RUN npm run build
-
-
-# =========================
-# 2. BUILD PHP (COMPOSER)
+# 1. BUILD PHP (COMPOSER)
 # =========================
 FROM composer:2 AS composer_build
 
@@ -75,6 +60,26 @@ RUN composer install \
     --no-dev \
     --optimize-autoloader \
     --no-interaction
+
+RUN php artisan wayfinder:generate --with-form
+
+
+# =========================
+# 2. BUILD FRONTEND (NODE)
+# =========================
+FROM node:20-alpine AS node_build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+COPY --from=composer_build /app/resources/js/actions ./resources/js/actions
+COPY --from=composer_build /app/resources/js/routes ./resources/js/routes
+
+RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
+    && npm run build
 
 
 # =========================
