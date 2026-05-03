@@ -77,6 +77,7 @@ RUN npm ci
 COPY . .
 COPY --from=composer_build /app/resources/js/actions ./resources/js/actions
 COPY --from=composer_build /app/resources/js/routes ./resources/js/routes
+COPY --from=composer_build /app/resources/js/wayfinder ./resources/js/wayfinder
 
 RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
     && npm run build
