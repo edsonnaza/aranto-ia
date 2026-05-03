@@ -7,7 +7,7 @@ import type { ReceptionCreateData } from '@/hooks/medical'
 import SearchableInput from '@/components/ui/SearchableInput'
 import TotalDisplay from '@/components/ui/TotalDisplay'
 import ServiceCartTable from '@/components/ui/ServiceCartTable'
-import SelectItem from '../../../components/ui/SelectItem'
+import SelectItem from '@/components/ui/SelectItem'
 
 // Simple SVG Icons
 const PlusIcon = ({ className }: { className?: string }) => (
