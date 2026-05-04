@@ -99,7 +99,7 @@ RUN apk add --no-cache \
     unzip
 
 # PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql intl zip opcache
+RUN docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl
 
 WORKDIR /var/www/html
 
