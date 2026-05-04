@@ -29,20 +29,34 @@
 
 #!/bin/sh
 
-echo "==> Starting Laravel..."
+service_mode="${RAILWAY_SERVICE_MODE:-web}"
+
+echo "==> Service mode: ${service_mode}"
 echo "==> PHP: $(php -v | head -1)"
 echo "==> PORT: ${PORT:-8080}"
 
-# cache optimizations (safe in production)
+if [ "${service_mode}" = "reverb" ]; then
+    php artisan config:cache || true
+
+    echo "==> Starting Reverb on ${PORT:-8080}..."
+
+    exec php artisan reverb:start \
+      --host=0.0.0.0 \
+      --port="${PORT:-8080}"
+fi
+
+echo "==> Starting Laravel..."
+
+# Cache optimizations are safe for the web service.
 php artisan config:cache || true
 php artisan route:cache || true
 php artisan view:cache || true
 
-# DO NOT fail deploy if no migrations needed
+# DO NOT fail deploy if no migrations are pending.
 php artisan migrate --force || true
 
 echo "==> Starting server on ${PORT:-8080}..."
 
 exec php artisan serve \
   --host=0.0.0.0 \
-  --port=${PORT:-8080}
+  --port="${PORT:-8080}"
