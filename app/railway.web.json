@@ -14,6 +14,7 @@
     "REVERB_HOST": "proud-courage-production-7b96.up.railway.app",
     "REVERB_PORT": "443",
     "REVERB_SCHEME": "https",
+    "VITE_REVERB_APP_KEY": "b7c2d3c10ff69cc7a3978e601bcaad72c9816d0e25deab355087b69cc8d492b9809e1da1063433d86c741eac3e4133a3",
     "VITE_REVERB_HOST": "proud-courage-production-7b96.up.railway.app",
     "VITE_REVERB_PORT": "443",
     "VITE_REVERB_SCHEME": "https"
