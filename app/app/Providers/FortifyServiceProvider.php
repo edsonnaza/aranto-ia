@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -40,6 +42,31 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        // Permite login con email, nombre completo, o prefijo de email (ej: "admin" → admin@aranto.com)
+        Fortify::authenticateUsing(function (Request $request) {
+            $login    = trim($request->input('email'));
+            $password = $request->input('password');
+
+            // 1. Es un email completo → buscar por email
+            if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                $user = User::where('email', $login)->first();
+            } else {
+                // 2. Buscar por nombre completo (case-insensitive)
+                $user = User::whereRaw('LOWER(name) = ?', [strtolower($login)])->first();
+
+                // 3. Si no se encontró, buscar por prefijo de email (antes del @)
+                if (!$user) {
+                    $user = User::whereRaw("LOWER(SUBSTRING_INDEX(email, '@', 1)) = ?", [strtolower($login)])->first();
+                }
+            }
+
+            if ($user && Hash::check($password, $user->password)) {
+                return $user;
+            }
+
+            return null;
+        });
     }
 
     /**
