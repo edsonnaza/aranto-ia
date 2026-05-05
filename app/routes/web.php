@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\DashboardController;
 
 Route::get('/', function () {
@@ -23,8 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('commissions.index');
 
-    // Users Management
-    Route::resource('users', UserController::class)->only(['index', 'create', 'show', 'edit']);
+    // Users Management (requiere permiso access-user-management)
+    Route::middleware('permission:access-user-management')->group(function () {
+        Route::resource('users', UserController::class);
+        Route::resource('roles', RoleController::class);
+    });
 });
 
 require __DIR__.'/settings.php';
