@@ -9,5 +9,13 @@
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
+  },
+  "variables": {
+    "REVERB_HOST": "proud-courage-production-7b96.up.railway.app",
+    "REVERB_PORT": "443",
+    "REVERB_SCHEME": "https",
+    "VITE_REVERB_HOST": "proud-courage-production-7b96.up.railway.app",
+    "VITE_REVERB_PORT": "443",
+    "VITE_REVERB_SCHEME": "https"
   }
 }
