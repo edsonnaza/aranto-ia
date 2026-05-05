@@ -1,0 +1,68 @@
+# =========================
+# 1. BUILD PHP (COMPOSER)
+# =========================
+FROM composer:2 AS composer_build
+
+WORKDIR /app
+
+COPY . .
+
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction
+
+RUN php artisan wayfinder:generate --with-form
+
+
+# =========================
+# 2. BUILD FRONTEND (NODE)
+# =========================
+FROM node:20-alpine AS node_build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+COPY --from=composer_build /app/resources/js/actions ./resources/js/actions
+COPY --from=composer_build /app/resources/js/routes ./resources/js/routes
+COPY --from=composer_build /app/resources/js/wayfinder ./resources/js/wayfinder
+
+RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
+    && npm run build
+
+
+# =========================
+# 3. RUNTIME (PHP)
+# =========================
+FROM php:8.4-fpm-alpine
+
+RUN apk add --no-cache \
+    nginx \
+    supervisor \
+    bash \
+    icu-dev \
+    libzip-dev \
+    zip \
+    unzip
+
+RUN docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl
+
+WORKDIR /var/www/html
+
+COPY --from=composer_build /app /var/www/html
+COPY --from=node_build /app/public/build /var/www/html/public/build
+
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache \
+    && chmod +x /var/www/html/start.web.sh
+
+RUN php artisan config:clear || true \
+    && php artisan route:clear || true \
+    && php artisan view:clear || true
+
+EXPOSE 8080
+
+CMD ["/bin/sh", "/var/www/html/start.web.sh"]

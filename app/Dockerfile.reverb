@@ -1,0 +1,42 @@
+# =========================
+# 1. BUILD PHP (COMPOSER)
+# =========================
+FROM composer:2 AS composer_build
+
+WORKDIR /app
+
+COPY . .
+
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction
+
+
+# =========================
+# 2. RUNTIME (PHP)
+# =========================
+FROM php:8.4-fpm-alpine
+
+RUN apk add --no-cache \
+    bash \
+    icu-dev \
+    libzip-dev \
+    zip \
+    unzip
+
+RUN docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl
+
+WORKDIR /var/www/html
+
+COPY --from=composer_build /app /var/www/html
+
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache \
+    && chmod +x /var/www/html/start.reverb.sh
+
+RUN php artisan config:clear || true
+
+EXPOSE 8080
+
+CMD ["/bin/sh", "/var/www/html/start.reverb.sh"]
