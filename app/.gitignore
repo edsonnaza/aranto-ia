@@ -13,7 +13,7 @@
 .DS_Store
 .env
 .env.backup
-.env.production
+# .env.production is committed intentionally (only VITE_* public build vars)
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
