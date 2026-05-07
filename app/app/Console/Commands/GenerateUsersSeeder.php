@@ -64,11 +64,7 @@ class GenerateUsersSeeder extends Command
             \$u->save();
         }
 
-        foreach ([{$roleNames}] as \$roleName) {
-            if (!\$u->hasRole(\$roleName)) {
-                \$u->assignRole(\$roleName);
-            }
-        }
+        \$this->assignRolesSafely(\$u, [{$roleNames}]);
 PHP;
             } else {
                 $lines[] = <<<PHP
@@ -95,7 +91,7 @@ PHP;
         $count     = $users->count();
         $generated = now()->toDateTimeString();
 
-        $useRoles = '';
+        $useRoles = $includeRoles ? "use Spatie\\Permission\\Models\\Role;" : '';
 
         $content = <<<PHP
 <?php
@@ -122,6 +118,17 @@ class UsersProductionSeeder extends Seeder
     public function run(): void
     {
 {$entries}
+    }
+
+    private function assignRolesSafely(User \$user, array \$roleNames): void
+    {
+        foreach (\$roleNames as \$roleName) {
+            \$role = Role::findOrCreate(\$roleName, 'web');
+
+            if (!\$user->roles->contains('name', \$role->name)) {
+                \$user->assignRole(\$role);
+            }
+        }
     }
 }
 PHP;

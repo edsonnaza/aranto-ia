@@ -15,6 +15,7 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
 
 
 class UsersProductionSeeder extends Seeder
@@ -37,11 +38,7 @@ class UsersProductionSeeder extends Seeder
             $u->save();
         }
 
-        foreach (['super-admin', 'super_admin'] as $roleName) {
-            if (!$u->hasRole($roleName)) {
-                $u->assignRole($roleName);
-            }
-        }
+        $this->assignRolesSafely($u, ['super-admin', 'super_admin']);
 
         $u = User::firstOrNew(['email' => 'doctor@aranto.com']);
         $isNew = !$u->exists;
@@ -59,11 +56,7 @@ class UsersProductionSeeder extends Seeder
             $u->save();
         }
 
-        foreach (['admin'] as $roleName) {
-            if (!$u->hasRole($roleName)) {
-                $u->assignRole($roleName);
-            }
-        }
+        $this->assignRolesSafely($u, ['admin']);
 
         $u = User::firstOrNew(['email' => 'cajero@aranto.com']);
         $isNew = !$u->exists;
@@ -81,11 +74,7 @@ class UsersProductionSeeder extends Seeder
             $u->save();
         }
 
-        foreach (['cashier', 'cajero'] as $roleName) {
-            if (!$u->hasRole($roleName)) {
-                $u->assignRole($roleName);
-            }
-        }
+        $this->assignRolesSafely($u, ['cashier', 'cajero']);
 
         $u = User::firstOrNew(['email' => 'supervisor@aranto.com']);
         $isNew = !$u->exists;
@@ -103,11 +92,7 @@ class UsersProductionSeeder extends Seeder
             $u->save();
         }
 
-        foreach (['accountant', 'supervisor'] as $roleName) {
-            if (!$u->hasRole($roleName)) {
-                $u->assignRole($roleName);
-            }
-        }
+        $this->assignRolesSafely($u, ['accountant', 'supervisor']);
 
         $u = User::firstOrNew(['email' => 'auditor@aranto.com']);
         $isNew = !$u->exists;
@@ -125,11 +110,7 @@ class UsersProductionSeeder extends Seeder
             $u->save();
         }
 
-        foreach (['viewer', 'auditor'] as $roleName) {
-            if (!$u->hasRole($roleName)) {
-                $u->assignRole($roleName);
-            }
-        }
+        $this->assignRolesSafely($u, ['viewer', 'auditor']);
 
         $u = User::firstOrNew(['email' => 'edson@legacy.local']);
         $isNew = !$u->exists;
@@ -1009,6 +990,17 @@ class UsersProductionSeeder extends Seeder
         if (!empty($changes)) {
             $u->fill($changes);
             $u->save();
+        }
+    }
+
+    private function assignRolesSafely(User $user, array $roleNames): void
+    {
+        foreach ($roleNames as $roleName) {
+            $role = Role::findOrCreate($roleName, 'web');
+
+            if (!$user->roles->contains('name', $role->name)) {
+                $user->assignRole($role);
+            }
         }
     }
 }
