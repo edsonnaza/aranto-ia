@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { format } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ArrowLeft, CheckCircle, Clock, AlertCircle, FileText, DollarSign, Calendar, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -73,12 +73,30 @@ export default function CommissionLiquidationDetail({
     }).format(amount)
   }
 
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yyyy', { locale: es })
+  const toValidDate = (value?: string | null): Date | null => {
+    if (!value) return null
+
+    const parsed = parseISO(value)
+    if (isValid(parsed)) {
+      return parsed
+    }
+
+    const fallback = new Date(value)
+    return isValid(fallback) ? fallback : null
   }
 
-  const formatDateTime = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: es })
+  const formatDate = (dateString?: string | null) => {
+    const date = toValidDate(dateString)
+    if (!date) return '-'
+
+    return format(date, 'dd/MM/yyyy', { locale: es })
+  }
+
+  const formatDateTime = (dateString?: string | null) => {
+    const date = toValidDate(dateString)
+    if (!date) return '-'
+
+    return format(date, 'dd/MM/yyyy HH:mm', { locale: es })
   }
 
   const getStatusBadge = (status: string) => {
