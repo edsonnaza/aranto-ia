@@ -156,6 +156,8 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('service-requests.confirm');
     Route::patch('service-requests/{serviceRequest}/cancel', [ServiceRequestController::class, 'cancel'])
         ->name('service-requests.cancel');
+    Route::patch('service-requests/{serviceRequest}/details/{detail}/transfer-professional', [ServiceRequestController::class, 'transferProfessional'])
+        ->name('service-requests.transfer-professional');
 
     // Reception Module
     Route::prefix('reception')->name('reception.')->group(function () {

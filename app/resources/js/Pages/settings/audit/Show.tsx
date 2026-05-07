@@ -39,6 +39,7 @@ const EVENT_LABELS: Record<string, { label: string; variant: 'default' | 'second
   deleted: { label: 'Eliminado', variant: 'destructive' },
   inactivated: { label: 'Inactivado', variant: 'outline' },
   restored: { label: 'Restaurado', variant: 'default' },
+  service_transferred: { label: 'Servicio transferido', variant: 'outline' },
 }
 
 const breadcrumbs: BreadcrumbItem[] = [

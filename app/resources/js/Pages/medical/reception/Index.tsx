@@ -148,6 +148,12 @@ const EyeIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
+const TransferIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 7l3-3m-3 3l3 3M17 17H7m10 0l-3-3m3 3l-3 3" />
+  </svg>
+)
+
 interface ReceptionIndexProps {
   stats: ReceptionStats
   // paginated server-side data
@@ -358,6 +364,13 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
       header: 'Acciones',
       cell: ({ row }) => (
         <div className="flex space-x-2">
+          <Link
+            href={`/medical/service-requests/${row.original.id}`}
+            className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+            title="Ir a solicitud para transferir profesional"
+          >
+            <TransferIcon className="h-4 w-4" />
+          </Link>
           <button
             onClick={() => handleViewDetails(row.original.id)}
             className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"

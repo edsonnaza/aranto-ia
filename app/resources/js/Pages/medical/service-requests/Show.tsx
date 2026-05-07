@@ -1,8 +1,22 @@
 import { Head, router } from '@inertiajs/react'
+import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import AppLayout from '@/layouts/app-layout'
 import { useServiceRequests } from '@/hooks/medical'
 import { getReceptionTypeLabel } from '@/hooks/medical/useReceptionTypeLabel'
+import SearchableInput from '@/components/ui/SearchableInput'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 // Simple SVG Icons
 const EditIcon = ({ className }: { className?: string }) => (
@@ -67,6 +81,7 @@ interface DetailedServiceRequest {
   service_details: Array<{
     id: number
     medical_service_name: string
+    professional_id: number
     professional_name: string
     insurance_type_name: string
     scheduled_date?: string
@@ -90,17 +105,30 @@ interface DetailedServiceRequest {
 
 interface ServiceRequestShowProps {
   serviceRequest: DetailedServiceRequest
+  professionals: Array<{ id: number; name: string }>
 }
 
-export default function ServiceRequestShow({ serviceRequest }: ServiceRequestShowProps) {
+interface TransferContext {
+  detailId: number
+  serviceName: string
+  currentProfessionalId: number
+  currentProfessionalName: string
+}
+
+export default function ServiceRequestShow({ serviceRequest, professionals }: ServiceRequestShowProps) {
   const { toFrontend } = useDateFormat();
   const { 
     loading, 
     error, 
     confirmServiceRequest, 
     cancelServiceRequest, 
-    navigateToEdit, 
+    navigateToEdit,
+    transferServiceProfessional,
   } = useServiceRequests()
+  const [transferContext, setTransferContext] = useState<TransferContext | null>(null)
+  const [selectedTransferProfessionalId, setSelectedTransferProfessionalId] = useState<number | null>(null)
+  const [selectedTransferProfessionalLabel, setSelectedTransferProfessionalLabel] = useState('')
+  const [confirmTransferOpen, setConfirmTransferOpen] = useState(false)
 
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
@@ -172,6 +200,75 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
     }
     
     return age
+  }
+
+  const searchProfessionalsForTransfer = useCallback(async (query: string, currentProfessionalId: number) => {
+    const normalized = query.trim().toLowerCase()
+
+    return professionals
+      .filter((professional) => professional.id !== currentProfessionalId)
+      .filter((professional) => {
+        if (!normalized) return true
+        return professional.name.toLowerCase().includes(normalized)
+      })
+      .slice(0, 15)
+      .map((professional) => ({
+        id: professional.id,
+        label: professional.name,
+        subtitle: `ID: ${professional.id}`,
+      }))
+  }, [professionals])
+
+  const openTransferModal = (service: DetailedServiceRequest['service_details'][number]) => {
+    setTransferContext({
+      detailId: service.id,
+      serviceName: service.medical_service_name,
+      currentProfessionalId: service.professional_id,
+      currentProfessionalName: service.professional_name,
+    })
+    setSelectedTransferProfessionalId(null)
+    setSelectedTransferProfessionalLabel('')
+  }
+
+  const closeTransferModal = () => {
+    setTransferContext(null)
+    setSelectedTransferProfessionalId(null)
+    setSelectedTransferProfessionalLabel('')
+    setConfirmTransferOpen(false)
+  }
+
+  const openConfirmTransfer = () => {
+    if (!transferContext) {
+      return
+    }
+
+    if (!selectedTransferProfessionalId) {
+      toast.error('Seleccioná un profesional para continuar')
+      return
+    }
+
+    setConfirmTransferOpen(true)
+  }
+
+  const handleConfirmTransfer = () => {
+    if (!transferContext || !selectedTransferProfessionalId) {
+      return
+    }
+
+    transferServiceProfessional(
+      serviceRequest.id,
+      transferContext.detailId,
+      {
+        professional_id: selectedTransferProfessionalId,
+        reason: 'Transferencia confirmada desde modal',
+      },
+      {
+        onSuccess: () => {
+          closeTransferModal()
+          setConfirmTransferOpen(false)
+        },
+      }
+    )
   }
 
   return (
@@ -410,6 +507,9 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Estado
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Transferir
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -471,6 +571,20 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
                       <td className="px-6 py-4">
                         {getStatusBadge(service.status)}
                       </td>
+                      <td className="px-6 py-4">
+                        {service.status !== 'cancelled' ? (
+                          <button
+                            type="button"
+                            onClick={() => openTransferModal(service)}
+                            disabled={loading}
+                            className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                          >
+                            Transferir
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">No disponible</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -489,6 +603,80 @@ export default function ServiceRequestShow({ serviceRequest }: ServiceRequestSho
           )}
         </div>
       </div>
+
+      <Dialog open={!!transferContext} onOpenChange={(open) => (!open ? closeTransferModal() : null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir Servicio</DialogTitle>
+            <DialogDescription>
+              Seleccioná el nuevo profesional y confirmá la operación.
+            </DialogDescription>
+          </DialogHeader>
+
+          {transferContext && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Servicio: <span className="font-medium">{transferContext.serviceName}</span>
+              </p>
+              <p className="text-sm text-gray-600">
+                Profesional actual: <span className="font-medium">{transferContext.currentProfessionalName}</span>
+              </p>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Nuevo profesional</label>
+                <SearchableInput
+                  placeholder="Buscar profesional..."
+                  value={selectedTransferProfessionalLabel}
+                  onSearch={(query) => searchProfessionalsForTransfer(query, transferContext.currentProfessionalId)}
+                  onSelect={(item) => {
+                    setSelectedTransferProfessionalId(item.id)
+                    setSelectedTransferProfessionalLabel(item.label)
+                  }}
+                  minSearchLength={0}
+                  maxResults={12}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={closeTransferModal}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={openConfirmTransfer}
+              disabled={loading || !selectedTransferProfessionalId}
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              Continuar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmTransferOpen} onOpenChange={setConfirmTransferOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar transferencia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {transferContext
+                ? `Se transferirá el servicio "${transferContext.serviceName}" de ${transferContext.currentProfessionalName} a ${selectedTransferProfessionalLabel}.`
+                : 'Se realizará la transferencia del servicio seleccionado.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={loading} onClick={handleConfirmTransfer}>
+              Confirmar transferencia
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <style>{`
         @media print {

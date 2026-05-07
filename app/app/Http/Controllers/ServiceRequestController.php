@@ -10,6 +10,9 @@ use App\Models\MedicalService;
 use App\Models\Professional;
 use App\Models\InsuranceType;
 use App\Models\ScheduleAppointment;
+use App\Models\ServiceRequestDetail;
+use App\Models\Transaction;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -312,6 +315,7 @@ class ServiceRequestController extends Controller
                 return [
                     'id' => $detail->id,
                     'medical_service_name' => $detail->medicalService->name,
+                    'professional_id' => $detail->professional_id,
                     'professional_name' => $detail->professional ? $detail->professional->full_name : 'No asignado',
                     'insurance_type_name' => $detail->insuranceType->name,
                     'scheduled_date' => $detail->scheduled_date?->format('Y-m-d'),
@@ -358,7 +362,149 @@ class ServiceRequestController extends Controller
 
         return Inertia::render('medical/service-requests/Show', [
             'serviceRequest' => $serviceRequestData,
+            'professionals' => Professional::query()
+                ->where('status', 'active')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name'])
+                ->map(fn (Professional $professional) => [
+                    'id' => $professional->id,
+                    'name' => $professional->full_name,
+                ])
+                ->toArray(),
         ]);
+    }
+
+    /**
+     * Transfer service detail to another medical professional.
+     */
+    public function transferProfessional(Request $request, ServiceRequest $serviceRequest, ServiceRequestDetail $detail): RedirectResponse
+    {
+        if ($detail->service_request_id !== $serviceRequest->id) {
+            abort(404, 'El detalle de servicio no pertenece a la solicitud indicada.');
+        }
+
+        if ($serviceRequest->isCancelled() || $detail->isCancelled()) {
+            throw ValidationException::withMessages([
+                'service' => 'No se puede transferir un servicio cancelado.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'professional_id' => ['required', 'exists:professionals,id', Rule::exists('professionals', 'id')->where('status', 'active')],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $newProfessionalId = (int) $validated['professional_id'];
+        $oldProfessionalId = (int) $detail->professional_id;
+        $transferReason = $validated['reason'] ?? null;
+
+        if ($newProfessionalId === $oldProfessionalId) {
+            throw ValidationException::withMessages([
+                'professional_id' => 'Debe seleccionar un profesional diferente al actual.',
+            ]);
+        }
+
+        // Si el servicio ya está pagado, solo perfiles administrativos pueden reasignar.
+        $isAdministrativeUser = (bool) auth()->user()?->canAny([
+            'admin.cash_register',
+            'access-commissions',
+            'access-user-management',
+        ]);
+
+        if ($serviceRequest->payment_status === ServiceRequest::PAYMENT_PAID && !$isAdministrativeUser) {
+            abort(403, 'Este servicio ya fue pagado. La transferencia requiere un perfil administrativo.');
+        }
+
+        // Regla principal: no permitir transferencia si la comisión del servicio ya fue liquidada.
+        $hasLiquidatedCommission = false;
+
+        if ($detail->movement_detail_id) {
+            $hasLiquidatedCommission = Transaction::query()
+                ->where('id', $detail->movement_detail_id)
+                ->where('status', 'active')
+                ->whereNotNull('commission_liquidation_id')
+                ->exists();
+        }
+
+        if (!$hasLiquidatedCommission) {
+            $fallbackLiquidatedQuery = Transaction::query()
+                ->where('service_request_id', $serviceRequest->id)
+                ->where('professional_id', $oldProfessionalId)
+                ->where('type', 'INCOME')
+                ->where('category', 'SERVICE_PAYMENT')
+                ->where('status', 'active')
+                ->whereNotNull('commission_liquidation_id');
+
+            if ($detail->movement_detail_id) {
+                $fallbackLiquidatedQuery->where('id', $detail->movement_detail_id);
+            }
+
+            $hasLiquidatedCommission = $fallbackLiquidatedQuery->exists();
+        }
+
+        if ($hasLiquidatedCommission) {
+            throw ValidationException::withMessages([
+                'service' => 'No se puede transferir: la comisión de este servicio ya fue liquidada.',
+            ]);
+        }
+
+        $newProfessional = Professional::with('commissionSettings')->findOrFail($newProfessionalId);
+        $commissionPercentage = $newProfessional->commissionSettings?->commission_percentage ?? 0;
+
+        $oldProfessional = Professional::find($oldProfessionalId);
+
+        DB::transaction(function () use ($detail, $newProfessionalId, $commissionPercentage, $serviceRequest, $oldProfessionalId, $oldProfessional, $newProfessional, $transferReason) {
+            $detail->update([
+                'professional_id' => $newProfessionalId,
+                'professional_commission_percentage' => $commissionPercentage,
+            ]);
+
+            // Mantener coherencia para futuras liquidaciones en movimientos no liquidados.
+            $transactionUpdateQuery = Transaction::query()
+                ->where('service_request_id', $serviceRequest->id)
+                ->where('professional_id', $oldProfessionalId)
+                ->where('type', 'INCOME')
+                ->where('category', 'SERVICE_PAYMENT')
+                ->where('status', 'active')
+                ->whereNull('commission_liquidation_id');
+
+            if ($detail->movement_detail_id) {
+                $transactionUpdateQuery->where('id', $detail->movement_detail_id);
+            }
+
+            $transactionUpdateQuery->update([
+                'professional_id' => $newProfessionalId,
+            ]);
+
+            AuditLog::logActivity(
+                $detail,
+                'service_transferred',
+                [
+                    'service_request_id' => $serviceRequest->id,
+                    'old_professional_id' => $oldProfessionalId,
+                    'old_professional_name' => $oldProfessional?->full_name,
+                ],
+                [
+                    'service_request_id' => $serviceRequest->id,
+                    'new_professional_id' => $newProfessional->id,
+                    'new_professional_name' => $newProfessional->full_name,
+                    'reason' => $transferReason,
+                    'transferred_by_user_id' => auth()->id(),
+                ],
+                sprintf(
+                    'Transferencia de servicio en solicitud #%s: %s -> %s. Motivo: %s',
+                    $serviceRequest->request_number,
+                    $oldProfessional?->full_name ?? 'N/A',
+                    $newProfessional->full_name,
+                    $transferReason ?: 'No especificado'
+                )
+            );
+        });
+
+        return redirect()
+            ->route('medical.service-requests.show', $serviceRequest)
+            ->with('message', 'Servicio transferido correctamente al nuevo profesional.');
     }
 
     /**

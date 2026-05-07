@@ -92,6 +92,11 @@ interface CreateServiceRequestData {
   services: ServiceData[]
 }
 
+interface TransferProfessionalData {
+  professional_id: number
+  reason?: string
+}
+
 // Service Request Routes - usando las URLs directamente
 const serviceRequestRoutes = {
   index: '/medical/service-requests',
@@ -102,7 +107,8 @@ const serviceRequestRoutes = {
   update: (id: number | string) => `/medical/service-requests/${id}`,
   destroy: (id: number | string) => `/medical/service-requests/${id}`,
   confirm: (id: number | string) => `/medical/service-requests/${id}/confirm`,
-  cancel: (id: number | string) => `/medical/service-requests/${id}/cancel`
+  cancel: (id: number | string) => `/medical/service-requests/${id}/cancel`,
+  transferProfessional: (serviceRequestId: number | string, detailId: number | string) => `/medical/service-requests/${serviceRequestId}/details/${detailId}/transfer-professional`,
 }
 
 interface UseServiceRequestsReturn {
@@ -120,6 +126,7 @@ interface UseServiceRequestsReturn {
   deleteServiceRequest: (id: number | string, options?: VisitOptions) => void
   confirmServiceRequest: (id: number | string, options?: VisitOptions) => void
   cancelServiceRequest: (id: number | string, reason: string, options?: VisitOptions) => void
+  transferServiceProfessional: (serviceRequestId: number | string, detailId: number | string, data: TransferProfessionalData, options?: VisitOptions) => void
   
   // Utils
   refreshCurrentPage: () => void
@@ -263,6 +270,33 @@ export const useServiceRequests = (): UseServiceRequestsReturn => {
     })
   }, [withLoading])
 
+  const transferServiceProfessional = useCallback((
+    serviceRequestId: number | string,
+    detailId: number | string,
+    data: TransferProfessionalData,
+    options: VisitOptions = {}
+  ) => {
+    const { onSuccess: customOnSuccess, onError: customOnError, ...restOptions } = options
+
+    withLoading(() => {
+      router.patch(serviceRequestRoutes.transferProfessional(serviceRequestId, detailId), data, {
+        preserveState: true,
+        onSuccess: (page) => {
+          setError(null)
+          toast.success('Servicio transferido correctamente')
+          customOnSuccess?.(page)
+        },
+        onError: (errors) => {
+          const message = resolveErrorMessage(errors)
+          setError(message)
+          toast.error(message)
+          customOnError?.(errors)
+        },
+        ...restOptions,
+      })
+    })
+  }, [resolveErrorMessage, withLoading])
+
   // Utility methods
   const refreshCurrentPage = useCallback(() => {
     router.reload()
@@ -283,10 +317,11 @@ export const useServiceRequests = (): UseServiceRequestsReturn => {
     deleteServiceRequest,
     confirmServiceRequest,
     cancelServiceRequest,
+    transferServiceProfessional,
     
     // Utils
     refreshCurrentPage,
   }
 }
 
-export type { ServiceRequest, ServiceRequestFilters, ServiceRequestsIndexData, CreateServiceRequestData, UseServiceRequestsReturn }
+export type { ServiceRequest, ServiceRequestFilters, ServiceRequestsIndexData, CreateServiceRequestData, TransferProfessionalData, UseServiceRequestsReturn }
