@@ -9,7 +9,7 @@ export default function AppLogo() {
             <img
                 src="/logo-brand-dark.png"
                 alt="Aranto"
-                className="h-16 w-auto max-w-72 object-contain hidden dark:block"
+                className="hidden h-16 w-auto max-w-72 object-contain dark:block"
             />
             <div className="sr-only">
                 <span>Aranto</span>
