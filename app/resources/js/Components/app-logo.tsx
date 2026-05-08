@@ -1,16 +1,19 @@
-import AppLogoIcon from './app-logo-icon';
-
 export default function AppLogo() {
     return (
-        <>
-            <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-                <AppLogoIcon className="size-5 fill-current text-white dark:text-black" />
+        <div className="ml-1 flex flex-1 items-center">
+            <img
+                src="/logo-brand.png"
+                alt="Aranto"
+                className="h-16 w-auto max-w-72 object-contain dark:hidden"
+            />
+            <img
+                src="/logo-brand-dark.png"
+                alt="Aranto"
+                className="h-16 w-auto max-w-72 object-contain hidden dark:block"
+            />
+            <div className="sr-only">
+                <span>Aranto</span>
             </div>
-            <div className="ml-1 grid flex-1 text-left text-sm">
-                <span className="mb-0.5 truncate leading-tight font-semibold">
-                    Aranto
-                </span>
-            </div>
-        </>
+        </div>
     );
 }

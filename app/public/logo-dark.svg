@@ -1,0 +1,12 @@
+<svg width="520" height="160" viewBox="0 0 520 160" xmlns="http://www.w3.org/2000/svg">
+  <rect width="520" height="160" fill="transparent"/>
+
+  <g transform="translate(20,20)">
+    <path d="M60 0 C30 40, 30 80, 60 120 C90 80, 90 40, 60 0 Z" fill="#FFFFFF"/>
+    <path d="M60 20 C45 55, 45 75, 60 105 C75 75, 75 55, 60 20 Z" fill="#34A853"/>
+    <path d="M40 70 C55 60, 65 60, 80 70" stroke="#1E3D34" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <text x="140" y="75" font-size="48" font-family="Arial, sans-serif" fill="#FFFFFF" font-weight="600">Aranto</text>
+  <text x="142" y="105" font-size="16" font-family="Arial, sans-serif" fill="#FFFFFF" opacity="0.75">Sistema Medico Integral</text>
+</svg>
