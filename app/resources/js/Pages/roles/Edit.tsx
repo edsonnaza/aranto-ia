@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { getPermissionGroupLabel, getPermissionLabel, getRoleLabel } from '@/utils/access-labels'
 
 interface Permission {
   id: number
@@ -58,7 +59,7 @@ export default function RolesEdit({ role, permissionGroups }: Props) {
 
   return (
     <AppLayout>
-      <Head title={`Editar Rol: ${role.name}`} />
+      <Head title={`Editar Rol: ${getRoleLabel(role.name)}`} />
       <div className="space-y-6 max-w-3xl">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" onClick={() => router.get('/roles')}>
@@ -102,7 +103,7 @@ export default function RolesEdit({ role, permissionGroups }: Props) {
                         id={`group-${group}`}
                       />
                       <label htmlFor={`group-${group}`} className="font-semibold text-sm capitalize cursor-pointer">
-                        {group.replace(/_/g, ' ')}
+                        {getPermissionGroupLabel(group)}
                       </label>
                     </div>
                     <div className="grid grid-cols-2 gap-2 pl-6">
@@ -114,7 +115,7 @@ export default function RolesEdit({ role, permissionGroups }: Props) {
                             onChange={() => togglePermission(p.id)}
                             className="h-4 w-4 rounded"
                           />
-                          {p.name}
+                          {getPermissionLabel(p.name)}
                         </label>
                       ))}
                     </div>

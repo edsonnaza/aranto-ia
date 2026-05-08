@@ -26,8 +26,30 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    notifications?: NotificationCollection;
     sidebarOpen: boolean;
     [key: string]: unknown;
+}
+
+export interface AppNotification {
+    id: string;
+    message: string;
+    href: string;
+    source: 'cash' | 'reception';
+    type: 'pending-service-created' | 'pending-service-cancelled' | 'payment-updated';
+    createdAt: string;
+    readAt: string | null;
+    read: boolean;
+    serviceRequest?: {
+        id: number | null;
+        requestNumber: string | null;
+        patientName: string | null;
+    };
+}
+
+export interface NotificationCollection {
+    items: AppNotification[];
+    unreadCount: number;
 }
 
 export interface User {

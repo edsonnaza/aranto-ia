@@ -1,6 +1,6 @@
 import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
-import { useReception, useReceptionStats } from '@/hooks/medical'
+import { useReception, useReceptionPaymentNotifications, useReceptionStats } from '@/hooks/medical'
 import type { ReceptionStats } from '@/hooks/medical'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
@@ -10,6 +10,7 @@ import { Link } from '@inertiajs/react'
 import { useState } from 'react'
 import ServiceRequestDetailsModal from '@/components/medical/ServiceRequestDetailsModal'
 import {  getPaymentStatusBadgeConfig, getReceptionTypeBadgeConfig } from '@/utils/formatters'
+import { toast } from 'sonner'
 //import { useCurrencyFormatter } from '@/stores/currency'
 
 // interface ReceptionStats {
@@ -230,10 +231,31 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
 
   // Fetch dynamic stats from API with date filters
   // Convert frontend format (dd-mm-yyyy) to backend format (yyyy-mm-dd) for API
-  const { stats: dynamicStats, loading: statsLoading } = useReceptionStats(
+  const { stats: dynamicStats, loading: statsLoading, refresh: refreshStats } = useReceptionStats(
     dateFrom ? toBackend(dateFrom) : undefined, 
     dateTo ? toBackend(dateTo) : undefined
   )
+
+  useReceptionPaymentNotifications((event) => {
+    const patientName = event.service_request.patient_name
+    const notificationMessage = patientName
+      ? `${event.message} · ${patientName}`
+      : event.message
+
+    if (event.service_request.payment_status === 'paid') {
+      toast.success(notificationMessage)
+    } else {
+      toast.info(notificationMessage)
+    }
+
+    router.reload({
+      only: ['requests'],
+      preserveState: true,
+      preserveScroll: true,
+    })
+
+    void refreshStats()
+  })
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)

@@ -55,6 +55,34 @@ class HandleInertiaRequests extends Middleware
                     'roles' => $request->user()->getRoleNames()->toArray(),
                 ] : null,
             ],
+            'notifications' => fn () => $request->user() ? [
+                'items' => $request->user()
+                    ->notifications()
+                    ->latest()
+                    ->limit(20)
+                    ->get()
+                    ->map(fn ($notification) => [
+                        'id' => (string) $notification->id,
+                        'message' => $notification->data['message'] ?? 'Nueva notificación',
+                        'href' => $notification->data['href'] ?? '/dashboard',
+                        'source' => $notification->data['source'] ?? 'cash',
+                        'type' => $notification->data['type'] ?? 'payment-updated',
+                        'createdAt' => $notification->created_at?->toISOString(),
+                        'readAt' => $notification->read_at?->toISOString(),
+                        'read' => $notification->read_at !== null,
+                        'serviceRequest' => [
+                            'id' => $notification->data['service_request']['id'] ?? null,
+                            'requestNumber' => $notification->data['service_request']['request_number'] ?? null,
+                            'patientName' => $notification->data['service_request']['patient_name'] ?? null,
+                        ],
+                    ])
+                    ->values()
+                    ->all(),
+                'unreadCount' => $request->user()->unreadNotifications()->count(),
+            ] : [
+                'items' => [],
+                'unreadCount' => 0,
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             
             // Flash messages

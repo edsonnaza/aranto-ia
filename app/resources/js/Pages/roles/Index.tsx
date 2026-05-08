@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { getPermissionLabel, getRoleLabel } from '@/utils/access-labels'
 
 interface Permission {
   id: number
@@ -44,7 +45,7 @@ export default function RolesIndex({ roles, filters, flash }: Props) {
 
   const handleDelete = (role: Role) => {
     if (role.users_count > 0) return
-    if (!confirm(`¿Eliminar el rol "${role.name}"?`)) return
+    if (!confirm(`¿Eliminar el rol "${getRoleLabel(role.name)}"?`)) return
     router.delete(`/roles/${role.id}`)
   }
 
@@ -108,7 +109,7 @@ export default function RolesIndex({ roles, filters, flash }: Props) {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-blue-500" />
-                        {role.name}
+                        {getRoleLabel(role.name)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -116,7 +117,7 @@ export default function RolesIndex({ roles, filters, flash }: Props) {
                         {role.permissions.length > 0 ? (
                           role.permissions.slice(0, 4).map((p) => (
                             <span key={p.id} className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                              {p.name}
+                              {getPermissionLabel(p.name)}
                             </span>
                           ))
                         ) : (

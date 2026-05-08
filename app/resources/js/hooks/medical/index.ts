@@ -32,6 +32,10 @@ export type {
 export { useReceptionStats } from './useReceptionStats'
 export type { ReceptionStatsData, UseReceptionStatsReturn } from './useReceptionStats'
 
+// Reception Realtime Notifications Hook
+export { useReceptionPaymentNotifications } from './useReceptionPaymentNotifications'
+export type { ReceptionPaymentUpdatedEvent } from './useReceptionPaymentNotifications'
+
 // Professionals Hook
 export { useProfessionals } from './useProfessionals'
 export type { Professional, UseProfessionalsReturn } from './useProfessionals'

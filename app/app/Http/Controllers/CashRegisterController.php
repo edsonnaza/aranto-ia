@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ServiceRequestPaymentUpdated;
 use App\Services\CashRegisterService;
+use App\Services\NotificationRecipientResolver;
 use App\Services\PaymentService;
 use App\Models\CashRegisterSession;
 use App\Models\Professional;
 use App\Models\Transaction;
 use App\Models\ServiceRequest;
 use App\Models\InsuranceType;
+use App\Notifications\ReceptionPaymentUpdatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -510,6 +513,7 @@ class CashRegisterController extends Controller
                 
                 $serviceRequest->update([
                     'paid_amount'            => $newPaidAmount,
+                    'status'                => $isFullyPaid ? ServiceRequest::STATUS_PAID : ServiceRequest::STATUS_PENDING_PAYMENT,
                     'payment_status'         => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
                     'payment_date'           => $isFullyPaid ? now() : $serviceRequest->payment_date,
                     'payment_transaction_id' => $isFullyPaid ? $lastTransaction->id : $serviceRequest->payment_transaction_id,
@@ -518,6 +522,19 @@ class CashRegisterController extends Controller
                 $activeSession->increment('total_income', $totalAmount);
 
                 DB::commit();
+
+                $updatedServiceRequest = $serviceRequest->fresh(['patient', 'details']);
+
+                ServiceRequestPaymentUpdated::dispatch($updatedServiceRequest);
+
+                $message = $updatedServiceRequest->payment_status === ServiceRequest::PAYMENT_PAID
+                    ? 'Pago completado en caja.'
+                    : 'Pago parcial registrado en caja.';
+
+                app(NotificationRecipientResolver::class)
+                    ->receptionPaymentRecipients()
+                    ->each
+                    ->notify(new ReceptionPaymentUpdatedNotification($updatedServiceRequest, $message));
 
                 // If this is an X-Inertia request (Inertia client), return redirect with success message
                 if ($request->header('X-Inertia')) {

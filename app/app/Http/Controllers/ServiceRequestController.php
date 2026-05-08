@@ -13,6 +13,8 @@ use App\Models\ScheduleAppointment;
 use App\Models\ServiceRequestDetail;
 use App\Models\Transaction;
 use App\Models\AuditLog;
+use App\Notifications\CashPendingServiceNotification;
+use App\Services\NotificationRecipientResolver;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -264,6 +266,15 @@ class ServiceRequestController extends Controller
 
         if ($serviceRequest->payment_status === ServiceRequest::PAYMENT_PENDING) {
             PendingServicePaymentRequested::dispatch($serviceRequest);
+
+            app(NotificationRecipientResolver::class)
+                ->cashPendingServiceRecipients()
+                ->each
+                ->notify(new CashPendingServiceNotification(
+                    $serviceRequest->fresh(['patient']),
+                    'Nueva solicitud pendiente de pago en caja.',
+                    'pending-service-created',
+                ));
         }
 
         return redirect()
@@ -652,7 +663,18 @@ class ServiceRequestController extends Controller
         
         $serviceRequest->cancel(auth()->id(), $reason);
 
-        PendingServicePaymentCancelled::dispatch($serviceRequest->fresh(['patient', 'details']));
+        $cancelledServiceRequest = $serviceRequest->fresh(['patient', 'details']);
+
+        PendingServicePaymentCancelled::dispatch($cancelledServiceRequest);
+
+        app(NotificationRecipientResolver::class)
+            ->cashPendingServiceRecipients()
+            ->each
+            ->notify(new CashPendingServiceNotification(
+                $cancelledServiceRequest,
+                'Solicitud pendiente cancelada en recepción.',
+                'pending-service-cancelled',
+            ));
 
         // Si la solicitud es cancelada desde una petición AJAX (modal), devolver JSON
         if ($request->expectsJson()) {

@@ -10,3 +10,7 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 Broadcast::channel('cash-register.pending-services', function (User $user) {
     return $user->can('cash_register.view');
 });
+
+Broadcast::channel('medical.reception.service-requests', function (User $user) {
+    return $user->can('access-medical-system');
+});

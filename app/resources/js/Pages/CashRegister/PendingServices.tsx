@@ -20,7 +20,7 @@ import ServiceRequestDetailsModal from '@/components/cash-register/service-reque
 import { useCurrencyFormatter } from '@/stores/currency';
 import { type BreadcrumbItem } from '@/types';
 import { getReceptionTypeConfig } from '@/hooks/medical/useReceptionTypeLabel';
-import {  CreditCard, Eye } from 'lucide-react';
+import { CreditCard, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';

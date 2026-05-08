@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { getPermissionGroupLabel, getPermissionLabel } from '@/utils/access-labels'
 
 interface Permission {
   id: number
@@ -94,7 +95,7 @@ export default function RolesCreate({ permissionGroups }: Props) {
                         id={`group-${group}`}
                       />
                       <label htmlFor={`group-${group}`} className="font-semibold text-sm capitalize cursor-pointer">
-                        {group.replace(/_/g, ' ')}
+                        {getPermissionGroupLabel(group)}
                       </label>
                     </div>
                     <div className="grid grid-cols-2 gap-2 pl-6">
@@ -106,7 +107,7 @@ export default function RolesCreate({ permissionGroups }: Props) {
                             onChange={() => togglePermission(p.id)}
                             className="h-4 w-4 rounded"
                           />
-                          {p.name}
+                          {getPermissionLabel(p.name)}
                         </label>
                       ))}
                     </div>

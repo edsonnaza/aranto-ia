@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { getRoleLabel } from '@/utils/access-labels'
 
 interface User {
   id: number
@@ -132,7 +133,7 @@ export default function UsersIndex({ users, filters }: Props) {
                                 key={role.name}
                                 className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
                               >
-                                {role.name}
+                                {getRoleLabel(role.name)}
                               </span>
                             ))}
                           </div>

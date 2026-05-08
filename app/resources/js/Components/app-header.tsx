@@ -1,10 +1,14 @@
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Icon } from '@/components/icon';
+import { NotificationBell } from '@/components/notification-bell';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -37,36 +41,38 @@ import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const rightNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
         icon: Folder,
     },
     {
         title: 'Documentation',
         href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
+                ...prev,
+            ].slice(0, 20));
+        },
+    );
 
-const activeItemStyles =
-    'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
+    useReceptionPaymentNotifications((event) => {
+        if (!canSeeReceptionNotifications) return;
 
-interface AppHeaderProps {
-    breadcrumbs?: BreadcrumbItem[];
-}
+        const patientName = event.service_request.patient_name;
+        const message = patientName
+            ? `${event.message} · ${patientName}`
+            : event.message;
 
-export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
-    const page = usePage<SharedData>();
-    const { auth } = page.props;
-    const getInitials = useInitials();
+        setNotifications((prev) => [
+            {
+                id: `reception-payment-${event.service_request.id}-${Date.now()}`,
+                message,
+                createdAt: new Date().toISOString(),
+                href: '/medical/reception',
+                read: false,
+                source: 'reception',
+                type: 'payment-updated',
+            },
+            ...prev,
+        ].slice(0, 20));
+    });
+
     return (
         <>
             <div className="border-b border-sidebar-border/80">
@@ -225,6 +231,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                 ))}
                             </div>
                         </div>
+
+                        <NotificationBell />
+
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button

@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Shield } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getPermissionLabel, getRoleLabel } from '@/utils/access-labels'
 
 interface Permission {
   id: number
@@ -70,7 +71,7 @@ export default function UsersShow({ user }: Props) {
                 {user.roles.map((role) => (
                   <div key={role.id} className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
                     <Shield className="h-4 w-4 text-blue-500 shrink-0" />
-                    <span className="font-medium text-sm">{role.name}</span>
+                    <span className="font-medium text-sm">{getRoleLabel(role.name)}</span>
                   </div>
                 ))}
               </div>
@@ -87,7 +88,7 @@ export default function UsersShow({ user }: Props) {
               <div className="flex flex-wrap gap-2">
                 {uniquePermissions.map((p) => (
                   <span key={p.id} className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
-                    {p.name}
+                    {getPermissionLabel(p.name)}
                   </span>
                 ))}
               </div>
