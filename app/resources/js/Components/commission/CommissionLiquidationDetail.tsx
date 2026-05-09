@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { format, isValid, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ArrowLeft, CheckCircle, Clock, AlertCircle, FileText, DollarSign, Calendar, User } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCommissionLiquidations } from '@/hooks/medical'
+import { useDocumentExport } from '@/hooks/useDocumentExport'
+import CommissionLiquidationApprovalDocument from './CommissionLiquidationApprovalDocument'
 import type { CommissionLiquidation, CommissionLiquidationDetail as ServiceDetail } from '@/types'
 
 interface CommissionLiquidationDetailProps {
@@ -22,8 +25,11 @@ export default function CommissionLiquidationDetail({
 }: CommissionLiquidationDetailProps) {
   // detail is a response object with the liquidation and its service details
   const [detail, setDetail] = useState<{ liquidation: CommissionLiquidation; services: ServiceDetail[] } | null>(null)
+  const [pdfPayload, setPdfPayload] = useState<{ liquidation: CommissionLiquidation; services: ServiceDetail[] } | null>(null)
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   const { getLiquidationDetail, approveLiquidation, payLiquidation, loading, error } = useCommissionLiquidations()
+  const { downloadPdf } = useDocumentExport()
 
   const loadDetail = useCallback(async () => {
     try {
@@ -39,11 +45,36 @@ export default function CommissionLiquidationDetail({
     loadDetail()
   }, [loadDetail])
 
+  useEffect(() => {
+    if (!pdfPayload) return
+
+    const exportPdf = async () => {
+      try {
+        await downloadPdf(pdfContainerRef.current, {
+          fileName: `liquidacion-${String(pdfPayload.liquidation.id).padStart(2, '0')}-${(pdfPayload.liquidation.professional_name ?? 'profesional').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '')}.pdf`,
+          marginMm: 8,
+        })
+      } catch (exportError) {
+        console.error('Error al generar PDF:', exportError)
+        toast.error('No se pudo generar el PDF de la liquidación.')
+      } finally {
+        setPdfPayload(null)
+      }
+    }
+
+    void exportPdf()
+  }, [downloadPdf, pdfPayload])
+
   const handleApprove = async () => {
     if (!detail) return
 
     try {
-      await approveLiquidation(detail.liquidation.id)
+      const detailForPdf = detail
+      await approveLiquidation(detail.liquidation.id, {
+        onSuccess: () => {
+          setPdfPayload(detailForPdf)
+        },
+      })
       await loadDetail()
     } catch (err) {
       console.error('Error approving liquidation:', err)
@@ -330,6 +361,17 @@ export default function CommissionLiquidationDetail({
           </div>
         </CardContent>
       </Card>
+
+      {pdfPayload && (
+        <div className="fixed top-0 z-[-1] opacity-0 pointer-events-none" style={{ left: -99999 }}>
+          <div ref={pdfContainerRef}>
+            <CommissionLiquidationApprovalDocument
+              liquidation={pdfPayload.liquidation}
+              services={pdfPayload.services}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

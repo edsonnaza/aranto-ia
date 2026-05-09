@@ -27,6 +27,7 @@ export interface CommissionLiquidation {
   professional_name?: string
   specialty_name?: string
   total_amount?: number
+  generated_by_name?: string
 }
 
 export interface CommissionLiquidationDetail {
@@ -50,6 +51,9 @@ export interface CommissionLiquidationDetail {
   patient_name?: string
   patient_document?: string
   service_name?: string
+  professional_name?: string
+  insurance_type_name?: string
+  service_request_date?: string | null
   created_at: string
   updated_at: string
 }

@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Eye, Edit, Trash2, CheckCircle, Clock, AlertCircle, MoreHorizontal, XCircle } from 'lucide-react'
+import { Eye, Edit, Trash2, CheckCircle, Clock, AlertCircle, MoreHorizontal, XCircle, Printer } from 'lucide-react'
 import { router } from '@inertiajs/react'
 import { ColumnDef } from '@tanstack/react-table'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,12 +13,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { DataTable, PaginatedData } from '@/components/ui/data-table'
 import { CommissionItemsModal } from './commission-items-modal'
+import CommissionLiquidationApprovalDocument from './CommissionLiquidationApprovalDocument'
 import { useCommissionLiquidations } from '@/hooks/medical'
+import { useDocumentExport } from '@/hooks/useDocumentExport'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import { useCurrencyFormatter } from '@/stores/currency'
 import { getStatusColor, getStatusClassName } from '@/lib/constants/status-colors'
 import { cn } from '@/lib/utils'
 import type { CommissionLiquidation } from '@/types'
+import type { CommissionLiquidationDetail } from '@/types/commission'
 
 
 interface CommissionLiquidationListProps {
@@ -45,9 +49,32 @@ function CommissionLiquidationList({
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionLiquidation | null>(null)
   const [showItemsModal, setShowItemsModal] = useState(false)
   const [selectedItemsLiquidation, setSelectedItemsLiquidation] = useState<CommissionLiquidation | null>(null)
+  const [pdfPayload, setPdfPayload] = useState<{ liquidation: CommissionLiquidation; services: CommissionLiquidationDetail[] } | null>(null)
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   // Usar el hook solo para delete y cancel
-  const { deleteLiquidation, cancelLiquidation, error } = useCommissionLiquidations()
+  const { deleteLiquidation, cancelLiquidation, getLiquidationDetail, loading, error } = useCommissionLiquidations()
+  const { downloadPdf } = useDocumentExport()
+
+  useEffect(() => {
+    if (!pdfPayload) return
+
+    const exportPdf = async () => {
+      try {
+        await downloadPdf(pdfContainerRef.current, {
+          fileName: `liquidacion-${String(pdfPayload.liquidation.id).padStart(2, '0')}-${(pdfPayload.liquidation.professional_name ?? 'profesional').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '')}.pdf`,
+          marginMm: 8,
+        })
+      } catch (exportError) {
+        console.error('Error al generar PDF:', exportError)
+        toast.error('No se pudo generar el PDF de la liquidación.')
+      } finally {
+        setPdfPayload(null)
+      }
+    }
+
+    void exportPdf()
+  }, [downloadPdf, pdfPayload])
 
   const handleDeleteClick = (liquidation: CommissionLiquidation) => {
     setSelectedLiquidation(liquidation)
@@ -81,6 +108,17 @@ function CommissionLiquidationList({
         router.reload({ only: ['liquidations'] })
       }
     })
+  }
+
+  const handlePrintLiquidation = async (liquidation: CommissionLiquidation) => {
+    const liquidationDetail = await getLiquidationDetail(liquidation.id)
+
+    if (!liquidationDetail) {
+      toast.error('No se pudo obtener el detalle para generar el PDF.')
+      return
+    }
+
+    setPdfPayload(liquidationDetail)
   }
 
   const getStatusBadge = (status: string) => {
@@ -197,6 +235,16 @@ function CommissionLiquidationList({
             >
               <Eye className="mr-2 h-4 w-4" />
               Ver Items
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => {
+                void handlePrintLiquidation(row.original)
+              }}
+              disabled={loading}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir PDF
             </DropdownMenuItem>
             
             {onEdit && row.original.status === 'draft' && (
@@ -325,6 +373,17 @@ function CommissionLiquidationList({
         }}
         liquidationId={selectedItemsLiquidation?.id || 0}
       />
+
+      {pdfPayload && (
+        <div className="fixed top-0 z-[-1] opacity-0 pointer-events-none" style={{ left: -99999 }}>
+          <div ref={pdfContainerRef}>
+            <CommissionLiquidationApprovalDocument
+              liquidation={pdfPayload.liquidation}
+              services={pdfPayload.services}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CheckCircle, Eye, Clock, AlertTriangle, Edit } from 'lucide-react'
+import { CheckCircle, Eye, Clock, AlertTriangle, Edit, Printer } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,8 +10,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { CommissionItemsModal } from './commission-items-modal'
+import CommissionLiquidationApprovalDocument from './CommissionLiquidationApprovalDocument'
+import { useDocumentExport } from '@/hooks/useDocumentExport'
 import { useCommissionLiquidations } from '@/hooks/medical'
 import type { CommissionPendingApproval } from '@/types'
+import type { CommissionLiquidation, CommissionLiquidationDetail } from '@/types/commission'
 
 interface CommissionPendingApprovalsProps {
   initialApprovals?: CommissionPendingApproval[]
@@ -28,14 +32,37 @@ export default function CommissionPendingApprovals({
   const [selectedLiquidation, setSelectedLiquidation] = useState<CommissionPendingApproval | null>(null)
   const [showItemsModal, setShowItemsModal] = useState(false)
   const [selectedItemsLiquidationId, setSelectedItemsLiquidationId] = useState<number | null>(null)
+  const [pdfPayload, setPdfPayload] = useState<{ liquidation: CommissionLiquidation; services: CommissionLiquidationDetail[] } | null>(null)
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   // Usamos el hook para aprobar liquidaciones
-  const { approveLiquidation, loading, error } = useCommissionLiquidations()
+  const { approveLiquidation, getLiquidationDetail, loading, error } = useCommissionLiquidations()
+  const { downloadPdf } = useDocumentExport()
 
   // Actualizar cuando cambien las props
   useEffect(() => {
     setPendingApprovals(initialApprovals)
   }, [initialApprovals])
+
+  useEffect(() => {
+    if (!pdfPayload) return
+
+    const exportPdf = async () => {
+      try {
+        await downloadPdf(pdfContainerRef.current, {
+          fileName: `liquidacion-${String(pdfPayload.liquidation.id).padStart(2, '0')}-${(pdfPayload.liquidation.professional_name ?? 'profesional').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '')}.pdf`,
+          marginMm: 8,
+        })
+      } catch (exportError) {
+        console.error('Error al generar PDF:', exportError)
+        toast.error('No se pudo generar el PDF de la liquidación.')
+      } finally {
+        setPdfPayload(null)
+      }
+    }
+
+    void exportPdf()
+  }, [downloadPdf, pdfPayload])
 
   const handleApproveClick = (approval: CommissionPendingApproval) => {
     console.log('handleApproveClick called with:', approval)
@@ -43,16 +70,21 @@ export default function CommissionPendingApprovals({
     setConfirmDialogOpen(true)
   }
 
-  const handleConfirmApprove = () => {
+  const handleConfirmApprove = async () => {
     if (!selectedLiquidation) {
       console.error('No selectedLiquidation')
       return
     }
 
+    const liquidationDetail = await getLiquidationDetail(selectedLiquidation.id)
+
     console.log('Calling approveLiquidation with ID:', selectedLiquidation.id)
     approveLiquidation(selectedLiquidation.id, {
       onSuccess: () => {
         console.log('Approval successful')
+        if (liquidationDetail) {
+          setPdfPayload(liquidationDetail)
+        }
         setSelectedLiquidation(null)
         // Inertia actualizará automáticamente las props
       },
@@ -62,6 +94,18 @@ export default function CommissionPendingApprovals({
         setSelectedLiquidation(null)
       }
     })
+  }
+
+  const handlePrintClick = async (approval: CommissionPendingApproval) => {
+    // Solo genera PDF. No ejecuta aprobación ni cambia estado de la liquidación.
+    const liquidationDetail = await getLiquidationDetail(approval.id)
+
+    if (!liquidationDetail) {
+      toast.error('No se pudo obtener el detalle para generar el PDF.')
+      return
+    }
+
+    setPdfPayload(liquidationDetail)
   }
 
   // El método rejectLiquidation no existe, así que lo eliminamos
@@ -223,14 +267,30 @@ export default function CommissionPendingApprovals({
                                 setSelectedItemsLiquidationId(approval.id)
                                 setShowItemsModal(true)
                               }}
+                              title="Ver items"
                             >
                               <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                void handlePrintClick(approval)
+                              }}
+                              disabled={loading}
+                              title="Reimprimir PDF"
+                            >
+                              <Printer className="h-4 w-4" />
                             </Button>
                             {onEdit && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => onEdit(approval.id)}
+                                title="Editar"
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -317,6 +377,17 @@ export default function CommissionPendingApprovals({
         }}
         liquidationId={selectedItemsLiquidationId || 0}
       />
+
+      {pdfPayload && (
+        <div className="fixed top-0 z-[-1] opacity-0 pointer-events-none" style={{ left: -99999 }}>
+          <div ref={pdfContainerRef}>
+            <CommissionLiquidationApprovalDocument
+              liquidation={pdfPayload.liquidation}
+              services={pdfPayload.services}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

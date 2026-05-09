@@ -1068,21 +1068,37 @@ class CommissionController extends Controller
     {
         try {
             $details = $commission->details()
-                ->with(['serviceRequest.patient', 'service'])
+                ->with([
+                    'serviceRequest.patient',
+                    'serviceRequest.details.insuranceType',
+                    'serviceRequest.details.professional',
+                    'service',
+                ])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             // Get professional specialty name
-            $professional = $commission->load('professional.specialties')->professional;
+            $professional = $commission->load('professional.specialties', 'generatedBy')->professional;
             $specialtyName = $professional?->specialties?->first()?->name ?? 'N/A';
 
             $mappedDetails = $details->map(function ($detail) {
+                $requestDetail = $detail->serviceRequest?->details
+                    ?->first(function ($item) use ($detail) {
+                        return (int) $item->medical_service_id === (int) $detail->service_id;
+                    }) ?? $detail->serviceRequest?->details?->first();
+
                 return [
+                    'id' => $detail->id,
                     'service_request_id' => $detail->service_request_id,
                     'patient_id' => $detail->serviceRequest?->patient_id,
                     'patient_name' => $detail->serviceRequest?->patient?->full_name ?? 'N/A',
                     'service_id' => $detail->service_id,
                     'service_name' => $detail->service?->name ?? 'Servicio desconocido',
+                    'professional_name' => $requestDetail?->professional?->full_name ?? 'Profesional no especificado',
+                    'insurance_type_name' => $requestDetail?->insuranceType?->name ?? 'Sin seguro',
+                    'service_request_date' => $detail->serviceRequest?->request_date
+                        ? \Carbon\Carbon::parse($detail->serviceRequest->request_date)->format('Y-m-d')
+                        : null,
                     'service_amount' => $detail->service_amount,
                     'commission_percentage' => $detail->commission_percentage,
                     'commission_amount' => $detail->commission_amount,
@@ -1109,15 +1125,20 @@ class CommissionController extends Controller
                     'commission_percentage' => $commission->commission_percentage,
                     'commission_amount' => $commission->commission_amount,
                     'generated_at' => $commission->created_at,
+                    'generated_by_name' => $commission->generatedBy?->name,
                     'approved_at' => $commission->updated_at,
                 ],
                 'services' => $mappedDetails->map(function($detail) {
                     return [
+                        'id' => $detail['id'],
                         'service_request_id' => $detail['service_request_id'],
                         'patient_id' => $detail['patient_id'],
                         'patient_name' => $detail['patient_name'],
                         'service_id' => $detail['service_id'],
                         'service_name' => $detail['service_name'],
+                        'professional_name' => $detail['professional_name'],
+                        'insurance_type_name' => $detail['insurance_type_name'],
+                        'service_request_date' => $detail['service_request_date'],
                         'service_amount' => $detail['service_amount'],
                         'commission_percentage' => $detail['commission_percentage'],
                         'commission_amount' => $detail['commission_amount'],
