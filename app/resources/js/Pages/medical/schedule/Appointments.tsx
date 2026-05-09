@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import AppointmentSlotModal from '@/components/medical/schedule/AppointmentSlotModal'
 import PatientSummaryModal from '@/components/medical/schedule/PatientSummaryModal'
 import { useSchedule, useSearch } from '@/hooks/medical'
@@ -249,12 +250,19 @@ export default function AppointmentsPage({
     const startDividerGap = startsAtHourBoundary ? dailyHourDividerGap : 0
     const endDividerGap = endsAtHourBoundary ? dailyHourDividerGap : 0
 
+    // Altura mínima dinámica: 36px para 15 min, 44px para 20 min, 60px para 30 min, 88px para slots largos
+    const slotDuration = endMinutes - startMinutes
+    let minHeight = 88
+    if (slotDuration <= 15) minHeight = 36
+    else if (slotDuration <= 20) minHeight = 44
+    else if (slotDuration <= 30) minHeight = 60
+
     return Math.max(
       ((endMinutes - startMinutes) * timelinePixelsPerMinute)
       - (dailySlotGap * 2)
       - startDividerGap
       - endDividerGap,
-      88,
+      minHeight,
     )
   }
 
@@ -357,6 +365,55 @@ export default function AppointmentsPage({
     setIsAppointmentModalOpen(true)
   }
 
+  const openAppointmentForEdit = (appointmentId: number, slot: SlotBoardEntry) => {
+    const fullAppointment = appointments.find((item) => item.id === appointmentId)
+
+    if (!fullAppointment) {
+      return
+    }
+
+    setSelectedAppointment(fullAppointment)
+    setSelectedSlot({
+      professionalId: slot.professional_id,
+      professionalName: slot.professional_name,
+      date: fullAppointment.appointment_date,
+      startTime: fullAppointment.start_time,
+      endTime: fullAppointment.end_time,
+      durationMinutes: fullAppointment.duration_minutes,
+    })
+    setIsAppointmentModalOpen(true)
+  }
+
+  const releaseAppointmentSlot = (appointmentId: number) => {
+    const fullAppointment = appointments.find((item) => item.id === appointmentId)
+
+    if (!fullAppointment) {
+      return
+    }
+
+    const confirmed = window.confirm('¿Deseas liberar este turno? La cita quedará cancelada y el slot volverá a estar disponible.')
+
+    if (!confirmed) {
+      return
+    }
+
+    saveAppointment({
+      professional_id: fullAppointment.professional_id,
+      patient_id: fullAppointment.patient_id,
+      medical_service_id: fullAppointment.medical_service_id ?? undefined,
+      medical_service_ids: fullAppointment.medical_service_ids?.length
+        ? fullAppointment.medical_service_ids
+        : (fullAppointment.medical_service_id ? [fullAppointment.medical_service_id] : undefined),
+      appointment_date: fullAppointment.appointment_date,
+      start_time: fullAppointment.start_time,
+      duration_minutes: fullAppointment.duration_minutes,
+      status: 'cancelled',
+      source: fullAppointment.source,
+      notes: fullAppointment.notes || undefined,
+      cancellation_reason: 'Turno liberado desde la agenda diaria',
+    }, fullAppointment.id)
+  }
+
 
   const openPatientRecord = (patientId: number) => {
     setPatientSummaryId(patientId)
@@ -426,17 +483,14 @@ export default function AppointmentsPage({
           <div>Acciones</div>
         </div>
 
-        <div
-          className="relative flex-1 overflow-hidden bg-white"
-          style={{ height: `${Math.max(dailyTimeline.totalHeight, 720)}px` }}
-        >
-        {entry.slots.length === 0 && (
-          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
-            Sin slots para este día.
-          </div>
-        )}
+        <div className="relative bg-white" style={{ minHeight: '120px' }}>
+          {entry.slots.length === 0 && (
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
+              Sin slots para este día.
+            </div>
+          )}
 
-        {entry.slots.map((slot) => (
+          {entry.slots.map((slot) => (
           <div
             key={`${slot.date}-${slot.start_time}-${slot.professional_id}`}
             role={isSlotAssignable(slot) ? 'button' : undefined}
@@ -458,10 +512,13 @@ export default function AppointmentsPage({
                 openSlotForNewAppointment(slot)
               }
             }}
-            className={`absolute left-0 right-0 flex flex-col overflow-hidden px-2 py-2 ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-inset' : ''}`}
+            className={`absolute left-0 right-0 flex flex-col overflow-hidden px-2 mb-0.5 ${getDailySlotBlockClasses(slot)} ${isSlotAssignable(slot) ? 'cursor-pointer transition hover:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-inset' : ''}`}
             style={{
               top: `${getSlotTopPosition(slot.start_time)}px`,
               height: `${getSlotHeight(slot.start_time, slot.end_time)}px`,
+              justifyContent: (parseTimeToMinutes(slot.end_time) - parseTimeToMinutes(slot.start_time)) >= 30 ? 'center' : 'flex-start',
+              paddingTop: (parseTimeToMinutes(slot.end_time) - parseTimeToMinutes(slot.start_time)) >= 30 ? '0.75rem' : '0.125rem',
+              paddingBottom: (parseTimeToMinutes(slot.end_time) - parseTimeToMinutes(slot.start_time)) >= 30 ? '0.75rem' : '0.125rem',
             }}
           >
             {slot.block_title && (
@@ -469,18 +526,49 @@ export default function AppointmentsPage({
             )}
 
             <div className="space-y-1.5">
-              {slot.appointments.length === 0 && slot.slot_status !== 'blocked' && (
-                <div className="w-full rounded-sm bg-white px-2 py-2 text-left text-[10px] text-slate-700">
-                  {isSlotAssignable(slot) ? 'Click en el slot para asignar.' : 'Disponible para agendar.'}
+              {slot.appointments.length === 0 && (
+                <div className={`grid ${dailyAppointmentsGridColumns} items-center gap-3 rounded-sm border-b border-slate-100 bg-white px-2 py-1 text-[10px] text-slate-700 last:border-b-0`}>
+                  <div className="min-w-0 whitespace-nowrap font-semibold text-slate-700">
+                    {slot.start_time} - {slot.end_time}
+                  </div>
+                  <div className="min-w-0 truncate text-slate-500">
+                    {slot.slot_status === 'blocked' ? 'Franja bloqueada' : 'Sin paciente asignado'}
+                  </div>
+                  <div className="min-w-0 truncate text-slate-500">
+                    {slot.slot_status === 'blocked' ? slot.block_title || 'Bloqueo operativo' : 'Disponible para agendar'}
+                  </div>
+                  <div className="min-w-0">
+                    <Badge variant={slot.slot_status === 'blocked' ? 'secondary' : 'outline'} className="h-6 px-1.5 text-[10px]">
+                      {slot.slot_status === 'blocked' ? 'Bloqueado' : 'Disponible'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {isSlotAssignable(slot) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-9 px-2.5 text-[11px]"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openSlotForNewAppointment(slot)
+                        }}
+                      >
+                        Agendar
+                      </Button>
+                    ) : (
+                      <span className="text-[10px] text-slate-500">Sin acción</span>
+                    )}
+                  </div>
                 </div>
               )}
 
               {slot.appointments.map((appointment) => {
                 const appointmentLocked = isAppointmentLocked(appointment)
-                const appointmentCanGoToReception = !appointment.service_request_id && appointment.status !== 'cancelled'
+                // Solo se puede enviar a recepción si está agendada, no está bloqueada y no tiene service_request_id ni status de llegada
+                const appointmentCanGoToReception = appointment.status === 'scheduled' && !appointmentLocked && !appointment.service_request_id && appointment.service_request_status !== 'checked_in' && appointment.service_request_status !== 'completed' && appointment.service_request_status !== 'cancelled' && appointment.service_request_status !== 'no_show'
 
                 return (
-                  <div key={appointment.id} className={`grid ${dailyAppointmentsGridColumns} items-center gap-3 rounded-sm border-b border-slate-100 bg-white px-2 py-2.5 last:border-b-0`}>
+                  <div key={appointment.id} className={`grid ${dailyAppointmentsGridColumns} items-center gap-3 rounded-sm border-b border-slate-100 bg-white px-2 py-1 last:border-b-0`}>
                     <div className="min-w-0 whitespace-nowrap text-[10px] font-semibold text-slate-700">
                       {getSlotAppointmentTimeRange(appointment.id, slot)}
                     </div>
@@ -505,29 +593,88 @@ export default function AppointmentsPage({
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 px-2.5 text-[11px]"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          openPatientRecord(appointment.patient_id)
-                        }}
-                      >
-                        Paciente
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-9 px-2.5 text-[11px]"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          goToReceptionFromAppointment(appointment.id)
-                        }}
-                        disabled={!appointmentCanGoToReception || loadingAction === 'reception'}>
-                        Recepción
-                      </Button>
+                      {/* Botón principal contextual */}
+                      {appointmentCanGoToReception ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-9 px-2.5 text-[11px]"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            goToReceptionFromAppointment(appointment.id)
+                          }}
+                          disabled={!appointmentCanGoToReception || loadingAction === 'reception'}
+                        >
+                          Recepción
+                        </Button>
+                      ) : (appointmentLocked || ['checked_in', 'completed', 'cancelled', 'no_show'].includes(appointment.status)) ? (
+                        <div className="flex items-center gap-1.5 opacity-60 cursor-not-allowed select-none">
+                          <Button type="button" size="sm" variant="outline" className="h-9 px-2.5 text-[11px]" disabled>Editar</Button>
+                          <Button type="button" size="sm" variant="outline" className="h-9 w-9" disabled>⋮</Button>
+                          <span className="ml-1 text-xs text-gray-500 flex items-center"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="#888" strokeWidth="2" d="M7 11V7a5 5 0 0 1 10 0v4m-9 8h8a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2Z"/></svg>No editable</span>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 px-2.5 text-[11px]"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openAppointmentForEdit(appointment.id, slot)
+                          }}
+                          disabled={appointmentLocked || loadingAction === 'appointment'}
+                        >
+                          Editar
+                        </Button>
+                      )}
+                      {/* Menú Más para acciones secundarias */}
+                      {!(appointmentLocked || ['checked_in', 'completed', 'cancelled', 'no_show'].includes(appointment.status)) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" className="h-9 w-9"><span className="sr-only">Más</span>⋮</Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36">
+                            {!appointmentCanGoToReception && (
+                              <DropdownMenuItem
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  goToReceptionFromAppointment(appointment.id)
+                                }}
+                                disabled={loadingAction === 'reception'}
+                              >
+                                Enviar a recepción
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                openAppointmentForEdit(appointment.id, slot)
+                              }}
+                              disabled={appointmentLocked || loadingAction === 'appointment'}
+                            >
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                releaseAppointmentSlot(appointment.id)
+                              }}
+                              disabled={appointmentLocked || appointment.status === 'cancelled' || loadingAction === 'appointment'}
+                            >
+                              Liberar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                openPatientRecord(appointment.patient_id)
+                              }}
+                            >
+                              Ver paciente
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 )
@@ -688,7 +835,7 @@ export default function AppointmentsPage({
             ) : (
               <div className="overflow-x-auto pb-2">
                 <div className={slotColumnsByProfessionalForSelectedDate.length === 1 ? 'flex w-full gap-0' : 'flex min-w-max gap-4'}>
-                  <div className="sticky left-0 z-10 grid min-w-21 border border-slate-200 bg-white" style={{ gridTemplateRows: `${dailyTimelineSidebarHeaderHeight}px auto 1fr` }}>
+                  <div className="sticky left-0 z-10 grid min-w-16 max-w-24 border border-slate-200 bg-white" style={{ gridTemplateRows: `${dailyTimelineSidebarHeaderHeight}px auto 1fr` }}>
                     <div className="sticky top-0 z-20 flex items-center justify-center border-b border-slate-200 bg-slate-100 px-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm" style={{ height: `${dailyTimelineSidebarHeaderHeight}px` }}>
                       Escala
                     </div>

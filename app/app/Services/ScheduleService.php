@@ -286,6 +286,16 @@ class ScheduleService
             ];
         }
 
+        if ($durationMinutes !== $matchingRule['slot_duration_minutes']) {
+            return [
+                'valid' => false,
+                'message' => sprintf(
+                    'La cita debe ocupar exactamente un slot de %d minutos en esta agenda.',
+                    $matchingRule['slot_duration_minutes']
+                ),
+            ];
+        }
+
         $start = Carbon::parse($appointmentDate->format('Y-m-d') . ' ' . $startTime);
         $end = $start->copy()->addMinutes($durationMinutes);
 
@@ -485,10 +495,15 @@ class ScheduleService
                 $ruleStart = Carbon::parse($appointmentDate->format('Y-m-d') . ' ' . $rule->start_time);
                 $ruleEnd = Carbon::parse($appointmentDate->format('Y-m-d') . ' ' . $rule->end_time);
 
-                if ($start->greaterThanOrEqualTo($ruleStart) && $end->lessThanOrEqualTo($ruleEnd)) {
+                $minutesFromRuleStart = $ruleStart->diffInMinutes($start);
+                $isAlignedToSlot = $start->greaterThanOrEqualTo($ruleStart)
+                    && ($minutesFromRuleStart % max(1, (int) $schedule->slot_duration_minutes) === 0);
+
+                if ($isAlignedToSlot && $end->lessThanOrEqualTo($ruleEnd)) {
                     return [
                         'schedule_id' => $schedule->id,
                         'capacity' => (int) $rule->capacity,
+                        'slot_duration_minutes' => (int) $schedule->slot_duration_minutes,
                     ];
                 }
             }

@@ -189,6 +189,9 @@ type AppointmentPlannerSlot = {
 		id: number
 		patientName: string
 		serviceLabel: string
+		status: 'scheduled' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
+		serviceRequestId?: number | null
+		serviceRequestStatus?: string | null
 	}>
 }
 
@@ -565,10 +568,11 @@ export default function ScheduleIndex({
 
 	const openBlockModalForSchedule = (schedule: ScheduleConfig) => {
 		resetBlockForm()
+		const initialDate = clampScheduleDate(schedule, selectedDate)
 		setBlockScheduleContext(schedule)
 		setBlockProfessionalId(String(schedule.professional_id))
-		setBlockRangeStartDate(selectedDate)
-		setBlockRangeEndDate(selectedDate)
+		setBlockRangeStartDate(initialDate)
+		setBlockRangeEndDate(initialDate)
 		setBlockTitle(`Bloqueo agenda ${schedule.name}`)
 		setIsBlockModalOpen(true)
 	}
@@ -588,9 +592,21 @@ export default function ScheduleIndex({
 	}, [blockRangeEndDate, blockRangeStartDate])
 
 	const blockPreviewDates = useMemo(() => {
+		if (!blockScheduleContext) {
+			return []
+		}
+
+		const scheduleRange = getSchedulePlanningRange(blockScheduleContext)
+		const constrainedStart = orderedBlockRange.start < scheduleRange.start ? scheduleRange.start : orderedBlockRange.start
+		const constrainedEnd = orderedBlockRange.end > scheduleRange.end ? scheduleRange.end : orderedBlockRange.end
+
+		if (constrainedEnd < constrainedStart) {
+			return []
+		}
+
 		const dates: string[] = []
-		const cursor = new Date(`${orderedBlockRange.start}T00:00:00`)
-		const end = new Date(`${orderedBlockRange.end}T00:00:00`)
+		const cursor = new Date(`${constrainedStart}T00:00:00`)
+		const end = new Date(`${constrainedEnd}T00:00:00`)
 
 		while (cursor <= end) {
 			dates.push(cursor.toISOString().split('T')[0])
@@ -598,7 +614,7 @@ export default function ScheduleIndex({
 		}
 
 		return dates
-	}, [orderedBlockRange])
+	}, [blockScheduleContext, orderedBlockRange])
 
 	const blockPreviewSlots = useMemo<BlockPreviewSlot[]>(() => {
 		if (!blockScheduleContext) {
@@ -607,7 +623,11 @@ export default function ScheduleIndex({
 
 		return blockPreviewDates.flatMap((date) => {
 			const actualSlotsForDay = slotBoard
-				.filter((slot) => slot.professional_id === blockScheduleContext.professional_id && slot.date === date)
+				.filter((slot) => (
+					slot.professional_id === blockScheduleContext.professional_id
+					&& slot.date === date
+					&& scheduleContainsSlot(blockScheduleContext, slot)
+				))
 				.map((slot) => ({
 					date,
 					start_time: slot.start_time,
@@ -882,6 +902,12 @@ export default function ScheduleIndex({
 		return appointment.medical_service_name?.trim() || 'Consulta general'
 	}
 
+	const isAppointmentLocked = (appointment: Pick<Appointment, 'service_request_id' | 'service_request_status'>) => Boolean(
+		appointment.service_request_id
+		&& appointment.service_request_status
+		&& appointment.service_request_status !== 'pending_confirmation'
+	)
+
 	const getBlockTypeLabel = (blockType?: 'travel' | 'conference' | 'holiday' | 'vacation' | 'other' | null) => {
 		switch (blockType) {
 			case 'travel':
@@ -957,6 +983,55 @@ export default function ScheduleIndex({
 			durationMinutes: slot.durationMinutes,
 		})
 		setIsAppointmentModalOpen(true)
+	}
+
+	const openExistingAppointmentFromPlanner = (slot: AppointmentPlannerSlot, appointmentId: number) => {
+		const fullAppointment = appointments.find((item) => item.id === appointmentId)
+
+		if (!fullAppointment) {
+			return
+		}
+
+		setSelectedAppointment(fullAppointment)
+		setSelectedAppointmentSlot({
+			professionalId: slot.professionalId,
+			professionalName: slot.professionalName,
+			date: fullAppointment.appointment_date,
+			startTime: fullAppointment.start_time,
+			endTime: fullAppointment.end_time,
+			durationMinutes: fullAppointment.duration_minutes,
+		})
+		setIsAppointmentModalOpen(true)
+	}
+
+	const releaseAppointmentFromPlanner = (appointmentId: number) => {
+		const fullAppointment = appointments.find((item) => item.id === appointmentId)
+
+		if (!fullAppointment) {
+			return
+		}
+
+		const confirmed = window.confirm('¿Deseas liberar este turno? La cita quedará cancelada y el slot volverá a estar disponible.')
+
+		if (!confirmed) {
+			return
+		}
+
+		saveAppointment({
+			professional_id: fullAppointment.professional_id,
+			patient_id: fullAppointment.patient_id,
+			medical_service_id: fullAppointment.medical_service_id ?? undefined,
+			medical_service_ids: fullAppointment.medical_service_ids?.length
+				? fullAppointment.medical_service_ids
+				: (fullAppointment.medical_service_id ? [fullAppointment.medical_service_id] : undefined),
+			appointment_date: fullAppointment.appointment_date,
+			start_time: fullAppointment.start_time,
+			duration_minutes: fullAppointment.duration_minutes,
+			status: 'cancelled',
+			source: fullAppointment.source,
+			notes: fullAppointment.notes || undefined,
+			cancellation_reason: 'Turno liberado desde el planner de agenda',
+		}, fullAppointment.id)
 	}
 
 	const submitAppointment = (payload: {
@@ -1035,6 +1110,9 @@ export default function ScheduleIndex({
 						serviceLabel: appointment.medical_service_names?.length
 							? appointment.medical_service_names.join(', ')
 							: appointment.medical_service_name?.trim() || 'Consulta general',
+										status: appointment.status,
+										serviceRequestId: appointment.service_request_id,
+										serviceRequestStatus: appointment.service_request_status,
 					})),
 				}))
 
@@ -1120,6 +1198,9 @@ export default function ScheduleIndex({
 							id: appointment.id,
 							patientName: appointment.patient_name,
 							serviceLabel: getAppointmentServiceLabel(appointment),
+								status: appointment.status,
+								serviceRequestId: appointment.service_request_id,
+								serviceRequestStatus: appointment.service_request_status,
 						})),
 					})
 
@@ -1812,12 +1893,90 @@ export default function ScheduleIndex({
 															<div className="mt-2 space-y-1 text-xs">
 																{slot.status === 'available' && <div>{slot.availableCapacity} lugar(es) disponible(s)</div>}
 																{slot.status === 'partial' && <div>{slot.availableCapacity} lugar(es) libre(s)</div>}
-																{slot.appointmentSummaries.map((appointment) => (
-																	<div key={appointment.id} className="rounded-md bg-white/70 px-2 py-1 text-[11px] leading-tight">
-																		<div className="font-semibold">{appointment.patientName}</div>
-																		<div className="opacity-80">{appointment.serviceLabel}</div>
-																	</div>
-																))}
+																{slot.appointmentSummaries.map((appointment) => {
+																	const appointmentLocked = isAppointmentLocked({ service_request_id: appointment.serviceRequestId ?? null, service_request_status: appointment.serviceRequestStatus ?? null })
+																	const appointmentCanGoToReception = appointment.status === 'scheduled' && !appointmentLocked && !appointment.serviceRequestId && appointment.serviceRequestStatus !== 'checked_in' && appointment.serviceRequestStatus !== 'completed' && appointment.serviceRequestStatus !== 'cancelled' && appointment.serviceRequestStatus !== 'no_show'
+																	return (
+																		<div key={appointment.id} className="rounded-md bg-white/70 px-2 py-1 text-[11px] leading-tight">
+																			<div className="font-semibold">{appointment.patientName}</div>
+																			<div className="opacity-80">{appointment.serviceLabel}</div>
+																			<div className="mt-1 flex flex-wrap gap-1.5">
+																				{appointmentCanGoToReception ? (
+																					<Button
+																						type="button"
+																						size="sm"
+																						className="h-7 px-2 text-[10px]"
+																						onClick={(event) => {
+																							event.stopPropagation()
+																							goToReceptionFromAppointment(appointment.id)
+																						}}
+																						disabled={!appointmentCanGoToReception || loadingAction === 'reception'}
+																					>
+																						Recepción
+																					</Button>
+																				) : (appointmentLocked || ['checked_in', 'completed', 'cancelled', 'no_show'].includes(appointment.status)) ? (
+																					<div className="flex items-center gap-1.5 opacity-60 cursor-not-allowed select-none">
+																						<Button type="button" size="sm" variant="outline" className="h-7 px-2 text-[10px]" disabled>Editar</Button>
+																						<Button type="button" size="sm" variant="outline" className="h-7 w-7" disabled>⋮</Button>
+																						<span className="ml-1 text-xs text-gray-500 flex items-center"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="#888" strokeWidth="2" d="M7 11V7a5 5 0 0 1 10 0v4m-9 8h8a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2Z"/></svg>No editable</span>
+																					</div>
+																				) : (
+																					<Button
+																						type="button"
+																						size="sm"
+																						variant="outline"
+																						className="h-7 px-2 text-[10px]"
+																						onClick={(event) => {
+																							event.stopPropagation()
+																							openExistingAppointmentFromPlanner(slot, appointment.id)
+																						}}
+																						disabled={appointmentLocked || loadingAction === 'appointment'}
+																					>
+																						Editar
+																					</Button>
+																				)}
+																				{!(appointmentLocked || ['checked_in', 'completed', 'cancelled', 'no_show'].includes(appointment.status)) && (
+																					<DropdownMenu>
+																						<DropdownMenuTrigger asChild>
+																							<Button type="button" variant="outline" size="icon" className="h-7 w-7"><span className="sr-only">Más</span>⋮</Button>
+																						</DropdownMenuTrigger>
+																						<DropdownMenuContent align="end" className="w-36">
+																							{!appointmentCanGoToReception && (
+																								<DropdownMenuItem
+																									onClick={(event) => {
+																										event.stopPropagation()
+																										goToReceptionFromAppointment(appointment.id)
+																									}}
+																									disabled={loadingAction === 'reception'}
+																								>
+																									Enviar a recepción
+																								</DropdownMenuItem>
+																							)}
+																							<DropdownMenuItem
+																								onClick={(event) => {
+																									event.stopPropagation()
+																									openExistingAppointmentFromPlanner(slot, appointment.id)
+																								}}
+																								disabled={appointmentLocked || loadingAction === 'appointment'}
+																							>
+																								Editar
+																							</DropdownMenuItem>
+																							<DropdownMenuItem
+																								onClick={(event) => {
+																									event.stopPropagation()
+																									releaseAppointmentFromPlanner(appointment.id)
+																								}}
+																								disabled={appointmentLocked || appointment.status === 'cancelled' || loadingAction === 'appointment'}
+																							>
+																								Liberar
+																							</DropdownMenuItem>
+																						</DropdownMenuContent>
+																					</DropdownMenu>
+																				)}
+																			</div>
+																		</div>
+																	)
+																})}
 																{slot.status === 'blocked' && slot.blockTitle && (
 																	<TooltipProvider delayDuration={150}>
 																		<Tooltip>
@@ -1960,11 +2119,11 @@ export default function ScheduleIndex({
 								<div className="grid gap-4">
 									<div>
 										<label className="mb-1 block text-sm font-medium text-gray-700">Desde</label>
-										<input type="date" value={blockRangeStartDate} onChange={(event) => setBlockRangeStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+										<input type="date" value={blockRangeStartDate} min={blockScheduleContext?.start_date} max={blockScheduleContext?.end_date || blockScheduleContext?.start_date} onChange={(event) => setBlockRangeStartDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
 									</div>
 									<div>
 										<label className="mb-1 block text-sm font-medium text-gray-700">Hasta</label>
-										<input type="date" value={blockRangeEndDate} onChange={(event) => setBlockRangeEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
+										<input type="date" value={blockRangeEndDate} min={blockScheduleContext?.start_date} max={blockScheduleContext?.end_date || blockScheduleContext?.start_date} onChange={(event) => setBlockRangeEndDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500" disabled={isScheduleInteractionLocked} required />
 									</div>
 									<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
 										Este rango solo define qué días y turnos cargar en pantalla. Después elegís los slots que querés bloquear o desbloquear.

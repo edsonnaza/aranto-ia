@@ -12,7 +12,7 @@ import {
   Clock,
 } from 'lucide-react'
 
-type NavigationItem = {
+export type NavigationItem = {
   title: string
   href?: NavItem['href']
   icon?: NavItem['icon']

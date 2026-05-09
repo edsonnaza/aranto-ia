@@ -126,7 +126,8 @@ export default function AppointmentSlotModal({
       return
     }
 
-    const calculatedDuration = selectedServices.reduce((total, service) => total + service.durationMinutes, 0)
+    // En agenda por slots, cada registro debe consumir solo el slot seleccionado.
+    const slotBasedDuration = slot.durationMinutes
 
     onSubmit({
       professional_id: slot.professionalId,
@@ -135,7 +136,7 @@ export default function AppointmentSlotModal({
       medical_service_ids: selectedServices.map((service) => service.id),
       appointment_date: slot.date,
       start_time: slot.startTime,
-      duration_minutes: calculatedDuration > 0 ? calculatedDuration : slot.durationMinutes,
+      duration_minutes: slotBasedDuration,
       status: appointmentStatus,
       source: appointmentSource,
       notes: appointmentNotes || undefined,

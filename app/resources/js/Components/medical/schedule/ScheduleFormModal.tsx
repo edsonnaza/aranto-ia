@@ -73,7 +73,7 @@ const weekDays = [
   { value: 0, label: 'Domingo' },
 ]
 
-const defaultSlotDurationOptions = ['15', '30', '45', '60']
+const defaultSlotDurationOptions = ['15', '20', '30', '45', '60']
 
 const emptyWeekRuleMap = (): WeekRuleForm[] => (
   weekDays.map((day) => ({
@@ -117,7 +117,7 @@ function ScheduleFormFields({
   const [scheduleName, setScheduleName] = useState(schedule?.name || '')
   const [scheduleStartDate, setScheduleStartDate] = useState(schedule?.start_date || initialRange.startDate)
   const [scheduleEndDate, setScheduleEndDate] = useState(schedule?.end_date || initialRange.endDate)
-  const [slotDuration, setSlotDuration] = useState(schedule ? String(schedule.slot_duration_minutes) : '30')
+  const [slotDuration, setSlotDuration] = useState(schedule ? String(schedule.slot_duration_minutes) : '20')
   const [scheduleStatus, setScheduleStatus] = useState<'active' | 'inactive'>(schedule?.status || 'active')
   const [scheduleNotes, setScheduleNotes] = useState(schedule?.notes || '')
   const [weekRules, setWeekRules] = useState<WeekRuleForm[]>(() => buildWeekRules(schedule))
@@ -221,6 +221,7 @@ function ScheduleFormFields({
               <option value={slotDuration}>{slotDuration} minutos</option>
             )}
             <option value="15">15 minutos</option>
+            <option value="20">20 minutos</option>
             <option value="30">30 minutos</option>
             <option value="45">45 minutos</option>
             <option value="60">60 minutos</option>
