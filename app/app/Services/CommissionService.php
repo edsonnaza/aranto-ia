@@ -7,6 +7,7 @@ use App\Models\CommissionLiquidationDetail;
 use App\Models\Professional;
 use App\Models\User;
 use App\Models\MedicalService;
+use App\Models\ServiceRequest;
 use App\Models\Transaction;
 use App\Models\CashRegisterSession;
 use Carbon\Carbon;
@@ -55,6 +56,19 @@ class CommissionService
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $endDate)
             ->whereNotNull('service_request_id')
+            ->whereHas('serviceRequest', function ($query) {
+                $query
+                    ->where('payment_status', ServiceRequest::PAYMENT_PAID)
+                    ->where(function ($eligibilityQuery) {
+                        $eligibilityQuery
+                            ->where(function ($scheduledQuery) {
+                                $scheduledQuery
+                                    ->where('reception_type', ServiceRequest::RECEPTION_SCHEDULED)
+                                    ->whereNotNull('commission_authorized_at');
+                            })
+                            ->orWhere('reception_type', '!=', ServiceRequest::RECEPTION_SCHEDULED);
+                    });
+            })
             ->where(function ($query) use ($currentLiquidationId) {
                 $query->whereNull('commission_liquidation_id');
 

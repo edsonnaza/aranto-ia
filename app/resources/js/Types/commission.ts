@@ -105,6 +105,27 @@ export interface CommissionData {
   }>
 }
 
+export interface ScheduledConsultationAuthorization {
+  id: number
+  request_number: string
+  patient_name: string
+  patient_document?: string | null
+  professional_name?: string | null
+  request_date: string | null
+  scheduled_date: string | null
+  services_summary: string
+  total_amount: number
+  paid_amount: number
+  remaining_amount: number
+  has_pending_balance: boolean
+  is_authorized: boolean
+  is_liquidated?: boolean
+  authorized_at?: string | null
+  authorized_by_name?: string | null
+  can_authorize: boolean
+  can_deauthorize?: boolean
+}
+
 // A lightweight structure for pending approvals used in the UI
 export interface CommissionPendingApproval {
   id: number

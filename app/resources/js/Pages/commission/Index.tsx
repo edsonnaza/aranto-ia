@@ -10,10 +10,12 @@ import {
   CommissionLiquidationDetail,
   CommissionReport,
   CommissionPendingApprovals,
+  CommissionScheduledAuthorizations,
   CommissionSettings,
   CommissionPaidLiquidations
 } from '@/components/commission'
 import type { Professional, CommissionLiquidation } from '@/types'
+import type { ScheduledConsultationAuthorization } from '@/types/commission'
 
 interface ProfessionalWithCommission {
   id: number
@@ -51,6 +53,18 @@ interface CommissionIndexProps {
   editingLiquidationId?: number | null
   createProfessionalId?: number | null
   professionalsWithPendingCommissions?: ProfessionalWithCommission[]
+  scheduledConsultations?: {
+    data: ScheduledConsultationAuthorization[]
+    current_page: number
+    last_page: number
+    total: number
+    links: Array<{ url: string | null; label: string; active: boolean }>
+  }
+  authorizationFilters?: {
+    authorization_date_from: string
+    authorization_date_to: string
+    authorization_professional_id?: string | null
+  }
 }
 
 export default function CommissionIndex({ 
@@ -63,7 +77,13 @@ export default function CommissionIndex({
   selectedLiquidationId: initialSelectedLiquidationId = null,
   editingLiquidationId: initialEditingLiquidationId = null,
   createProfessionalId = null,
-  professionalsWithPendingCommissions = []
+  professionalsWithPendingCommissions = [],
+  scheduledConsultations,
+  authorizationFilters = {
+    authorization_date_from: '',
+    authorization_date_to: '',
+    authorization_professional_id: null,
+  }
 }: CommissionIndexProps) {
   // const { props } = usePage()
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -145,12 +165,13 @@ export default function CommissionIndex({
       <Head title="Comisiones" />
 
       <div className="py-6">
-        <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div className="max-w-full mx-auto sm:px-6 lg:px-8">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
               <TabsTrigger value="create">Crear Liquidación</TabsTrigger>
               <TabsTrigger value="list">Liquidaciones</TabsTrigger>
+              <TabsTrigger value="authorizations">Autorizaciones</TabsTrigger>
               <TabsTrigger value="reports">Reportes</TabsTrigger>
               <TabsTrigger value="approvals">Aprobaciones</TabsTrigger>
               <TabsTrigger value="settings">Configuración</TabsTrigger>
@@ -195,6 +216,22 @@ export default function CommissionIndex({
 
             <TabsContent value="paid">
               <CommissionPaidLiquidations initialLiquidations={liquidations?.data || []} />
+            </TabsContent>
+
+            <TabsContent value="authorizations">
+              <CommissionScheduledAuthorizations
+                scheduledConsultations={
+                  scheduledConsultations || {
+                    data: [],
+                    current_page: 1,
+                    last_page: 1,
+                    total: 0,
+                    links: [],
+                  }
+                }
+                filters={authorizationFilters}
+                professionals={professionals}
+              />
             </TabsContent>
 
             <TabsContent value="details">

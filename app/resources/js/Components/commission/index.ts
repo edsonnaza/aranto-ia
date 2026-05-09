@@ -4,6 +4,7 @@ export { default as CommissionLiquidationList } from './CommissionLiquidationLis
 export { default as CommissionLiquidationDetail } from './CommissionLiquidationDetail'
 export { default as CommissionReport } from './CommissionReport'
 export { default as CommissionPendingApprovals } from './CommissionPendingApprovals'
+export { default as CommissionScheduledAuthorizations } from './CommissionScheduledAuthorizations'
 export { default as CommissionSettings } from './CommissionSettings'
 export { CommissionPaidLiquidations } from './commission-paid-liquidations'
 export { CommissionItemsTable } from './commission-items-table'

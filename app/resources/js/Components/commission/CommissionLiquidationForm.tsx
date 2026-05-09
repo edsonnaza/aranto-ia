@@ -530,7 +530,7 @@ export default function CommissionLiquidationForm({
     <div className="space-y-6">
       {/* Top Professionals Quick Select */}
       <TopProfessionalsQuickSelect
-        limit={10}
+        limit={50}
         onSelectProfessional={(professionalId, startDate, endDate) => {
           form.setValue('professional_id', professionalId)
           

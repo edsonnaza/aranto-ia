@@ -22,8 +22,12 @@ use App\Traits\Auditable;
  * @property float $total_amount
  * @property float $paid_amount
  * @property string $payment_status
+ * @property int|null $payment_transaction_id
  * @property float|null $remaining_amount
  * @property \Carbon\Carbon|null $payment_date
+ * @property \Carbon\Carbon|null $commission_authorized_at
+ * @property int|null $commission_authorized_by
+ * @property bool|null $has_liquidation
  * @property \Carbon\Carbon|null $confirmed_at
  * @property \Carbon\Carbon|null $cancelled_at
  * @property int|null $cancelled_by
@@ -50,6 +54,9 @@ class ServiceRequest extends Model
         'total_amount',
         'paid_amount',
         'payment_status',
+        'payment_transaction_id',
+        'commission_authorized_at',
+        'commission_authorized_by',
         'confirmed_at',
         'cancelled_at',
         'cancelled_by',
@@ -63,6 +70,8 @@ class ServiceRequest extends Model
         'request_date' => 'date',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
+        'payment_transaction_id' => 'integer',
+        'commission_authorized_at' => 'datetime',
         'confirmed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'created_at' => 'datetime',
@@ -125,6 +134,14 @@ class ServiceRequest extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * Get the user who authorized this request for commission liquidation.
+     */
+    public function commissionAuthorizedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'commission_authorized_by');
     }
 
     /**

@@ -9,9 +9,17 @@ import {
   BarChart3, 
   Settings,
   Users,
-  Percent,
   Clock,
 } from 'lucide-react'
+
+type NavigationItem = {
+  title: string
+  href?: NavItem['href']
+  icon?: NavItem['icon']
+  isActive?: boolean
+  permission?: string
+  items?: NavigationItem[]
+}
 
 // Definición de permisos por módulo
 export const MODULE_PERMISSIONS = {
@@ -28,7 +36,7 @@ export const MODULE_PERMISSIONS = {
 } as const
 
 // Todos los items de navegación disponibles
-const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
+const ALL_NAV_ITEMS: NavigationItem[] = [
   {
     title: 'Dashboard',
     href: { url: '/dashboard', method: 'get' },
@@ -71,6 +79,11 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
       {
         title: 'Liquidación de Comisiones',
         href: { url: '/medical/commissions', method: 'get' },
+        permission: MODULE_PERMISSIONS.COMMISSIONS,
+      },
+      {
+        title: 'Autorizar Consultas',
+        href: { url: '/medical/commissions?tab=authorizations', method: 'get' },
         permission: MODULE_PERMISSIONS.COMMISSIONS,
       },
       {
@@ -146,7 +159,7 @@ const ALL_NAV_ITEMS: (NavItem & { permission?: string })[] = [
 ]
 
 // Función para filtrar navegación según permisos del usuario
-export function getNavigationForUser(userPermissions: string[]): NavItem[] {
+export function getNavigationForUser(userPermissions: string[]): NavigationItem[] {
   return ALL_NAV_ITEMS
     .filter(item => {
       // Si no requiere permiso, siempre mostrar

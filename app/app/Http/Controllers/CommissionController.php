@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\CommissionLiquidation;
+use App\Models\AuditLog;
+use App\Models\ServiceRequest;
 use App\Services\CommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -30,6 +33,7 @@ class CommissionController extends Controller
         'dashboard',
         'create',
         'list',
+        'authorizations',
         'reports',
         'approvals',
         'settings',
@@ -41,13 +45,184 @@ class CommissionController extends Controller
      */
     public function index(Request $request): Response
     {
-        $requestedTab = $request->query('tab', 'dashboard');
+        $indexUiState = $this->resolveIndexUiState($request);
+        $activeTab = $indexUiState['activeTab'];
+        $dateFrom = $indexUiState['dateFrom'];
+        $dateTo = $indexUiState['dateTo'];
+
+        $liquidations = $this->getLiquidationsForIndex($request, $dateFrom, $dateTo);
+        $pendingApprovals = $this->getPendingApprovalsForIndex();
+        $professionals = $this->getProfessionalsForIndex();
+        $authorizationData = $this->getScheduledConsultationsForAuthorization($request);
+        $filters = $this->getCommissionIndexFilters($request, $dateFrom, $dateTo);
+        $selectionState = $this->resolveIndexSelectionState($request);
+
+        return Inertia::render('commission/Index', [
+            'professionals' => $professionals,
+            'liquidations' => $liquidations,
+            'pendingApprovals' => $pendingApprovals,
+            'filters' => $filters,
+            'initialTab' => $activeTab,
+            'selectedLiquidationId' => $selectionState['selectedLiquidationId'],
+            'editingLiquidationId' => $selectionState['editingLiquidationId'],
+            'createProfessionalId' => $selectionState['createProfessionalId'],
+            'professionalsWithPendingCommissions' => $this->getProfessionalsWithPendingCommissions(),
+            'scheduledConsultations' => $authorizationData['consultations'],
+            'authorizationFilters' => $authorizationData['filters'],
+        ]);
+    }
+
+    /**
+     * Resuelve el estado principal de la UI para el índice.
+     *
+     * @return array{activeTab: string, dateFrom: string, dateTo: string}
+     */
+    private function resolveIndexUiState(Request $request): array
+    {
+        $requestedTab = (string) $request->query('tab', 'dashboard');
         $activeTab = in_array($requestedTab, self::INDEX_TABS, true) ? $requestedTab : 'dashboard';
 
+        return [
+            'activeTab' => $activeTab,
+            'dateFrom' => $request->filled('date_from') ? (string) $request->query('date_from') : now()->toDateString(),
+            'dateTo' => $request->filled('date_to') ? (string) $request->query('date_to') : now()->toDateString(),
+        ];
+    }
+
+    /**
+     * Resuelve IDs opcionales usados por la UI del índice.
+     *
+     * @return array{selectedLiquidationId: int|null, editingLiquidationId: int|null, createProfessionalId: int|null}
+     */
+    private function resolveIndexSelectionState(Request $request): array
+    {
+        return [
+            'selectedLiquidationId' => $request->filled('liquidation_id') ? (int) $request->query('liquidation_id') : null,
+            'editingLiquidationId' => $request->filled('edit_liquidation_id') ? (int) $request->query('edit_liquidation_id') : null,
+            'createProfessionalId' => $request->filled('create_professional_id') ? (int) $request->query('create_professional_id') : null,
+        ];
+    }
+
+    /**
+     * Listar consultas/citas agendadas para autorización de comisión.
+     *
+     * @return array{consultations: \Illuminate\Contracts\Pagination\LengthAwarePaginator, filters: array<string, string|null>}
+     */
+    private function getScheduledConsultationsForAuthorization(Request $request): array
+    {
+        $dateFrom = $request->filled('authorization_date_from')
+            ? (string) $request->query('authorization_date_from')
+            : now()->toDateString();
+
+        $dateTo = $request->filled('authorization_date_to')
+            ? (string) $request->query('authorization_date_to')
+            : now()->toDateString();
+
+        $professionalId = $request->filled('authorization_professional_id')
+            ? (int) $request->query('authorization_professional_id')
+            : null;
+
+        $consultationsQuery = ServiceRequest::query()
+            ->with([
+                'patient:id,first_name,last_name,document_number',
+                'details:id,service_request_id,medical_service_id,professional_id,scheduled_date',
+                'details.medicalService:id,name',
+                'details.professional:id,first_name,last_name',
+                'commissionAuthorizedBy:id,name',
+            ])
+            ->where('reception_type', ServiceRequest::RECEPTION_SCHEDULED)
+            ->whereHas('details', function ($query) use ($dateFrom, $dateTo) {
+                $query
+                    ->whereNotNull('scheduled_date')
+                    ->whereDate('scheduled_date', '>=', $dateFrom)
+                    ->whereDate('scheduled_date', '<=', $dateTo);
+            })
+            ->when($professionalId, function ($query, $professionalId) {
+                $query->whereHas('details', function ($detailQuery) use ($professionalId) {
+                    $detailQuery->where('professional_id', $professionalId);
+                });
+            })
+            ->withExists([
+                'transactions as has_liquidation' => function ($query) {
+                    $query->whereNotNull('commission_liquidation_id');
+                }
+            ])
+            ->orderByDesc('request_date')
+            ->orderByDesc('id');
+
+        $consultations = $consultationsQuery
+            ->paginate(20)
+            ->through(function (ServiceRequest $serviceRequest) {
+                $details = $serviceRequest->details;
+
+                $scheduledDate = $details
+                    ->pluck('scheduled_date')
+                    ->filter()
+                    ->sort()
+                    ->first();
+
+                $servicesSummary = $details
+                    ->map(fn ($detail) => $detail->medicalService?->name)
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
+
+                $professionalSummary = $details
+                    ->map(fn ($detail) => $detail->professional?->full_name)
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
+
+                $totalAmount = (float) $serviceRequest->total_amount;
+                $paidAmount = (float) $serviceRequest->paid_amount;
+                $remainingAmount = max(0, round($totalAmount - $paidAmount, 2));
+                $hasPendingBalance = $remainingAmount > 0.0001 || $serviceRequest->payment_status !== ServiceRequest::PAYMENT_PAID;
+                $isAuthorized = !is_null($serviceRequest->commission_authorized_at);
+                $isLiquidated = (bool) ($serviceRequest->has_liquidation ?? false);
+
+                return [
+                    'id' => $serviceRequest->id,
+                    'request_number' => $serviceRequest->request_number,
+                    'patient_name' => $serviceRequest->patient?->full_name ?? 'Paciente sin nombre',
+                    'patient_document' => $serviceRequest->patient?->document_number,
+                    'professional_name' => $professionalSummary,
+                    'request_date' => $serviceRequest->request_date?->format('Y-m-d'),
+                    'scheduled_date' => $scheduledDate?->format('Y-m-d'),
+                    'services_summary' => $servicesSummary,
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => $paidAmount,
+                    'remaining_amount' => $remainingAmount,
+                    'has_pending_balance' => $hasPendingBalance,
+                    'is_authorized' => $isAuthorized,
+                    'is_liquidated' => $isLiquidated,
+                    'authorized_at' => $serviceRequest->commission_authorized_at?->format('Y-m-d H:i:s'),
+                    'authorized_by_name' => $serviceRequest->commissionAuthorizedBy?->name,
+                    'can_authorize' => !$hasPendingBalance && !$isAuthorized,
+                    'can_deauthorize' => $isAuthorized && !$isLiquidated,
+                ];
+            })
+            ->withQueryString();
+
+        return [
+            'consultations' => $consultations,
+            'filters' => [
+                'authorization_date_from' => $dateFrom,
+                'authorization_date_to' => $dateTo,
+                'authorization_professional_id' => $professionalId ? (string) $professionalId : null,
+            ],
+        ];
+    }
+
+    /**
+     * Obtener liquidaciones para el índice de comisiones.
+     *
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function getLiquidationsForIndex(Request $request, string $dateFrom, string $dateTo)
+    {
         $query = CommissionLiquidation::with(['professional.specialties', 'generatedBy', 'approvedBy'])
             ->orderBy('created_at', 'desc');
 
-        // Apply filters
         if ($request->filled('professional_id')) {
             $query->where('professional_id', $request->professional_id);
         }
@@ -56,19 +231,12 @@ class CommissionController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Get date range filters, default to today if not provided
-        $dateFrom = $request->filled('date_from') ? $request->date_from : now()->toDateString();
-        $dateTo = $request->filled('date_to') ? $request->date_to : now()->toDateString();
-
-        // Apply date range filter
         $query->whereDate('created_at', '>=', $dateFrom);
         $query->whereDate('created_at', '<=', $dateTo);
 
-        $paginatedLiquidations = $query->paginate(20);
-
-        // Transform liquidations to include professional data
-        $liquidations = $paginatedLiquidations->map(function($liquidation) {
+        return $query->paginate(20)->through(function (CommissionLiquidation $liquidation) {
             $specialty = $liquidation->professional->specialties->where('pivot.is_primary', true)->first();
+
             return [
                 'id' => $liquidation->id,
                 'professional_id' => $liquidation->professional_id,
@@ -84,19 +252,22 @@ class CommissionController extends Controller
                 'status' => $liquidation->status,
             ];
         });
+    }
 
-        // Create a new paginator with the transformed data
-        $transformedPaginator = $paginatedLiquidations->setCollection(
-            collect($liquidations)
-        );
-
-        // Get pending approvals (draft status only)
-        $pendingApprovals = CommissionLiquidation::with(['professional.specialties'])
+    /**
+     * Obtener aprobaciones pendientes para el índice.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getPendingApprovalsForIndex(): array
+    {
+        return CommissionLiquidation::with(['professional.specialties'])
             ->where('status', CommissionLiquidation::STATUS_DRAFT)
             ->orderBy('created_at', 'asc')
             ->get()
-            ->map(function($liquidation) {
+            ->map(function (CommissionLiquidation $liquidation) {
                 $specialty = $liquidation->professional->specialties->where('pivot.is_primary', true)->first();
+
                 return [
                     'id' => $liquidation->id,
                     'professional_id' => $liquidation->professional_id,
@@ -111,66 +282,233 @@ class CommissionController extends Controller
                     'created_at' => $liquidation->created_at->toDateString(),
                     'status' => $liquidation->status,
                 ];
-            });
+            })
+            ->values()
+            ->all();
+    }
 
-        // Convert dates to dd-mm-yyyy format for frontend
-        $formatDate = function($date) {
-            return \Carbon\Carbon::parse($date)->format('d-m-Y');
-        };
+    /**
+     * Obtener profesionales activos para el índice.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getProfessionalsForIndex(): array
+    {
+        return \App\Models\Professional::where('status', 'active')
+            ->with('specialties', 'commissionSettings')
+            ->select(
+                'id',
+                'first_name',
+                'last_name',
+                'email',
+                'phone',
+                'license_number',
+                'commission_percentage',
+                'status',
+                'created_at',
+                'updated_at'
+            )
+            ->orderBy('last_name')
+            ->get()
+            ->map(function (\App\Models\Professional $prof) {
+                return [
+                    'id' => $prof->id,
+                    'first_name' => $prof->first_name,
+                    'last_name' => $prof->last_name,
+                    'email' => $prof->email,
+                    'phone' => $prof->phone,
+                    'license_number' => $prof->license_number,
+                    'commission_percentage' => $prof->commissionSettings?->commission_percentage ?? $prof->commission_percentage ?? 0,
+                    'is_active' => $prof->status === 'active',
+                    'status' => $prof->status,
+                    'specialties' => $prof->specialties
+                        ->map(fn ($specialty) => [
+                            'id' => $specialty->id,
+                            'name' => $specialty->name,
+                        ])
+                        ->values()
+                        ->all(),
+                    'created_at' => $prof->created_at?->toDateTimeString(),
+                    'updated_at' => $prof->updated_at?->toDateTimeString(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
 
-        return Inertia::render('commission/Index', [
-            'professionals' => \App\Models\Professional::where('status', 'active')
-                ->with('specialties', 'commissionSettings')
-                ->select(
-                    'id',
-                    'first_name',
-                    'last_name',
-                    'email',
-                    'phone',
-                    'license_number',
-                    'commission_percentage',
-                    'status',
-                    'created_at',
-                    'updated_at'
-                )
-                ->orderBy('last_name')
-                ->get()
-                ->map(function (\App\Models\Professional $prof) {
-                    return [
-                        'id' => $prof->id,
-                        'first_name' => $prof->first_name,
-                        'last_name' => $prof->last_name,
-                        'email' => $prof->email,
-                        'phone' => $prof->phone,
-                        'license_number' => $prof->license_number,
-                        'commission_percentage' => $prof->commissionSettings?->commission_percentage ?? $prof->commission_percentage ?? 0,
-                        'is_active' => $prof->status === 'active',
-                        'status' => $prof->status,
-                        'specialties' => $prof->specialties
-                            ->map(fn ($specialty) => [
-                                'id' => $specialty->id,
-                                'name' => $specialty->name,
-                            ])
-                            ->values()
-                            ->all(),
-                        'created_at' => $prof->created_at?->toDateTimeString(),
-                        'updated_at' => $prof->updated_at?->toDateTimeString(),
-                    ];
-                }),
-            'liquidations' => $transformedPaginator,
-            'pendingApprovals' => $pendingApprovals,
-            'filters' => [
-                'professional_id' => $request->professional_id,
-                'status' => $request->status,
-                'date_from' => $formatDate($dateFrom),
-                'date_to' => $formatDate($dateTo),
-            ],
-            'initialTab' => $activeTab,
-            'selectedLiquidationId' => $request->filled('liquidation_id') ? (int) $request->query('liquidation_id') : null,
-            'editingLiquidationId' => $request->filled('edit_liquidation_id') ? (int) $request->query('edit_liquidation_id') : null,
-            'createProfessionalId' => $request->filled('create_professional_id') ? (int) $request->query('create_professional_id') : null,
-            'professionalsWithPendingCommissions' => $this->getProfessionalsWithPendingCommissions(),
+    /**
+     * Armar filtros del índice con formato de salida esperado.
+     *
+     * @return array<string, mixed>
+     */
+    private function getCommissionIndexFilters(Request $request, string $dateFrom, string $dateTo): array
+    {
+        return [
+            'professional_id' => $request->professional_id,
+            'status' => $request->status,
+            'date_from' => \Carbon\Carbon::parse($dateFrom)->format('d-m-Y'),
+            'date_to' => \Carbon\Carbon::parse($dateTo)->format('d-m-Y'),
+        ];
+    }
+
+    /**
+     * Autorizar en masa todas las consultas agendadas del filtro actual.
+     */
+    public function bulkAuthorizeScheduledConsultations(Request $request): RedirectResponse
+    {
+        $user = auth()->user();
+        if (!$user || !$user->can('access-financial') || !$user->can('access-commissions')) {
+            return back()->withErrors(['general' => ['No tiene permisos para autorizar consultas en masa.']]);
+        }
+
+        $dateFrom = $request->filled('authorization_date_from')
+            ? (string) $request->input('authorization_date_from')
+            : now()->toDateString();
+
+        $dateTo = $request->filled('authorization_date_to')
+            ? (string) $request->input('authorization_date_to')
+            : now()->toDateString();
+
+        $professionalId = $request->filled('authorization_professional_id')
+            ? (int) $request->input('authorization_professional_id')
+            : null;
+
+        /** @var \Illuminate\Database\Eloquent\Collection<int, ServiceRequest> $consultations */
+        $consultations = ServiceRequest::query()
+            ->where('reception_type', ServiceRequest::RECEPTION_SCHEDULED)
+            ->whereNull('commission_authorized_at')
+            ->whereHas('details', function ($query) use ($dateFrom, $dateTo) {
+                $query
+                    ->whereNotNull('scheduled_date')
+                    ->whereDate('scheduled_date', '>=', $dateFrom)
+                    ->whereDate('scheduled_date', '<=', $dateTo);
+            })
+            ->when($professionalId, function ($query, $professionalId) {
+                $query->whereHas('details', function ($detailQuery) use ($professionalId) {
+                    $detailQuery->where('professional_id', $professionalId);
+                });
+            })
+            ->whereRaw('ROUND(total_amount - paid_amount, 2) <= 0')
+            ->where('payment_status', ServiceRequest::PAYMENT_PAID)
+            ->get();
+
+        if ($consultations->isEmpty()) {
+            return back()->withErrors(['general' => ['No hay consultas pendientes de autorización en el filtro seleccionado.']]);
+        }
+
+        $authorized = 0;
+
+        DB::transaction(function () use ($consultations, &$authorized) {
+            foreach ($consultations as $serviceRequest) {
+                /** @var ServiceRequest $serviceRequest */
+
+                $oldValues = [
+                    'commission_authorized_at' => $serviceRequest->commission_authorized_at,
+                    'commission_authorized_by' => $serviceRequest->commission_authorized_by,
+                ];
+
+                $serviceRequest->update([
+                    'commission_authorized_at' => now(),
+                    'commission_authorized_by' => auth()->id(),
+                ]);
+
+                $serviceRequest->refresh();
+
+                AuditLog::logActivity(
+                    $serviceRequest,
+                    'commission_authorized',
+                    $oldValues,
+                    [
+                        'commission_authorized_at' => $serviceRequest->commission_authorized_at?->toDateTimeString(),
+                        'commission_authorized_by' => $serviceRequest->commission_authorized_by,
+                    ],
+                    'Consulta autorizada en masa para liquidación de comisiones'
+                );
+
+                $authorized++;
+            }
+        });
+
+        return back()->with('success', "Se autorizaron {$authorized} consultas correctamente.");
+    }
+
+    /**
+     * Autorizar una consulta agendada para liquidación de comisiones.
+     */
+    public function authorizeScheduledConsultation(Request $request, ServiceRequest $serviceRequest): RedirectResponse
+    {
+        $user = auth()->user();
+        if (!$user || !$user->can('access-financial') || !$user->can('access-commissions')) {
+            return back()->withErrors(['general' => ['No tiene permisos para autorizar consultas para liquidación.']]);
+        }
+
+        $validated = $request->validate([
+            'authorized' => ['required', 'boolean'],
         ]);
+
+        $shouldAuthorize = (bool) $validated['authorized'];
+
+        if ($serviceRequest->reception_type !== ServiceRequest::RECEPTION_SCHEDULED) {
+            return back()->withErrors(['general' => ['Solo se pueden autorizar consultas agendadas.']]);
+        }
+
+        $remainingAmount = round((float) $serviceRequest->total_amount - (float) $serviceRequest->paid_amount, 2);
+        if ($serviceRequest->payment_status !== ServiceRequest::PAYMENT_PAID || $remainingAmount > 0) {
+            return back()->withErrors(['general' => ['No se puede autorizar una consulta con saldo pendiente.']]);
+        }
+
+        $isAuthorized = !is_null($serviceRequest->commission_authorized_at);
+
+        if ($shouldAuthorize && $isAuthorized) {
+            return back()->withErrors(['general' => ['Esta consulta ya fue autorizada previamente.']]);
+        }
+
+        if (!$shouldAuthorize && !$isAuthorized) {
+            return back()->withErrors(['general' => ['La consulta ya se encuentra desautorizada.']]);
+        }
+
+        $hasLiquidation = $serviceRequest->transactions()
+            ->whereNotNull('commission_liquidation_id')
+            ->exists();
+
+        if (!$shouldAuthorize && $hasLiquidation) {
+            return back()->withErrors(['general' => ['No se puede desautorizar una consulta que ya fue liquidada.']]);
+        }
+
+        DB::transaction(function () use ($serviceRequest, $shouldAuthorize) {
+            $oldValues = [
+                'commission_authorized_at' => $serviceRequest->commission_authorized_at,
+                'commission_authorized_by' => $serviceRequest->commission_authorized_by,
+                'payment_status' => $serviceRequest->payment_status,
+                'remaining_amount' => round((float) $serviceRequest->total_amount - (float) $serviceRequest->paid_amount, 2),
+            ];
+
+            $serviceRequest->update([
+                'commission_authorized_at' => $shouldAuthorize ? now() : null,
+                'commission_authorized_by' => $shouldAuthorize ? auth()->id() : null,
+            ]);
+
+            $serviceRequest->refresh();
+
+            AuditLog::logActivity(
+                $serviceRequest,
+                $shouldAuthorize ? 'commission_authorized' : 'commission_deauthorized',
+                $oldValues,
+                [
+                    'commission_authorized_at' => $serviceRequest->commission_authorized_at?->toDateTimeString(),
+                    'commission_authorized_by' => $serviceRequest->commission_authorized_by,
+                    'payment_status' => $serviceRequest->payment_status,
+                    'remaining_amount' => round((float) $serviceRequest->total_amount - (float) $serviceRequest->paid_amount, 2),
+                ],
+                $shouldAuthorize
+                    ? 'Consulta autorizada para liquidación de comisiones'
+                    : 'Consulta desautorizada para liquidación de comisiones'
+            );
+        });
+
+        return back()->with('success', $shouldAuthorize
+            ? 'Consulta autorizada para liquidación de comisiones.'
+            : 'Consulta desautorizada para liquidación de comisiones.');
     }
 
     /**
@@ -188,6 +526,12 @@ class CommissionController extends Controller
                     ->where('category', 'SERVICE_PAYMENT')
                     ->where('status', 'active')
                     ->whereNull('commission_liquidation_id')
+                    ->whereHas('serviceRequest', function ($query) {
+                        $query
+                            ->where('reception_type', ServiceRequest::RECEPTION_SCHEDULED)
+                            ->where('payment_status', ServiceRequest::PAYMENT_PAID)
+                            ->whereNotNull('commission_authorized_at');
+                    })
                     ->get();
 
                 $pendingCount = $pendingMovements->count();
@@ -229,46 +573,70 @@ class CommissionController extends Controller
         $professionals = \App\Models\Professional::where('status', 'active')
             ->with('specialties', 'commissionSettings')
             ->get()
-            ->map(function ($professional) {
+            ->flatMap(function ($professional) {
                 // Get transaction movements that have not been liquidated yet
                 $pendingMovements = \App\Models\Transaction::where('professional_id', $professional->id)
                     ->where('type', 'INCOME')
                     ->where('category', 'SERVICE_PAYMENT')
                     ->where('status', 'active')
                     ->whereNull('commission_liquidation_id')
+                    ->whereHas('serviceRequest', function ($query) {
+                        $query
+                            ->where('payment_status', ServiceRequest::PAYMENT_PAID)
+                            ->where(function ($eligibilityQuery) {
+                                $eligibilityQuery
+                                    ->where(function ($scheduledQuery) {
+                                        $scheduledQuery
+                                            ->where('reception_type', ServiceRequest::RECEPTION_SCHEDULED)
+                                            ->whereNotNull('commission_authorized_at');
+                                    })
+                                    ->orWhere('reception_type', '!=', ServiceRequest::RECEPTION_SCHEDULED);
+                            });
+                    })
+                    ->with('serviceRequest:id,reception_type')
                     ->get();
 
                 if ($pendingMovements->isEmpty()) {
-                    return null;
+                    return collect();
                 }
-
-                $pendingCount = $pendingMovements->count();
-                $pendingAmount = $pendingMovements->sum('amount');
                 
                 // Get commission percentage from commissionSettings, fallback to professional.commission_percentage
                 $commissionPercentage = $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0;
-                
-                // Calculate date range from transactions
-                $dates = $pendingMovements->pluck('created_at')->map(function ($date) {
-                    return \Carbon\Carbon::parse($date);
-                });
-                
-                $periodStart = $dates->min()?->toDateString();
-                $periodEnd = $dates->max()?->toDateString();
 
-                return [
-                    'id' => $professional->id,
-                    'full_name' => $professional->full_name,
-                    'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
-                    'commission_percentage' => $commissionPercentage,
-                    'pending_services_count' => $pendingCount,
-                    'pending_amount' => $pendingAmount,
-                    'commission_amount' => round(($pendingAmount * $commissionPercentage) / 100, 2),
-                    'period_start' => $periodStart,
-                    'period_end' => $periodEnd,
-                ];
+                $groupedMovements = $pendingMovements->groupBy(function ($movement) {
+                    $receptionType = $movement->serviceRequest?->reception_type;
+                    return $receptionType === ServiceRequest::RECEPTION_SCHEDULED
+                        ? 'scheduled'
+                        : 'without_schedule';
+                });
+
+                return $groupedMovements->map(function ($movements, $groupKey) use ($professional, $commissionPercentage) {
+                    $pendingCount = $movements->count();
+                    $pendingAmount = $movements->sum('amount');
+
+                    $dates = $movements->pluck('created_at')->map(function ($date) {
+                        return \Carbon\Carbon::parse($date);
+                    });
+
+                    $periodStart = $dates->min()?->toDateString();
+                    $periodEnd = $dates->max()?->toDateString();
+
+                    return [
+                        'id' => $professional->id,
+                        'group_key' => sprintf('%d-%s', $professional->id, $groupKey),
+                        'reception_group' => $groupKey,
+                        'reception_label' => $groupKey === 'scheduled' ? 'Consulta agendada' : 'Sin agenda',
+                        'full_name' => $professional->full_name,
+                        'specialty' => $professional->specialties->first()?->name ?? 'Sin especialidad',
+                        'commission_percentage' => $commissionPercentage,
+                        'pending_services_count' => $pendingCount,
+                        'pending_amount' => $pendingAmount,
+                        'commission_amount' => round(($pendingAmount * $commissionPercentage) / 100, 2),
+                        'period_start' => $periodStart,
+                        'period_end' => $periodEnd,
+                    ];
+                })->values();
             })
-            ->filter(fn($p) => $p !== null)
             ->sortByDesc('commission_amount')
             ->take($limit)
             ->values()
@@ -391,82 +759,7 @@ class CommissionController extends Controller
         ]);
 
         try {
-            $currentDetails = $commission->details()->get();
-            $currentServiceRequestIds = $currentDetails->pluck('service_request_id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-            $selectedServiceRequestIds = collect($request->service_request_ids)
-                ->map(fn ($id) => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
-
-            $serviceRequestIdsToRemove = array_values(array_diff($currentServiceRequestIds, $selectedServiceRequestIds));
-            $serviceRequestIdsToAdd = array_values(array_diff($selectedServiceRequestIds, $currentServiceRequestIds));
-
-            if (!empty($serviceRequestIdsToRemove)) {
-                $commission->details()
-                    ->whereIn('service_request_id', $serviceRequestIdsToRemove)
-                    ->delete();
-
-                \App\Models\Transaction::where('commission_liquidation_id', $commission->id)
-                    ->whereIn('service_request_id', $serviceRequestIdsToRemove)
-                    ->update(['commission_liquidation_id' => null]);
-            }
-
-            if (!empty($serviceRequestIdsToAdd)) {
-                $commissionData = $this->commissionService->getProfessionalCommissionData(
-                    $commission->professional_id,
-                    $request->period_start,
-                    $request->period_end,
-                    $commission->id
-                );
-
-                $availableServices = collect($commissionData['services'])->keyBy('service_request_id');
-
-                foreach ($serviceRequestIdsToAdd as $serviceRequestId) {
-                    $service = $availableServices->get($serviceRequestId);
-
-                    if (!$service) {
-                        throw new \Exception("El servicio {$serviceRequestId} no está disponible para el rango seleccionado.");
-                    }
-
-                    \App\Models\CommissionLiquidationDetail::create([
-                        'liquidation_id' => $commission->id,
-                        'service_request_id' => $service['service_request_id'],
-                        'patient_id' => $service['patient_id'],
-                        'service_id' => $service['service_id'] ?? null,
-                        'service_date' => $service['service_date'],
-                        'payment_date' => $service['payment_date'],
-                        'service_amount' => $service['service_amount'],
-                        'commission_percentage' => $service['commission_percentage'],
-                        'commission_amount' => $service['commission_amount'],
-                        'payment_movement_id' => $service['movement_id'],
-                    ]);
-
-                    \App\Models\Transaction::where('id', $service['movement_id'])
-                        ->update(['commission_liquidation_id' => $commission->id]);
-                }
-            }
-
-            // Recalculate totals based on remaining services
-            $remainingDetails = $commission->fresh('details')->details;
-
-            $totalGross = $remainingDetails->sum('service_amount');
-            $totalCommission = $remainingDetails->sum('commission_amount');
-            $totalPercentage = $remainingDetails->count() > 0 
-                ? $remainingDetails->first()->commission_percentage 
-                : 0;
-
-            // Update the liquidation with new totals and dates
-            $commission->update([
-                'period_start' => $request->period_start,
-                'period_end' => $request->period_end,
-                'total_services' => $remainingDetails->count(),
-                'gross_amount' => $totalGross,
-                'commission_percentage' => $totalPercentage,
-                'commission_amount' => $totalCommission,
-            ]);
+            $this->syncDraftCommissionLiquidation($commission, $request->period_start, $request->period_end, $request->service_request_ids);
 
             return redirect()->route('medical.commissions.index', [
                 'tab' => 'details',
@@ -477,6 +770,116 @@ class CommissionController extends Controller
         } catch (\Exception $e) {
             return back()->withErrors(['general' => [$e->getMessage()]]);
         }
+    }
+
+    /**
+     * Sincroniza una liquidación borrador con los servicios seleccionados.
+     *
+     * @param array<int, int|string> $serviceRequestIds
+     */
+    private function syncDraftCommissionLiquidation(CommissionLiquidation $commission, string $periodStart, string $periodEnd, array $serviceRequestIds): void
+    {
+        $currentServiceRequestIds = $commission->details()
+            ->pluck('service_request_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $selectedServiceRequestIds = collect($serviceRequestIds)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $serviceRequestIdsToRemove = array_values(array_diff($currentServiceRequestIds, $selectedServiceRequestIds));
+        $serviceRequestIdsToAdd = array_values(array_diff($selectedServiceRequestIds, $currentServiceRequestIds));
+
+        DB::transaction(function () use ($commission, $periodStart, $periodEnd, $serviceRequestIdsToRemove, $serviceRequestIdsToAdd) {
+            if (!empty($serviceRequestIdsToRemove)) {
+                $this->removeCommissionDetails($commission, $serviceRequestIdsToRemove);
+            }
+
+            if (!empty($serviceRequestIdsToAdd)) {
+                $this->addCommissionDetails($commission, $periodStart, $periodEnd, $serviceRequestIdsToAdd);
+            }
+
+            $this->refreshCommissionLiquidationTotals($commission, $periodStart, $periodEnd);
+        });
+    }
+
+    /**
+     * Elimina detalles de una liquidación y libera sus transacciones.
+     *
+     * @param array<int, int> $serviceRequestIdsToRemove
+     */
+    private function removeCommissionDetails(CommissionLiquidation $commission, array $serviceRequestIdsToRemove): void
+    {
+        $commission->details()
+            ->whereIn('service_request_id', $serviceRequestIdsToRemove)
+            ->delete();
+
+        \App\Models\Transaction::where('commission_liquidation_id', $commission->id)
+            ->whereIn('service_request_id', $serviceRequestIdsToRemove)
+            ->update(['commission_liquidation_id' => null]);
+    }
+
+    /**
+     * Agrega nuevos detalles a una liquidación borrador.
+     *
+     * @param array<int, int> $serviceRequestIdsToAdd
+     */
+    private function addCommissionDetails(CommissionLiquidation $commission, string $periodStart, string $periodEnd, array $serviceRequestIdsToAdd): void
+    {
+        $commissionData = $this->commissionService->getProfessionalCommissionData(
+            $commission->professional_id,
+            $periodStart,
+            $periodEnd,
+            $commission->id
+        );
+
+        $availableServices = collect($commissionData['services'])->keyBy('service_request_id');
+
+        foreach ($serviceRequestIdsToAdd as $serviceRequestId) {
+            $service = $availableServices->get($serviceRequestId);
+
+            if (!$service) {
+                throw new \Exception("El servicio {$serviceRequestId} no está disponible para el rango seleccionado.");
+            }
+
+            \App\Models\CommissionLiquidationDetail::create([
+                'liquidation_id' => $commission->id,
+                'service_request_id' => $service['service_request_id'],
+                'patient_id' => $service['patient_id'],
+                'service_id' => $service['service_id'] ?? null,
+                'service_date' => $service['service_date'],
+                'payment_date' => $service['payment_date'],
+                'service_amount' => $service['service_amount'],
+                'commission_percentage' => $service['commission_percentage'],
+                'commission_amount' => $service['commission_amount'],
+                'payment_movement_id' => $service['movement_id'],
+            ]);
+
+            \App\Models\Transaction::where('id', $service['movement_id'])
+                ->update(['commission_liquidation_id' => $commission->id]);
+        }
+    }
+
+    /**
+     * Recalcula los totales de una liquidación borrador a partir de sus detalles actuales.
+     */
+    private function refreshCommissionLiquidationTotals(CommissionLiquidation $commission, string $periodStart, string $periodEnd): void
+    {
+        $remainingDetails = $commission->fresh('details')->details;
+
+        $commission->update([
+            'period_start' => $periodStart,
+            'period_end' => $periodEnd,
+            'total_services' => $remainingDetails->count(),
+            'gross_amount' => $remainingDetails->sum('service_amount'),
+            'commission_percentage' => $remainingDetails->count() > 0
+                ? $remainingDetails->first()->commission_percentage
+                : 0,
+            'commission_amount' => $remainingDetails->sum('commission_amount'),
+        ]);
     }
 
     /**

@@ -13,6 +13,8 @@ use App\Models\ServiceRequest;
 use App\Models\InsuranceType;
 use App\Notifications\ReceptionPaymentUpdatedNotification;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -92,14 +94,34 @@ class CashRegisterController extends Controller
     public function index(): Response
     {
         \Log::info('🔧 DEBUG: CashRegister index method called');
-        
+
         $user = Auth::user();
         \Log::info('🔧 DEBUG: User retrieved', ['user_id' => $user?->id]);
-        
+
         $activeSession = $this->cashRegisterService->getActiveSession($user);
         \Log::info('🔧 DEBUG: Active session retrieved', ['session' => $activeSession?->toArray()]);
-        
-        // Get today's transactions
+
+        $sessionDashboardData = $this->buildSessionDashboardData($activeSession);
+        $approvedCommissionLiquidations = $this->getApprovedCommissionLiquidations();
+        $suggestedInitialAmount = $this->getSuggestedInitialAmount((int) $user->id);
+
+        // Render dashboard with computed values
+        return Inertia::render('CashRegister/Dashboard', [
+            'activeSession' => $activeSession,
+            'todayTransactions' => $sessionDashboardData['todayTransactions'],
+            'balance' => $sessionDashboardData['balance'],
+            'approvedCommissionLiquidations' => $approvedCommissionLiquidations,
+            'suggestedInitialAmount' => $suggestedInitialAmount,
+        ]);
+    }
+
+    /**
+     * Construye los datos de resumen de la sesión activa para el dashboard.
+     *
+     * @return array{todayTransactions: \Illuminate\Support\Collection<int, mixed>, balance: array{opening: float, income: float, expense: float, current: float}}
+     */
+    private function buildSessionDashboardData(?CashRegisterSession $activeSession): array
+    {
         $todayTransactions = collect();
         $balance = [
             'opening' => 0.0,
@@ -108,51 +130,60 @@ class CashRegisterController extends Controller
             'current' => 0.0,
         ];
 
-        if ($activeSession) {
-            \Log::info('🔧 DEBUG: Processing active session', [
-                'session_id' => $activeSession->id,
-                'initial_amount' => $activeSession->initial_amount,
-            ]);
-
-            // Get a condensed summary for the UI
-            try {
-                $sessionSummary = $this->cashRegisterService->getSessionSummary($activeSession);
-
-                $todayTransactions = $sessionSummary['transactions']['recent'] ?? collect();
-
-                $balance = [
-                    'opening' => $sessionSummary['summary']['initial_amount'] ?? 0.0,
-                    'income' => $sessionSummary['summary']['total_income'] ?? 0.0,
-                    'expense' => $sessionSummary['summary']['total_expenses'] ?? 0.0,
-                    'current' => $sessionSummary['summary']['calculated_balance'] ?? 0.0,
-                ];
-            } catch (\Exception $e) {
-                Log::error('Error while building session summary', ['error' => $e->getMessage()]);
-            }
-
+        if (!$activeSession) {
+            return [
+                'todayTransactions' => $todayTransactions,
+                'balance' => $balance,
+            ];
         }
 
-        // Get approved commission liquidations (ready to pay)
-        $approvedCommissionLiquidations = \App\Models\CommissionLiquidation::with('professional')
+        \Log::info('🔧 DEBUG: Processing active session', [
+            'session_id' => $activeSession->id,
+            'initial_amount' => $activeSession->initial_amount,
+        ]);
+
+        try {
+            $sessionSummary = $this->cashRegisterService->getSessionSummary($activeSession);
+
+            $todayTransactions = $sessionSummary['transactions']['recent'] ?? collect();
+            $balance = [
+                'opening' => (float) ($sessionSummary['summary']['initial_amount'] ?? 0),
+                'income' => (float) ($sessionSummary['summary']['total_income'] ?? 0),
+                'expense' => (float) ($sessionSummary['summary']['total_expenses'] ?? 0),
+                'current' => (float) ($sessionSummary['summary']['calculated_balance'] ?? 0),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error while building session summary', ['error' => $e->getMessage()]);
+        }
+
+        return [
+            'todayTransactions' => $todayTransactions,
+            'balance' => $balance,
+        ];
+    }
+
+    /**
+     * Obtiene las liquidaciones de comisión aprobadas y pendientes de pago.
+     */
+    private function getApprovedCommissionLiquidations()
+    {
+        return \App\Models\CommissionLiquidation::with('professional')
             ->where('status', \App\Models\CommissionLiquidation::STATUS_APPROVED)
             ->orderBy('created_at', 'asc')
             ->get();
+    }
 
-        // Saldo calculado de la última sesión cerrada del usuario (para pre-rellenar apertura)
-        $lastClosedSession = CashRegisterSession::where('user_id', $user->id)
+    /**
+     * Calcula el monto inicial sugerido desde la última caja cerrada del usuario.
+     */
+    private function getSuggestedInitialAmount(int $userId): float
+    {
+        $lastClosedSession = CashRegisterSession::where('user_id', $userId)
             ->where('status', 'closed')
             ->orderBy('closing_date', 'desc')
             ->first();
-        $suggestedInitialAmount = $lastClosedSession ? $lastClosedSession->calculateBalance() : 0;
 
-        // Render dashboard with computed values
-        return Inertia::render('CashRegister/Dashboard', [
-            'activeSession' => $activeSession,
-            'todayTransactions' => $todayTransactions,
-            'balance' => $balance,
-            'approvedCommissionLiquidations' => $approvedCommissionLiquidations,
-            'suggestedInitialAmount' => $suggestedInitialAmount,
-        ]);
+        return $lastClosedSession ? (float) $lastClosedSession->calculateBalance() : 0.0;
     }
 
     /**
@@ -408,159 +439,184 @@ class CashRegisterController extends Controller
     /**
      * Process service payment
      */
-    public function processServicePayment(Request $request)
+    public function processServicePayment(Request $request): JsonResponse|RedirectResponse
     {
-        // Soporta formato mixto (payments[]) y formato legacy (payment_method + amount)
-        if ($request->has('payments')) {
-            $request->validate([
-                'service_request_id'             => 'required|exists:service_requests,id',
-                'notes'                          => 'nullable|string|max:255',
-                'payments'                       => 'required|array|min:1',
-                'payments.*.payment_method'      => 'required|string',
-                'payments.*.amount'              => 'required|numeric|min:0.01',
-                'payments.*.pos_number'          => 'nullable|string|max:100',
-            ]);
-            $payments = $request->payments;
-        } else {
-            $request->validate([
-                'service_request_id' => 'required|exists:service_requests,id',
-                'payment_method'     => 'required|string',
-                'amount'             => 'required|numeric|min:0',
-                'notes'              => 'nullable|string|max:255',
-            ]);
-            $payments = [[
-                'payment_method' => $request->payment_method,
-                'amount'         => $request->amount,
-                'pos_number'     => $request->pos_number ?? null,
-            ]];
-        }
-
-        $totalAmount = collect($payments)->sum('amount');
-
         try {
+            $payments = $this->resolveServicePaymentSplits($request);
             $serviceRequest = ServiceRequest::findOrFail($request->service_request_id);
-            
-            // Verify service can be paid (pending or partial payment)
-            if (!in_array($serviceRequest->payment_status, [ServiceRequest::PAYMENT_PENDING, ServiceRequest::PAYMENT_PARTIAL])) {
-                if ($request->header('X-Inertia')) {
-                    return response()->json(['success' => false, 'message' => 'Este servicio ya ha sido procesado completamente.'], 422);
-                }
-
-                return redirect()->back()->with('error', 'Este servicio ya ha sido procesado completamente.');
+            $validationError = $this->validateServicePaymentEligibility($request, $serviceRequest, $payments);
+            if ($validationError !== null) {
+                return $validationError;
             }
 
-            // Calculate remaining amount
-            $remainingAmount = $serviceRequest->total_amount - $serviceRequest->paid_amount;
-            
-            // Validate total of all splits doesn't exceed remaining
-            if ($totalAmount > $remainingAmount) {
-                if ($request->header('X-Inertia')) {
-                    return response()->json(['success' => false, 'message' => 'El monto total del pago no puede exceder el pendiente.'], 422);
-                }
-
-                return redirect()->back()->with('error', 'El monto total del pago no puede exceder el pendiente.');
-            }
-
-            // Get active cash register session
             $activeSession = $this->cashRegisterService->getActiveSession(Auth::user());
             if (!$activeSession) {
-                if ($request->header('X-Inertia')) {
-                    return response()->json(['success' => false, 'message' => 'No hay una sesión de caja activa. Abra la caja primero.'], 422);
-                }
-
-                return redirect()->back()->with('error', 'No hay una sesión de caja activa. Abra la caja primero.');
+                return $this->servicePaymentFailureResponse($request, 'No hay una sesión de caja activa. Abra la caja primero.');
             }
 
-            // Determine category based on service origin
-            $category = match($serviceRequest->reception_type) {
-                'RECEPTION_SCHEDULED', 'RECEPTION_WALK_IN' => 'SERVICE_PAYMENT',
-                'INPATIENT_DISCHARGE' => 'INPATIENT_DISCHARGE_PAYMENT',
-                'EMERGENCY' => 'EMERGENCY_DISCHARGE_PAYMENT',
-                default => 'SERVICE_PAYMENT'
-            };
-            // Transactional processing: make sure to rollback on failure
-            DB::beginTransaction();
-            try {
-                // Get professional_id from service request details
-                $professionalId = $serviceRequest->details()->first()?->professional_id;
-                $hasPaymentMethod = Schema::hasColumn('transactions', 'payment_method');
-                $lastTransaction = null;
+            $this->persistServicePayment($request, $serviceRequest, $payments, $activeSession);
 
-                // Create one transaction per payment split
-                foreach ($payments as $split) {
-                    $transactionData = [
-                        'cash_register_session_id' => $activeSession->id,
-                        'type'                     => 'INCOME',
-                        'category'                 => $category,
-                        'amount'                   => $split['amount'],
-                        'concept'                  => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
-                        'patient_name'             => $serviceRequest->patient->full_name,
-                        'patient_id'               => $serviceRequest->patient_id,
-                        'professional_id'          => $professionalId,
-                        'notes'                    => $request->notes,
-                        'user_id'                  => Auth::id(),
-                        'service_request_id'       => $serviceRequest->id,
-                    ];
-                    if ($hasPaymentMethod) {
-                        $transactionData['payment_method'] = $split['payment_method'];
-                    }
-                    $lastTransaction = Transaction::create($transactionData);
-                }
-
-                // Update service request payment status
-                $newPaidAmount = $serviceRequest->paid_amount + $totalAmount;
-                $isFullyPaid = $newPaidAmount >= $serviceRequest->total_amount;
-                
-                $serviceRequest->update([
-                    'paid_amount'            => $newPaidAmount,
-                    'status'                => $isFullyPaid ? ServiceRequest::STATUS_PAID : ServiceRequest::STATUS_PENDING_PAYMENT,
-                    'payment_status'         => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
-                    'payment_date'           => $isFullyPaid ? now() : $serviceRequest->payment_date,
-                    'payment_transaction_id' => $isFullyPaid ? $lastTransaction->id : $serviceRequest->payment_transaction_id,
-                ]);
-                // Update session totals
-                $activeSession->increment('total_income', $totalAmount);
-
-                DB::commit();
-
-                $updatedServiceRequest = $serviceRequest->fresh(['patient', 'details']);
-
-                ServiceRequestPaymentUpdated::dispatch($updatedServiceRequest);
-
-                $message = $updatedServiceRequest->payment_status === ServiceRequest::PAYMENT_PAID
-                    ? 'Pago completado en caja.'
-                    : 'Pago parcial registrado en caja.';
-
-                app(NotificationRecipientResolver::class)
-                    ->receptionPaymentRecipients()
-                    ->each
-                    ->notify(new ReceptionPaymentUpdatedNotification($updatedServiceRequest, $message));
-
-                // If this is an X-Inertia request (Inertia client), return redirect with success message
-                if ($request->header('X-Inertia')) {
-                    return back()->with('success', 'Cobro procesado exitosamente.');
-                }
-
-                // Fallback: redirect (useful for non-Inertia requests and tests)
-                return redirect()->route('cash-register.pending-services')->with('success', 'Cobro procesado exitosamente.');
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('Error processing service payment', [
-                    'error' => $e->getMessage(),
-                    'service_request_id' => $request->service_request_id,
-                ]);
-
-                return redirect()->back()->with('error', 'Error al procesar el cobro. Intente nuevamente.');
-            }
-
+            return $this->servicePaymentSuccessResponse($request);
         } catch (\Exception $e) {
             Log::error('Error processing service payment', [
                 'error' => $e->getMessage(),
                 'service_request_id' => $request->service_request_id,
             ]);
 
-            return redirect()->back()->with('error', 'Error al procesar el cobro. Intente nuevamente.');
+            return $this->servicePaymentFailureResponse($request, 'Error al procesar el cobro. Intente nuevamente.');
         }
+    }
+
+    /**
+     * Normaliza y valida los pagos enviados para una solicitud de servicio.
+     *
+     * @return array<int, array{payment_method: string, amount: float|int, pos_number: string|null}>
+     */
+    private function resolveServicePaymentSplits(Request $request): array
+    {
+        if ($request->has('payments')) {
+            $request->validate([
+                'service_request_id' => 'required|exists:service_requests,id',
+                'notes' => 'nullable|string|max:255',
+                'payments' => 'required|array|min:1',
+                'payments.*.payment_method' => 'required|string',
+                'payments.*.amount' => 'required|numeric|min:0.01',
+                'payments.*.pos_number' => 'nullable|string|max:100',
+            ]);
+
+            return $request->input('payments', []);
+        }
+
+        $request->validate([
+            'service_request_id' => 'required|exists:service_requests,id',
+            'payment_method' => 'required|string',
+            'amount' => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:255',
+        ]);
+
+        return [[
+            'payment_method' => (string) $request->payment_method,
+            'amount' => $request->amount,
+            'pos_number' => $request->pos_number ?? null,
+        ]];
+    }
+
+    /**
+     * Valida que la solicitud todavía pueda ser cobrada.
+     */
+    private function validateServicePaymentEligibility(Request $request, ServiceRequest $serviceRequest, array $payments): JsonResponse|RedirectResponse|null
+    {
+        if (!in_array($serviceRequest->payment_status, [ServiceRequest::PAYMENT_PENDING, ServiceRequest::PAYMENT_PARTIAL], true)) {
+            return $this->servicePaymentFailureResponse($request, 'Este servicio ya ha sido procesado completamente.');
+        }
+
+        $totalAmount = collect($payments)->sum('amount');
+        $remainingAmount = (float) $serviceRequest->total_amount - (float) $serviceRequest->paid_amount;
+
+        if ($totalAmount > $remainingAmount) {
+            return $this->servicePaymentFailureResponse($request, 'El monto total del pago no puede exceder el pendiente.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Persiste la transacción y actualiza la solicitud de servicio.
+     */
+    private function persistServicePayment(Request $request, ServiceRequest $serviceRequest, array $payments, CashRegisterSession $activeSession): void
+    {
+        $totalAmount = collect($payments)->sum('amount');
+
+        DB::beginTransaction();
+        try {
+            $professionalId = $serviceRequest->details()->first()?->professional_id;
+            $hasPaymentMethod = Schema::hasColumn('transactions', 'payment_method');
+            $lastTransaction = null;
+
+            $category = match ($serviceRequest->reception_type) {
+                'RECEPTION_SCHEDULED', 'RECEPTION_WALK_IN' => 'SERVICE_PAYMENT',
+                'INPATIENT_DISCHARGE' => 'INPATIENT_DISCHARGE_PAYMENT',
+                'EMERGENCY' => 'EMERGENCY_DISCHARGE_PAYMENT',
+                default => 'SERVICE_PAYMENT',
+            };
+
+            foreach ($payments as $split) {
+                $transactionData = [
+                    'cash_register_session_id' => $activeSession->id,
+                    'type' => 'INCOME',
+                    'category' => $category,
+                    'amount' => $split['amount'],
+                    'concept' => "Cobro: {$serviceRequest->request_number} - {$serviceRequest->patient->full_name}",
+                    'patient_name' => $serviceRequest->patient->full_name,
+                    'patient_id' => $serviceRequest->patient_id,
+                    'professional_id' => $professionalId,
+                    'notes' => $request->notes,
+                    'user_id' => Auth::id(),
+                    'service_request_id' => $serviceRequest->id,
+                ];
+
+                if ($hasPaymentMethod) {
+                    $transactionData['payment_method'] = $split['payment_method'];
+                }
+
+                $lastTransaction = Transaction::create($transactionData);
+            }
+
+            $newPaidAmount = (float) $serviceRequest->paid_amount + $totalAmount;
+            $isFullyPaid = $newPaidAmount >= (float) $serviceRequest->total_amount;
+
+            $serviceRequest->update([
+                'paid_amount' => $newPaidAmount,
+                'status' => $isFullyPaid ? ServiceRequest::STATUS_PAID : ServiceRequest::STATUS_PENDING_PAYMENT,
+                'payment_status' => $isFullyPaid ? ServiceRequest::PAYMENT_PAID : ServiceRequest::PAYMENT_PARTIAL,
+                'payment_date' => $isFullyPaid ? now() : $serviceRequest->payment_date,
+                'payment_transaction_id' => $isFullyPaid ? $lastTransaction->id : $serviceRequest->payment_transaction_id,
+            ]);
+
+            $activeSession->increment('total_income', $totalAmount);
+
+            DB::commit();
+
+            $updatedServiceRequest = $serviceRequest->fresh(['patient', 'details']);
+
+            ServiceRequestPaymentUpdated::dispatch($updatedServiceRequest);
+
+            $message = $updatedServiceRequest->payment_status === ServiceRequest::PAYMENT_PAID
+                ? 'Pago completado en caja.'
+                : 'Pago parcial registrado en caja.';
+
+            app(NotificationRecipientResolver::class)
+                ->receptionPaymentRecipients()
+                ->each
+                ->notify(new ReceptionPaymentUpdatedNotification($updatedServiceRequest, $message));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Respuesta de éxito para cobros de caja.
+     */
+    private function servicePaymentSuccessResponse(Request $request): JsonResponse|RedirectResponse
+    {
+        if ($request->header('X-Inertia')) {
+            return back()->with('success', 'Cobro procesado exitosamente.');
+        }
+
+        return redirect()->route('cash-register.pending-services')->with('success', 'Cobro procesado exitosamente.');
+    }
+
+    /**
+     * Respuesta de error para cobros de caja.
+     */
+    private function servicePaymentFailureResponse(Request $request, string $message): JsonResponse|RedirectResponse
+    {
+        if ($request->header('X-Inertia')) {
+            return response()->json(['success' => false, 'message' => $message], 422);
+        }
+
+        return redirect()->back()->with('error', $message);
     }
 
     /**

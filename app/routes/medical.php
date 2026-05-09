@@ -214,6 +214,12 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('commissions.top-professionals');
     Route::post('commissions/report-data', [CommissionController::class, 'reportData'])
         ->name('commissions.report-data');
+    Route::post('commissions/service-requests/bulk-authorize', [CommissionController::class, 'bulkAuthorizeScheduledConsultations'])
+        ->middleware(['can:access-financial', 'can:access-commissions'])
+        ->name('commissions.service-requests.bulk-authorize');
+    Route::patch('commissions/service-requests/{serviceRequest}/authorize', [CommissionController::class, 'authorizeScheduledConsultation'])
+        ->middleware(['can:access-financial', 'can:access-commissions'])
+        ->name('commissions.service-requests.authorize');
     
     // Commission Resource
     Route::resource('commissions', CommissionController::class)->names([

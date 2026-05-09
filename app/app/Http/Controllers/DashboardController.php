@@ -18,18 +18,61 @@ class DashboardController extends Controller
      */
     public function index(): Response
     {
-        $today = Carbon::today();
-        $tomorrow = Carbon::tomorrow();
-        $last7DaysStart = Carbon::today()->subDays(6)->startOfDay();
+        $dates = $this->resolveDashboardDates();
 
-        // 1. Unique patients with scheduled appointments today
+        $today = $dates['today'];
+        $tomorrow = $dates['tomorrow'];
+        $last7DaysStart = $dates['last7DaysStart'];
+
+        $stats = $this->getDashboardStats($today, $tomorrow);
+        $topServicesToday = $this->getTopServicesToday($today, $tomorrow);
+        $topProfessionalsToday = $this->getTopProfessionalsToday($today, $tomorrow);
+        $dailyTrend = $this->getDailyTrend($last7DaysStart, $tomorrow);
+        $paymentStatusToday = $this->getPaymentStatusToday($today, $tomorrow);
+        $recentRequests = $this->getRecentRequests($today, $tomorrow);
+
+        return Inertia::render('dashboard', [
+            'stats' => $stats,
+            'charts' => [
+                'top_services_today' => $topServicesToday->map(fn ($item) => [
+                    'name' => $item->name,
+                    'count' => $item->count,
+                ])->toArray(),
+                'top_professionals_today' => $topProfessionalsToday->map(fn ($item) => [
+                    'name' => $item->name,
+                    'count' => $item->count,
+                ])->toArray(),
+                'daily_trend' => $dailyTrend,
+                'payment_status_today' => $paymentStatusToday,
+            ],
+            'recent_requests' => $recentRequests,
+            'date_info' => $this->formatDateInfo($today),
+        ]);
+    }
+
+    /**
+     * @return array{today: Carbon, tomorrow: Carbon, last7DaysStart: Carbon}
+     */
+    private function resolveDashboardDates(): array
+    {
+        return [
+            'today' => Carbon::today(),
+            'tomorrow' => Carbon::tomorrow(),
+            'last7DaysStart' => Carbon::today()->subDays(6)->startOfDay(),
+        ];
+    }
+
+    /**
+     * @return array{patients_attended_today: int, patients_by_insurance_today: int, patients_particular_today: int, service_requests_today: int, active_income_transactions_today: int, open_cash_sessions: int}
+     */
+    private function getDashboardStats(Carbon $today, Carbon $tomorrow): array
+    {
         $patientsScheduledToday = ScheduleAppointment::query()
             ->whereDate('appointment_date', $today)
             ->where('status', ScheduleAppointment::STATUS_SCHEDULED)
             ->distinct('patient_id')
             ->count('patient_id');
 
-        // 2. Patients by insurance type (not "Particular") today
         $patientsByInsuranceToday = DB::table('service_requests')
             ->join('patients', 'service_requests.patient_id', '=', 'patients.id')
             ->join('patient_insurances', 'patients.id', '=', 'patient_insurances.patient_id')
@@ -39,7 +82,6 @@ class DashboardController extends Controller
             ->distinct('service_requests.patient_id')
             ->count('service_requests.patient_id');
 
-        // 3. Private/Particular patients today
         $patientsParticularToday = DB::table('service_requests')
             ->join('patients', 'service_requests.patient_id', '=', 'patients.id')
             ->leftJoin('patient_insurances', 'patients.id', '=', 'patient_insurances.patient_id')
@@ -55,21 +97,29 @@ class DashboardController extends Controller
             ->distinct('service_requests.patient_id')
             ->count('service_requests.patient_id');
 
-        // 4. Service requests created today
         $serviceRequestsToday = ServiceRequest::whereBetween('created_at', [$today, $tomorrow])->count();
 
-        // 5. Active income transactions today (non-sensitive KPI)
         $activeIncomeTransactionsToday = Transaction::query()
             ->active()
             ->income()
             ->whereBetween('created_at', [$today, $tomorrow])
             ->count();
 
-        // 6. Open cash register sessions
         $openCashSessions = CashRegisterSession::query()->open()->count();
 
-        // 7. Top 10 services today
-        $topServicesToday = DB::table('service_request_details')
+        return [
+            'patients_attended_today' => $patientsScheduledToday,
+            'patients_by_insurance_today' => $patientsByInsuranceToday,
+            'patients_particular_today' => $patientsParticularToday,
+            'service_requests_today' => $serviceRequestsToday,
+            'active_income_transactions_today' => $activeIncomeTransactionsToday,
+            'open_cash_sessions' => $openCashSessions,
+        ];
+    }
+
+    private function getTopServicesToday(Carbon $today, Carbon $tomorrow)
+    {
+        return DB::table('service_request_details')
             ->join('medical_services', 'service_request_details.medical_service_id', '=', 'medical_services.id')
             ->join('service_requests', 'service_request_details.service_request_id', '=', 'service_requests.id')
             ->whereBetween('service_requests.created_at', [$today, $tomorrow])
@@ -78,9 +128,11 @@ class DashboardController extends Controller
             ->orderByDesc('count')
             ->limit(10)
             ->get();
+    }
 
-        // 8. Top 10 professionals today
-        $topProfessionalsToday = DB::table('service_request_details')
+    private function getTopProfessionalsToday(Carbon $today, Carbon $tomorrow)
+    {
+        return DB::table('service_request_details')
             ->join('professionals', 'service_request_details.professional_id', '=', 'professionals.id')
             ->join('service_requests', 'service_request_details.service_request_id', '=', 'service_requests.id')
             ->whereBetween('service_requests.created_at', [$today, $tomorrow])
@@ -92,8 +144,13 @@ class DashboardController extends Controller
             ->orderByDesc('count')
             ->limit(10)
             ->get();
+    }
 
-        // 9. Daily trend (last 7 days): distinct patients + income
+    /**
+     * @return array<int, array{date: string, label: string, patients: int, income: float}>
+     */
+    private function getDailyTrend(Carbon $last7DaysStart, Carbon $tomorrow): array
+    {
         $patientsTrendRaw = DB::table('service_requests')
             ->selectRaw('DATE(created_at) as day, COUNT(DISTINCT patient_id) as patients_count')
             ->whereBetween('created_at', [$last7DaysStart, $tomorrow])
@@ -108,7 +165,7 @@ class DashboardController extends Controller
             ->groupBy('day')
             ->pluck('total_income', 'day');
 
-        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($last7DaysStart, $patientsTrendRaw, $incomeTrendRaw) {
+        return collect(range(0, 6))->map(function (int $offset) use ($last7DaysStart, $patientsTrendRaw, $incomeTrendRaw) {
             $date = $last7DaysStart->copy()->addDays($offset);
             $key = $date->toDateString();
 
@@ -119,9 +176,14 @@ class DashboardController extends Controller
                 'income' => (float) ($incomeTrendRaw[$key] ?? 0),
             ];
         })->toArray();
+    }
 
-        // 10. Payment status split for today
-        $paymentStatusToday = ServiceRequest::query()
+    /**
+     * @return array<int, array{status: mixed, count: int}>
+     */
+    private function getPaymentStatusToday(Carbon $today, Carbon $tomorrow): array
+    {
+        return ServiceRequest::query()
             ->whereBetween('created_at', [$today, $tomorrow])
             ->selectRaw('payment_status, COUNT(*) as count')
             ->groupBy('payment_status')
@@ -131,9 +193,14 @@ class DashboardController extends Controller
                 'count' => (int) $row->count,
             ])
             ->toArray();
+    }
 
-        // 11. Recent requests (today)
-        $recentRequests = ServiceRequest::query()
+    /**
+     * @return array<int, array{id: int, request_number: string, patient: string, total_amount: float, paid_amount: float, payment_status: string, created_at: string|null}>
+     */
+    private function getRecentRequests(Carbon $today, Carbon $tomorrow): array
+    {
+        return ServiceRequest::query()
             ->with('patient:id,first_name,last_name')
             ->whereBetween('created_at', [$today, $tomorrow])
             ->latest('created_at')
@@ -149,34 +216,17 @@ class DashboardController extends Controller
                 'created_at' => $request->created_at?->format('H:i'),
             ])
             ->toArray();
+    }
 
-        return Inertia::render('dashboard', [
-            'stats' => [
-                'patients_attended_today' => $patientsScheduledToday,
-                'patients_by_insurance_today' => $patientsByInsuranceToday,
-                'patients_particular_today' => $patientsParticularToday,
-                'service_requests_today' => $serviceRequestsToday,
-                'active_income_transactions_today' => $activeIncomeTransactionsToday,
-                'open_cash_sessions' => $openCashSessions,
-            ],
-            'charts' => [
-                'top_services_today' => $topServicesToday->map(fn ($item) => [
-                    'name' => $item->name,
-                    'count' => $item->count,
-                ])->toArray(),
-                'top_professionals_today' => $topProfessionalsToday->map(fn ($item) => [
-                    'name' => $item->name,
-                    'count' => $item->count,
-                ])->toArray(),
-                'daily_trend' => $dailyTrend,
-                'payment_status_today' => $paymentStatusToday,
-            ],
-            'recent_requests' => $recentRequests,
-            'date_info' => [
-                'date' => $today->format('Y-m-d'),
-                'day_name' => $today->translatedFormat('l'),
-                'formatted_date' => $today->translatedFormat('d \d\e F \d\e Y'),
-            ],
-        ]);
+    /**
+     * @return array{date: string, day_name: string, formatted_date: string}
+     */
+    private function formatDateInfo(Carbon $today): array
+    {
+        return [
+            'date' => $today->format('Y-m-d'),
+            'day_name' => $today->translatedFormat('l'),
+            'formatted_date' => $today->translatedFormat('d \d\e F \d\e Y'),
+        ];
     }
 }

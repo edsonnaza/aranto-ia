@@ -249,7 +249,7 @@ class ServiceRequestController extends Controller
                     'discount_amount' => $serviceData['discount_amount'] ?? 0,
                     'preparation_instructions' => $serviceData['preparation_instructions'] ?? null,
                     'notes' => $serviceData['notes'] ?? null,
-                    'status' => \App\Models\ServiceRequestDetail::STATUS_PENDING,
+                    'status' => ServiceRequestDetail::STATUS_PENDING,
                 ]);
             }
 

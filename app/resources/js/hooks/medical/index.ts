@@ -79,6 +79,9 @@ export type { CommissionReportFilters, UseCommissionReportsReturn } from './useC
 export { useCommissionDashboard } from './useCommissionDashboard'
 export type { CommissionDashboardData } from './useCommissionDashboard'
 
+// Commission authorizations hook
+export { useCommissionAuthorizations } from './useCommissionAuthorizations'
+
 // Specialties Hooks
 export { default as useSpecialties } from './useSpecialties'
 export type { 

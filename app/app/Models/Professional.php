@@ -21,6 +21,7 @@ use App\Traits\Auditable;
  * @property string|null $professional_license
  * @property \Illuminate\Support\Carbon|null $license_expiry_date
  * @property string|null $title
+ * @property string|null $license_number
  * @property float $commission_percentage
  * @property string $commission_calculation_method
  * @property string $status
