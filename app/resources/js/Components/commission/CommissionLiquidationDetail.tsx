@@ -28,7 +28,7 @@ export default function CommissionLiquidationDetail({
   const [pdfPayload, setPdfPayload] = useState<{ liquidation: CommissionLiquidation; services: ServiceDetail[] } | null>(null)
   const pdfContainerRef = useRef<HTMLDivElement>(null)
 
-  const { getLiquidationDetail, approveLiquidation, payLiquidation, loading, error } = useCommissionLiquidations()
+  const { getLiquidationDetail, approveLiquidation, loading, error } = useCommissionLiquidations()
   const { downloadPdf } = useDocumentExport()
 
   const loadDetail = useCallback(async () => {
@@ -78,22 +78,6 @@ export default function CommissionLiquidationDetail({
       await loadDetail()
     } catch (err) {
       console.error('Error approving liquidation:', err)
-    }
-  }
-
-  const handleMarkAsPaid = async () => {
-    if (!detail) return
-
-    try {
-      // Mock temporal para los datos de pago
-      await payLiquidation(detail.liquidation.id, {
-        cash_register_session_id: 1,
-        amount: detail.liquidation.commission_amount ?? 0,
-        concept: 'Pago de comisión'
-      })
-      await loadDetail()
-    } catch (err) {
-      console.error('Error marking as paid:', err)
     }
   }
 
@@ -289,12 +273,7 @@ export default function CommissionLiquidationDetail({
                   Aprobar
                 </Button>
               )}
-              {liquidation.status === 'approved' && (
-                <Button onClick={handleMarkAsPaid} disabled={loading}>
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Marcar como Pagada
-                </Button>
-              )}
+
             </div>
           </div>
         </CardContent>

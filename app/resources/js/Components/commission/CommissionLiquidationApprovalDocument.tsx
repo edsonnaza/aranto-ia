@@ -86,7 +86,7 @@ export default function CommissionLiquidationApprovalDocument({
                 </div>
             </div>
 
-            <main>
+            <main className="mt-1">
                 <table className="w-full border-collapse text-[9px] leading-tight">
                     <thead>
                         <tr className="bg-gray-100">
@@ -120,13 +120,8 @@ export default function CommissionLiquidationApprovalDocument({
                 </table>
             </main>
 
-            <footer className="mt-16 grid grid-cols-2 gap-12 text-center text-sm">
-                <div>
-                    <div className="mb-2 h-px w-full bg-black" />
-                    <p>Firma quien genero el documento</p>
-                    <p className="mt-1 font-semibold">{liquidation.generated_by_name ?? '____________________'}</p>
-                </div>
-                <div>
+            <footer className="mt-16 text-center text-sm">
+                <div className="mx-auto w-80 max-w-full">
                     <div className="mb-2 h-px w-full bg-black" />
                     <p>Firma profesional que recibe</p>
                     <p className="mt-1 font-semibold">{liquidation.professional_name ?? '____________________'}</p>

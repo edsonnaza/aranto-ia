@@ -17,8 +17,8 @@ export default function DocumentHeader({ title, numberLabel = 'N°', numberValue
     return (
         <header className="mb-4 border-b pb-3">
             <div className="mb-3 flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+                <div className="flex min-w-0 flex-1 items-end gap-2">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm">
                         {logoUrl ? (
                             <img
                                 src={logoUrl}
@@ -32,26 +32,23 @@ export default function DocumentHeader({ title, numberLabel = 'N°', numberValue
                         )}
                     </div>
 
-                    <div className="min-w-0 space-y-0.5">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                         <h2 className="truncate text-sm font-bold uppercase text-gray-900 dark:text-gray-100">
                             {company?.name ?? 'Empresa'}
                         </h2>
                         <p className="text-[10px] text-gray-600 dark:text-gray-400">
                             {company?.ruc ? `RUC: ${company.ruc}` : 'RUC no informado'}
                         </p>
-                        <p className="text-[10px] text-gray-600 dark:text-gray-400">
-                            {company?.legal_representative ? `Rep. legal: ${company.legal_representative}` : '-'}
-                        </p>
-                        <p className="text-[10px] text-gray-600 dark:text-gray-400">
+                       
+                        <p className="truncate whitespace-nowrap text-[10px] text-gray-600 dark:text-gray-400">
                             {[company?.phone, company?.email].filter(Boolean).join(' • ') || '-'}
                         </p>
                     </div>
                 </div>
 
                 {numberValue !== undefined ? (
-                    <div className="whitespace-nowrap text-right">
-                        <div className="text-xs font-semibold uppercase text-gray-500">{numberLabel}</div>
-                        <div className="text-base font-bold text-gray-700">{numberValue}</div>
+                    <div className="whitespace-nowrap pl-2 text-right text-sm font-bold text-gray-700">
+                        {numberLabel} {numberValue}
                     </div>
                 ) : null}
             </div>
