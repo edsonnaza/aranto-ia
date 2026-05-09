@@ -5,6 +5,18 @@ export interface Auth {
     user: User;
 }
 
+export interface CompanySetting {
+    id: number;
+    name: string;
+    ruc: string | null;
+    logo_path: string | null;
+    logo_url: string | null;
+    logo_data_url: string | null;
+    legal_representative: string | null;
+    phone: string | null;
+    email: string | null;
+}
+
 export interface BreadcrumbItem {
     title: string;
     href: string;
@@ -25,6 +37,7 @@ export interface NavItem {
 
 export interface SharedData {
     name: string;
+    company: CompanySetting | null;
     quote: { message: string; author: string };
     auth: Auth;
     notifications?: NotificationCollection;

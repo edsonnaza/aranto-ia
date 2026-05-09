@@ -2,8 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CompanySetting;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -37,10 +39,39 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $company = CompanySetting::current();
+        $logoDataUrl = null;
+
+        if ($company?->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+            $extension = strtolower(pathinfo($company->logo_path, PATHINFO_EXTENSION));
+            $mimeType = match ($extension) {
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif',
+                'svg' => 'image/svg+xml',
+                default => 'image/jpeg',
+            };
+            $logoDataUrl = sprintf(
+                'data:%s;base64,%s',
+                $mimeType,
+                base64_encode(Storage::disk('public')->get($company->logo_path)),
+            );
+        }
 
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'company' => $company ? [
+                'id' => $company->id,
+                'name' => $company->name,
+                'ruc' => $company->ruc,
+                'logo_path' => $company->logo_path,
+                'logo_url' => $company->logo_url,
+                'logo_data_url' => $logoDataUrl,
+                'legal_representative' => $company->legal_representative,
+                'phone' => $company->phone,
+                'email' => $company->email,
+            ] : null,
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user() ? [

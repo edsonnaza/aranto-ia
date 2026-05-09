@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type { CommissionLiquidation, CommissionLiquidationDetail } from '@/types/commission';
+import DocumentHeader from '@/components/documents/DocumentHeader';
 
 type CommissionLiquidationApprovalDocumentProps = {
     liquidation: CommissionLiquidation;
@@ -53,42 +54,37 @@ export default function CommissionLiquidationApprovalDocument({
 
     return (
         <div className="bg-white p-8 text-black" style={{ width: '210mm', minHeight: '297mm' }}>
-            <header className="mb-4 border-b pb-3">
-                <div className="mb-2 flex items-baseline justify-between gap-4">
-                    <h1 className="whitespace-nowrap text-lg font-bold">Liquidacion de Comisiones</h1>
-                    <span className="whitespace-nowrap text-sm font-semibold text-gray-500">Nº {liquidation.id}</span>
+            <DocumentHeader title="Liquidacion de Comisiones" numberLabel="Nº" numberValue={liquidation.id} />
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p>
+                        <span className="font-semibold">Profesional: </span>
+                        {liquidation.professional_name ?? '-'}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Periodo: </span>
+                        {formatDate(liquidation.period_start)} - {formatDate(liquidation.period_end)}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Estado: </span>
+                        {getStatusLabel(liquidation.status)}
+                    </p>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <p>
-                            <span className="font-semibold">Profesional: </span>
-                            {liquidation.professional_name ?? '-'}
-                        </p>
-                        <p>
-                            <span className="font-semibold">Periodo: </span>
-                            {formatDate(liquidation.period_start)} - {formatDate(liquidation.period_end)}
-                        </p>
-                        <p>
-                            <span className="font-semibold">Estado: </span>
-                            {getStatusLabel(liquidation.status)}
-                        </p>
-                    </div>
-                    <div>
-                        <p>
-                            <span className="font-semibold">Total produccion: </span>
-                            {formatCurrency(totalProduction)}
-                        </p>
-                        <p>
-                            <span className="font-semibold">Total comision a cobrar: </span>
-                            {formatCurrency(totalCommission)}
-                        </p>
-                        <p>
-                            <span className="font-semibold">Fecha impresion: </span>
-                            {printedAt.toLocaleDateString('es-PY')} {printedAt.toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                        </p>
-                    </div>
+                <div>
+                    <p>
+                        <span className="font-semibold">Total produccion: </span>
+                        {formatCurrency(totalProduction)}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Total comision a cobrar: </span>
+                        {formatCurrency(totalCommission)}
+                    </p>
+                    <p>
+                        <span className="font-semibold">Fecha impresion: </span>
+                        {printedAt.toLocaleDateString('es-PY')} {printedAt.toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </p>
                 </div>
-            </header>
+            </div>
 
             <main>
                 <table className="w-full border-collapse text-[9px] leading-tight">
