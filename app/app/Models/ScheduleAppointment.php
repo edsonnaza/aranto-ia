@@ -48,6 +48,7 @@ class ScheduleAppointment extends Model
 
     protected $fillable = [
         'professional_id',
+        'professional_schedule_id',
         'patient_id',
         'medical_service_id',
         'medical_service_ids',
@@ -66,6 +67,7 @@ class ScheduleAppointment extends Model
     ];
 
     protected $casts = [
+        'professional_schedule_id' => 'integer',
         'appointment_date' => 'date',
         'medical_service_ids' => 'array',
         'duration_minutes' => 'integer',

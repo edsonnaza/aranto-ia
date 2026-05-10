@@ -259,7 +259,17 @@ class ScheduleController extends Controller
     {
         $validated = $this->validateSchedule($request);
 
+        // Validación: no permitir modificar si existen turnos asignados a esta agenda
+        $hasAppointments = ScheduleAppointment::where('professional_schedule_id', $schedule->id)
+            ->exists();
+
+        if ($hasAppointments) {
+            return back()->withErrors(['slot_duration_minutes' => 'No se puede modificar la duración del slot porque existen turnos asignados a esta agenda. Libere o reprograme todos los turnos antes de modificar la agenda.'])->withInput();
+        }
+
+
         DB::transaction(function () use ($schedule, $validated) {
+            // Actualizar agenda
             $schedule->update([
                 'professional_id' => $validated['professional_id'],
                 'name' => $validated['name'],
@@ -270,8 +280,18 @@ class ScheduleController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
+            // Eliminar reglas/slots antiguos
             $schedule->rules()->delete();
+
+            // Regenerar reglas/slots nuevos
             $schedule->rules()->createMany($validated['rules']);
+
+            // Eliminar todos los bloques de agenda (slots bloqueados) del rango
+            ProfessionalScheduleBlock::where('professional_id', $schedule->professional_id)
+                ->where('start_datetime', '>=', $schedule->start_date)
+                ->where('end_datetime', '<=', $schedule->end_date ?? now())
+                ->delete();
+            // Aquí podrías llamar a un servicio para regenerar slots físicos si tu sistema los usa
         });
 
         return back()->with('message', 'Agenda actualizada correctamente.');
@@ -338,7 +358,19 @@ class ScheduleController extends Controller
             return back()->withErrors(['appointment_time' => $validation['message']])->withInput();
         }
 
-        ScheduleAppointment::create($this->buildAppointmentPayload($validated));
+        // Buscar la agenda activa para el profesional y fecha
+        $schedule = \App\Models\ProfessionalSchedule::where('professional_id', $validated['professional_id'])
+            ->where('start_date', '<=', $validated['appointment_date'])
+            ->where(function($q) use ($validated) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $validated['appointment_date']);
+            })
+            ->where('status', \App\Models\ProfessionalSchedule::STATUS_ACTIVE)
+            ->first();
+
+        $payload = $this->buildAppointmentPayload($validated);
+        $payload['professional_schedule_id'] = $schedule?->id;
+
+        ScheduleAppointment::create($payload);
 
         return back()->with('message', 'Cita registrada correctamente.');
     }
@@ -361,7 +393,19 @@ class ScheduleController extends Controller
             }
         }
 
-        $appointment->update($this->buildAppointmentPayload($validated));
+        // Buscar la agenda activa para el profesional y fecha
+        $schedule = \App\Models\ProfessionalSchedule::where('professional_id', $validated['professional_id'])
+            ->where('start_date', '<=', $validated['appointment_date'])
+            ->where(function($q) use ($validated) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $validated['appointment_date']);
+            })
+            ->where('status', \App\Models\ProfessionalSchedule::STATUS_ACTIVE)
+            ->first();
+
+        $payload = $this->buildAppointmentPayload($validated);
+        $payload['professional_schedule_id'] = $schedule?->id;
+
+        $appointment->update($payload);
 
         return back()->with('message', 'Cita actualizada correctamente.');
     }

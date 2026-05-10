@@ -1,5 +1,11 @@
+
+	// Navegar a recepción desde un turno
+	function goToReceptionFromAppointment(id: number) {
+		// Redirigir a la pantalla de recepción con el id de la cita
+		router.get('/reception', { appointment_id: id })
+	}
 import { Head, router } from '@inertiajs/react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronRight, MoreHorizontal, PlusCircle } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
@@ -214,16 +220,26 @@ interface SchedulePageProps {
 	}
 }
 
-export default function ScheduleIndex({
-	professionals,
-	medicalServices,
-	schedules,
-	blocks,
-	appointments,
-	occupancy,
-	slotBoard,
-	filters,
-}: SchedulePageProps) {
+export default function ScheduleIndex(props: SchedulePageProps) {
+	// Ref para el contenedor de cards de turnos
+	const appointmentCardsRef = useRef<HTMLDivElement>(null)
+	const {
+		professionals,
+		medicalServices,
+		schedules,
+		blocks,
+		appointments,
+		occupancy,
+		slotBoard,
+		filters,
+	} = props
+
+
+	// ...existing code...
+
+
+
+
 		const { searchPatients, searchProfessionals } = useSearch()
 	const {
 		loadingAction,
@@ -749,6 +765,8 @@ export default function ScheduleIndex({
 			accumulator[slot.date].push(slot)
 			return accumulator
 		}, {})
+
+		
 
 		return Object.entries(groupedByDate).flatMap(([date, slotsForDay]) => {
 			const orderedSlots = [...slotsForDay].sort((left, right) => left.start_time.localeCompare(right.start_time))
@@ -1542,6 +1560,19 @@ export default function ScheduleIndex({
 		})
 	}
 
+
+		// Scroll automático al abrir el modal de planner semanal
+	useEffect(() => {
+		if (isAppointmentPlannerOpen) {
+			const timeout = setTimeout(() => {
+				if (appointmentCardsRef.current) {
+					appointmentCardsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+				}
+			}, 250)
+			return () => clearTimeout(timeout)
+		}
+	}, [isAppointmentPlannerOpen])
+
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Agenda médica" />
@@ -1553,6 +1584,8 @@ export default function ScheduleIndex({
 				</div>
 
 				<div className="grid gap-4 md:grid-cols-4">
+					{/* Punto de scroll automático al abrir el planner semanal */}
+					<div ref={appointmentCardsRef} className="col-span-4" />
 					<Card>
 						<CardContent className="pt-6">
 							<div className="text-sm text-gray-500">Capacidad total</div>
@@ -1829,8 +1862,7 @@ export default function ScheduleIndex({
 							</div>
 						</div>
 						</div>
-						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-							<div className="space-y-5">
+						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5" ref={appointmentCardsRef}>
 							{selectedAppointmentPlannerDay && (
 								<div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
 									<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1871,7 +1903,7 @@ export default function ScheduleIndex({
 									{filteredSelectedAppointmentPlannerSlots.length === 0 ? (
 										<p className="text-sm text-sky-900">No hay slots configurados para este día en la agenda.</p>
 									) : (
-										<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+										<div className="grid gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
 											{filteredSelectedAppointmentPlannerSlots.map((slot) => {
 												const canSchedule = slot.status === 'available' || slot.status === 'partial'
 												const toneClasses = slot.status === 'available'
@@ -2080,7 +2112,7 @@ export default function ScheduleIndex({
 								</div>
 							)}
 						</div>
-					</div>
+					
 					<DialogFooter className="shrink-0 border-t border-gray-200 bg-white px-6 py-4 sm:justify-between">
 						<div className="text-xs text-gray-500">
 							{selectedAppointmentPlannerDay
