@@ -48,6 +48,11 @@ type SlotContext = {
   endTime: string
   durationMinutes: number
 }
+// allow optional agenda metadata when slot is derived from slotBoard
+type SlotContextExtended = SlotContext & {
+  agendaName?: string | null
+  slotLengthMinutes?: number | null
+}
 
 interface AppointmentSlotModalProps {
   open: boolean
@@ -77,6 +82,13 @@ export default function AppointmentSlotModal({
   const [appointmentSource, setAppointmentSource] = useState<'agenda' | 'reception' | 'manual'>('agenda')
   const [appointmentNotes, setAppointmentNotes] = useState('')
   const [cancellationReason, setCancellationReason] = useState('')
+
+  const formatDateToDDMMYYYY = (isoDate?: string) => {
+    if (!isoDate) return ''
+    const parts = isoDate.split('-')
+    if (parts.length !== 3) return isoDate
+    return `${parts[2]}-${parts[1]}-${parts[0]}`
+  }
 
   useEffect(() => {
     if (!open) {
@@ -173,7 +185,23 @@ export default function AppointmentSlotModal({
         <DialogHeader>
           <DialogTitle>{appointment ? 'Editar cita' : 'Asignar cita'}</DialogTitle>
           <DialogDescription>
-            {slot ? `${slot.professionalName} · ${slot.date} · ${slot.startTime} a ${slot.endTime}` : 'Seleccioná un slot para cargar la cita.'}
+            {slot ? (
+              <>
+                <span>{`${slot.professionalName} · ${formatDateToDDMMYYYY(slot.date)} · ${slot.startTime} a ${slot.endTime}`}</span>
+                {(slot as SlotContextExtended).agendaName && (
+                  <>
+                    <br />
+                    <span className="text-sm text-slate-600">Agenda: {(slot as SlotContextExtended).agendaName}</span>
+                  </>
+                )}
+                {(slot as SlotContextExtended).slotLengthMinutes && (
+                  <>
+                    <br />
+                    <span className="text-sm text-slate-600">Duración: {(slot as SlotContextExtended).slotLengthMinutes} min</span>
+                  </>
+                )}
+              </>
+            ) : 'Seleccioná un slot para cargar la cita.'}
           </DialogDescription>
         </DialogHeader>
 

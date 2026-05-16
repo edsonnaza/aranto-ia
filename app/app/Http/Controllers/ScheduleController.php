@@ -13,6 +13,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,6 +44,7 @@ class ScheduleController extends Controller
             : $dateFrom->copy();
 
         $professionalId = $request->filled('professional_id') ? (int) $request->get('professional_id') : null;
+        // Si no se selecciona profesional, mostrar todas las agendas (no filtrar por profesional)
         $scheduleSearch = trim((string) $request->get('search', ''));
         $scheduleStatus = $request->filled('status') ? (string) $request->get('status') : null;
 
@@ -55,12 +57,22 @@ class ScheduleController extends Controller
         $appointments = $this->getAppointmentsList($professionalId, $dateFrom, $dateTo, $medicalServicesLookup);
 
         $occupancy = $this->scheduleService->getOccupancyReport($dateFrom, $dateTo, $professionalId);
+
         $slotBoard = $professionalId
             ? $this->scheduleService->getSlotBoardForDate($professionalId, $selectedDate)
             : [];
 
+        // Log para depuración
+        \Log::info('DEBUG slotBoard', [
+            'professional_id' => $professionalId,
+            'selected_date' => $selectedDate,
+            'slotBoard' => $slotBoard,
+        ]);
+
+        $professionalsWithSchedule = $this->getProfessionalsWithSchedule();
         return Inertia::render('medical/schedule/Index', [
             'professionals' => $professionals,
+            'professionalsWithSchedule' => $professionalsWithSchedule,
             'medicalServices' => $medicalServices,
             'schedules' => $schedules,
             'blocks' => $blocks,
@@ -78,6 +90,31 @@ class ScheduleController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Retorna solo los profesionales que tienen al menos una agenda creada
+     */
+    private function getProfessionalsWithSchedule(): array
+    {
+        $professionalIds = ProfessionalSchedule::query()
+            ->distinct()
+            ->pluck('professional_id');
+
+        return Professional::query()
+            ->whereIn('id', $professionalIds)
+            ->active()
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (Professional $p) => [
+                'id' => $p->id,
+                'full_name' => $p->full_name,
+                'specialties' => $p->specialties->pluck('name')->values()->all(),
+            ])
+            ->values()
+            ->all();
+    }
+ 
 
     private function getProfessionalsList(): array
     {
@@ -217,6 +254,16 @@ class ScheduleController extends Controller
             ->unique()
             ->values()
             ->all();
+
+        // Log para depuración: comparar citas y slotBoard
+        Log::info('DEBUG appointmentsIndex', [
+            'professional_id' => $professionalId,
+            'selected_date' => $selectedDate,
+            'range_start' => $rangeStart,
+            'range_end' => $rangeEnd,
+            'appointments' => $appointments,
+            'slotBoard' => $slotBoard,
+        ]);
 
         return Inertia::render('medical/schedule/Appointments', [
             'professionals' => $professionals,

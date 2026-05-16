@@ -250,7 +250,8 @@ export default function ScheduleIndex(props: SchedulePageProps) {
 		saveAppointment,
 	} = useSchedule()
 
-	const [filterProfessionalId, setFilterProfessionalId] = useState(filters.professional_id ? String(filters.professional_id) : '')
+	// Mostrar todas las agendas por defecto (no filtrar por profesional al cargar)
+	const [filterProfessionalId, setFilterProfessionalId] = useState('')
 	const [dateFrom, setDateFrom] = useState(filters.date_from)
 	const [dateTo, setDateTo] = useState(filters.date_to)
 	const [selectedDate] = useState(filters.selected_date)
@@ -375,7 +376,8 @@ export default function ScheduleIndex(props: SchedulePageProps) {
 
 	const applyFilters = () => {
 		navigateWithFilters({
-			professional_id: filterProfessionalId || undefined,
+			// Solo enviar professional_id si el usuario seleccionó uno
+			...(filterProfessionalId ? { professional_id: filterProfessionalId } : {}),
 			date_from: dateFrom,
 			date_to: dateTo,
 			selected_date: selectedDate,
@@ -388,7 +390,8 @@ export default function ScheduleIndex(props: SchedulePageProps) {
 	const applyProfessionalFilter = (professionalId: string) => {
 		setFilterProfessionalId(professionalId)
 		navigateWithFilters({
-			professional_id: professionalId || undefined,
+			// Solo enviar professional_id si el usuario seleccionó uno
+			...(professionalId ? { professional_id: professionalId } : {}),
 			date_from: dateFrom,
 			date_to: dateTo,
 			selected_date: selectedDate,
