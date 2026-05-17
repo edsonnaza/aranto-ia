@@ -211,6 +211,18 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
           try {
             if (!arg || !arg.date) return
             const start = arg.date
+            // Buscar si existe un evento bloqueado en ese horario
+            const clickedISO = start.toISOString().slice(0, 16) // Precisión a minutos
+            const blocked = events.some(ev => {
+              // FullCalendar puede tener start/end como string o Date
+              const evStart = typeof ev.start === 'string' ? ev.start.slice(0, 16) : (ev.start instanceof Date ? ev.start.toISOString().slice(0, 16) : '')
+       
+              return evStart === clickedISO && ev.extendedProps && ev.extendedProps.slot_status === 'blocked'
+            })
+            if (blocked) {
+              // Opcional: mostrar toast o mensaje
+              return
+            }
             // parse slotDuration like '00:30:00' into milliseconds
             const parts = (slotDuration || '00:30:00').split(':').map(Number)
             const slotMinutes = ((parts[0] || 0) * 60) + (parts[1] || 0)
@@ -238,7 +250,7 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
           if (noAgenda) {
             return (
               <div className="w-full flex flex-col items-center justify-center py-12">
-                <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-lg">
+                <div className="rounded-sm   bg-white p-6 text-center text-sm text-slate-600 shadow-lg">
                   <div className="font-medium text-slate-800 mb-1">Sin agenda para la fecha</div>
                   <div>
                     No hay slots definidos para {names} en {fecha}.
@@ -251,6 +263,31 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
               </div>
             )
           }
+
+          // Si el slot está bloqueado, mostrar fondo gris oscuro y motivo
+            if (arg.event.extendedProps?.slot_status === 'blocked') {
+              // Mapeo de tipos de bloqueo a español
+              const tipoRaw = arg.event.extendedProps?.block_type || ''
+              const tipoMap: Record<string, string> = {
+                'vacation': 'Vacaciones',
+                'conference': 'Congreso',
+                'travel': 'Viaje',
+                'other': 'Otro',
+                // Agrega aquí más tipos según existan en tu sistema
+              }
+              const tipo = tipoMap[tipoRaw.toLowerCase()] || tipoRaw
+              return (
+                <div className="flex items-center justify-center h-full w-full rounded-md bg-orange-100" >
+                  <div className="flex flex-col items-center w-full pt-2">
+                     <Badge variant="destructive">Agenda bloqueada</Badge>
+                    {tipo && (
+                         <Badge className="text-black bg-transparent">Motivo: {tipo}</Badge>
+                    )}
+                  </div>
+                </div>
+              )
+          }
+
           // Si hay agenda, mostrar el contenido normal
           const professional = arg.event.extendedProps?.professional_name ?? arg.event.title
           const patient = arg.event.extendedProps?.patient_name ?? arg.event.extendedProps?.patient ?? ''
@@ -297,18 +334,7 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
               {/* Solo mostrar badges y botones si es una cita real */}
               {isRealAppointment && (
                 <>
-                  {arg.event.extendedProps?.slot_status === 'blocked' && (
-                    <div className="flex flex-col justify-center items-end gap-1 pr-2 pl-1">
-                      <div className="flex flex-col items-end">
-                        <Badge variant="outline" className="text-red-900 border-red-400">
-                          Turno bloqueado
-                        </Badge>
-                        <div className="min-w-0 truncate text-slate-500 text-xs mt-1">
-                          {arg.event.extendedProps?.agenda_name || 'Bloqueo operativo'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* ...bloqueo y acciones normales... */}
                   {!appointmentCanGoToReception && arg.event.extendedProps?.slot_status !== 'blocked' && (
                     <div className="flex flex-col justify-center items-end gap-1 pr-2 pl-1">
                       <div className="flex w-full flex-wrap justify-center gap-2">

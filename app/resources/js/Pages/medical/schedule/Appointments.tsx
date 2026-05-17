@@ -680,14 +680,14 @@ export default function AppointmentsPage(props: AppointmentsPageProps) {
                     {slot.start_time} - {slot.end_time}
                   </div>
                   <div className="min-w-0 truncate text-slate-500">
-                    {slot.slot_status === 'blocked' ? 'Franja bloqueada' : 'Sin paciente asignado'}
+                    {slot.slot_status === 'blocked' ? slot.block_title || 'Bloqueo operativo' : 'Sin paciente asignado'}
                   </div>
                   <div className="min-w-0 truncate text-slate-500">
                     {slot.slot_status === 'blocked' ? slot.block_title || 'Bloqueo operativo' : 'Disponible para agendar'}
                   </div>
                   <div className="min-w-0">
                     <Badge variant={slot.slot_status === 'blocked' ? 'secondary' : 'outline'} className="h-6 px-1.5 text-[10px]">
-                      {slot.slot_status === 'blocked' ? 'Bloqueado' : 'Disponible'}
+                      {slot.slot_status === 'blocked' ? (slot.block_title || 'Slot') : 'Disponible'}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -1041,17 +1041,16 @@ export default function AppointmentsPage(props: AppointmentsPageProps) {
                     si no hay slots visibles para la fecha/profesional seleccionados. Así, los botones prev/next nunca se bloquean y la UX es consistente.
                   */}
                   <CitasFullCalendar
-                    // Solo citas de los profesionales visibles en la vista diaria filtrada
+                    // Unimos citas y slots bloqueados para visualización
                     events={(() => {
                       const visibleProfessionalIds = new Set(professionalsForDailyView.map(p => p.id))
-                      return appointments
+                      // Eventos de citas
+                      const appointmentEvents = appointments
                         .filter((appt) => visibleProfessionalIds.size === 0 || visibleProfessionalIds.has(appt.professional_id))
                         .map(appt => {
-                          // Buscar metadatos del slot
                           const matchingSlot = slotBoard.find((s) => s.professional_id === appt.professional_id && s.date === appt.appointment_date && s.start_time === appt.start_time)
                           const agendaName = matchingSlot?.block_title || matchingSlot?.block_title === null ? matchingSlot?.block_title : undefined
                           const slotLength = matchingSlot?.duration_minutes ?? appt.duration_minutes
-
                           return {
                             id: String(appt.id),
                             title: `${appt.professional_name} — ${appt.patient_name}` + (appt.medical_service_name ? ` (${appt.medical_service_name})` : ''),
@@ -1068,6 +1067,27 @@ export default function AppointmentsPage(props: AppointmentsPageProps) {
                             borderColor: appt.status === 'cancelled' ? '#f87171' : appt.status === 'completed' ? '#10b981' : '#2563eb',
                           }
                         })
+                      // Eventos de slots bloqueados
+                      const blockedSlotEvents = slotBoard
+                        .filter(slot => slot.slot_status === 'blocked' && (visibleProfessionalIds.size === 0 || visibleProfessionalIds.has(slot.professional_id)))
+                        .map(slot => {
+                          return {
+                            id: `blocked-${slot.professional_id}-${slot.date}-${slot.start_time}`,
+                            title: 'Franja bloqueada',
+                            start: slot.date + 'T' + slot.start_time,
+                            end: slot.date + 'T' + slot.end_time,
+                            extendedProps: {
+                              ...slot,
+                              block_title: slot.block_title,
+                              block_type: slot.block_type,
+                              agenda_name: slot.block_title || slot.agenda_name,
+                              slot_status: 'blocked',
+                            },
+                           // backgroundColor: '#374151',
+                           // borderColor: '#374151',
+                          }
+                        })
+                      return [...appointmentEvents, ...blockedSlotEvents]
                     })()}
                     initialView="timeGridDay"
                     filters={{
