@@ -250,8 +250,7 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
 
     router.reload({
       only: ['requests'],
-      preserveState: true,
-      preserveScroll: true,
+      preserveUrl: true,
     })
 
     void refreshStats()

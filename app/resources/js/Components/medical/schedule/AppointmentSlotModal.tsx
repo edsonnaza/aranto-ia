@@ -179,6 +179,9 @@ export default function AppointmentSlotModal({
     setSelectedServices((current) => current.filter((service) => service.id !== serviceId))
   }
 
+  // --- NUEVO: modo solo lectura si cita fue enviada a recepción ---
+  const enviadoARecepcion = appointment?.service_request_status === 'checked_in' || appointment?.service_request_status === 'completed' || appointment?.status === 'checked_in'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -205,16 +208,23 @@ export default function AppointmentSlotModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        {enviadoARecepcion && (
+          <div className="mb-2 rounded border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+            Esta cita ya fue enviada a recepción y no puede ser modificada.
+          </div>
+        )}
+
+        <form className="space-y-4" onSubmit={e => { if (enviadoARecepcion) { e.preventDefault(); return; } handleSubmit(e); }}>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Paciente</label>
               <SearchableInput
                 placeholder="Buscar paciente"
                 value={selectedPatient?.name || ''}
-                onSelect={(patient) => setSelectedPatient({ id: patient.id, name: patient.label })}
+                onSelect={enviadoARecepcion ? undefined : (patient) => setSelectedPatient({ id: patient.id, name: patient.label })}
                 onSearch={onSearchPatients}
                 className="w-full"
+                disabled={enviadoARecepcion}
               />
             </div>
             <div>
@@ -222,11 +232,12 @@ export default function AppointmentSlotModal({
               <SearchableInput
                 placeholder="Buscar servicio"
                 value=""
-                onSelect={addService}
+                onSelect={enviadoARecepcion ? undefined : addService}
                 onSearch={searchServices}
                 minSearchLength={1}
                 maxResults={10}
                 className="w-full"
+                disabled={enviadoARecepcion}
               />
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedServices.length === 0 && <span className="text-xs text-gray-500">Podés agregar uno o varios servicios para la misma cita.</span>}
@@ -234,8 +245,9 @@ export default function AppointmentSlotModal({
                   <button
                     key={service.id}
                     type="button"
-                    onClick={() => removeService(service.id)}
-                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                    onClick={enviadoARecepcion ? undefined : () => removeService(service.id)}
+                    className={`inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 ${enviadoARecepcion ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    disabled={enviadoARecepcion}
                   >
                     {service.name || `Servicio #${service.id}`} · {service.durationMinutes} min
                     <span className="ml-2 text-blue-500">×</span>
@@ -245,7 +257,7 @@ export default function AppointmentSlotModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
-              <SelectItem value={appointmentStatus} onValueChange={(value) => setAppointmentStatus(value as 'scheduled' | 'checked_in' | 'completed' | 'cancelled' | 'no_show')}>
+              <SelectItem value={appointmentStatus} onValueChange={enviadoARecepcion ? undefined : (value) => setAppointmentStatus(value as 'scheduled' | 'checked_in' | 'completed' | 'cancelled' | 'no_show')} disabled={enviadoARecepcion}>
                 <option value="scheduled">Agendada</option>
                 <option value="checked_in">Confirmado / llegó</option>
                 <option value="completed">Completada</option>
@@ -255,7 +267,7 @@ export default function AppointmentSlotModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Origen</label>
-              <SelectItem value={appointmentSource} onValueChange={(value) => setAppointmentSource(value as 'agenda' | 'reception' | 'manual')}>
+              <SelectItem value={appointmentSource} onValueChange={enviadoARecepcion ? undefined : (value) => setAppointmentSource(value as 'agenda' | 'reception' | 'manual')} disabled={enviadoARecepcion}>
                 <option value="agenda">Agenda</option>
                 <option value="manual">Manual</option>
                 <option value="reception">Recepción</option>
@@ -266,20 +278,27 @@ export default function AppointmentSlotModal({
           {appointmentStatus === 'cancelled' && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Motivo de cancelación</label>
-              <textarea value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={2} />
+              <textarea value={cancellationReason} onChange={enviadoARecepcion ? undefined : (event) => setCancellationReason(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={2} disabled={enviadoARecepcion} />
             </div>
           )}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Motivo / consulta</label>
-            <textarea value={appointmentNotes} onChange={(event) => setAppointmentNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} />
+            <textarea value={appointmentNotes} onChange={enviadoARecepcion ? undefined : (event) => setAppointmentNotes(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" rows={3} disabled={enviadoARecepcion} />
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cerrar
             </Button>
-            <Button type="submit" disabled={loading || !selectedPatient || !slot}>
+            <Button
+              type="submit"
+              disabled={
+                appointment
+                  ? enviadoARecepcion || loading || !selectedPatient || !slot
+                  : loading || !selectedPatient || !slot
+              }
+            >
               {appointment ? 'Guardar cambios' : 'Asignar cita'}
             </Button>
           </DialogFooter>

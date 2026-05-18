@@ -4,7 +4,7 @@ import type { DatesSetArg, EventClickArg, DateSelectArg, CalendarApi, EventInput
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import { Edit, Trash, ArrowUpRight, BadgeCheck } from 'lucide-react'
+import { Edit, ArrowUpRight, BadgeCheck, RotateCcw } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 
 // Local (narrow) type for dateClick callback; FullCalendar's DateClickArg may not be exported
@@ -22,7 +22,7 @@ type CitasFullCalendarProps = {
   onDateChange?: (info: DatesSetArg) => void;
   onEventClick?: (arg: EventClickArg) => void;
   onSlotSelect?: (arg: DateSelectArg) => void;
-  onEventAction?: (action: 'edit' | 'release' | 'reception', arg: EventContentArg) => void;
+  onEventAction?: (action: 'edit' | 'release' | 'reception' | 'info', arg: EventContentArg) => void;
   filters?: { selected_date?: string; [key: string]: unknown } | null;
   selectedDate?: string;
   slotMinTime?: string;
@@ -36,15 +36,11 @@ type CitasFullCalendarProps = {
   hasSlots?: boolean;
   // Last minute of the last slot visible in the day (in minutes since 00:00). Used to clamp dateClick end.
   dayLastSlotEndMinutes?: number;
-  // Marker provided by parent indicating last requested date (ref)
-  lastRequestedDateRef?: React.RefObject<string | null>;
-  // Callback parent can provide to clear/consume the lastRequested marker
-  onConsumeLastRequested?: () => void;
-  // Callback to expose calendar API to parent without mutating props
+  // Callback to expose calendar API to parent sin mutar props
   onApiReady?: (api: CalendarApi | null) => void;
 }
 
-export default function CitasFullCalendar({ events = [], initialView = 'timeGridDay', onDateChange, onEventClick, onSlotSelect, onEventAction, filters = null, selectedDate = undefined, slotMinTime = '07:00:00', slotMaxTime = '21:00:00', slotDuration = '00:30:00', slotHeight = 36, slotLabelInterval = undefined, dayLastSlotEndMinutes = undefined, lastRequestedDateRef = undefined, onConsumeLastRequested = undefined, onApiReady = undefined, contentHeight = undefined, hasSlots = true }: CitasFullCalendarProps) {
+export default function CitasFullCalendar({ events = [], initialView = 'timeGridDay', onDateChange, onEventClick, onSlotSelect, onEventAction, filters = null, selectedDate = undefined, slotMinTime = '07:00:00', slotMaxTime = '21:00:00', slotDuration = '00:30:00', slotHeight = 36, slotLabelInterval = undefined, dayLastSlotEndMinutes = undefined, onApiReady = undefined, contentHeight = undefined, hasSlots = true }: CitasFullCalendarProps) {
   const calendarRef = useRef<CalendarApi | null>(null)
   // Mirror instance for parent + syncing flag
   const [apiInstance, setApiInstance] = useState<CalendarApi | null>(null)
@@ -165,7 +161,7 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
       `}</style>
       <div style={{position: 'relative'}}>
         <FullCalendar
-          headerToolbar={{ left: 'prev,next', center: 'title', right: 'timeGridDay' }}
+            headerToolbar={{ left: 'prev,today,next', center: 'title', right: '' }}
           buttonText={{ today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día' }}
 
           // ref must receive the component instance; map to calendar API
@@ -323,12 +319,14 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
               className={`flex items-stretch w-full h-full rounded-md ${enviadoRecepcion ? 'bg-emerald-100 border border-emerald-400' : ''}`}
               style={enviadoRecepcion ? { boxShadow: '0 0 0 2px #34d399 inset' } : {}}
             >
-              <div className="flex-1 flex flex-col justify-center min-w-0 pl-2 pr-1 py-1">
+              <div className="flex-1 flex flex-col justify-center min-w-0 pl-2 py-1">
                 <div className="truncate text-sm font-semibold text-shadow-stone-200 text-stone-50">
                   {professional}
                 </div>
                 {patient && (
-                  <span className="block text-xs font-semibold text-slate-800 truncate">{patient}{service && ` - [ ${service} ]`}</span>
+                  <span className="block text-xs font-semibold text-slate-800 truncate">
+                    {patient}{service && ` - [ ${service} ]`}
+                  </span>
                 )}
               </div>
               {/* Solo mostrar badges y botones si es una cita real */}
@@ -336,9 +334,9 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
                 <>
                   {/* ...bloqueo y acciones normales... */}
                   {!appointmentCanGoToReception && arg.event.extendedProps?.slot_status !== 'blocked' && (
-                    <div className="flex flex-col justify-center items-end gap-1 pr-2 pl-1">
+                    <div className="flex flex-col justify-center items-end gap-1 pr-2 pl-1 ">
                       <div className="flex w-full flex-wrap justify-center gap-2">
-                        <Badge variant="outline" className="text-red-900 border-yellow-400">
+                        <Badge variant="outline" className="text-red-900">
                           <BadgeCheck data-icon="inline-start" />
                           Enviado a recepcion
                         </Badge>
@@ -349,7 +347,7 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
                     <div className="flex gap-1">
                       <button
                         type="button"
-                        className={`rounded-md bg-white border border-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400 p-1.5 transition text-slate-700 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-100'}`}
+                        className={`rounded-md bg-white border border-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400 p-1.5 transition text-slate-700 cursor-pointer ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-100'}`}
                         style={{ width: 32, height: 32 }}
                         onClick={e => { if (!isDisabled) { e.stopPropagation(); onEventAction?.('edit', arg) } }}
                         title={isDisabled ? 'No editable' : 'Editar'}
@@ -359,17 +357,17 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
                       </button>
                       <button
                         type="button"
-                        className={`rounded-md bg-white border border-rose-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-400 p-1.5 transition text-rose-600 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rose-50'}`}
+                        className={`rounded-md bg-white border border-rose-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-400 p-1.5 transition text-rose-600 cursor-pointer ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rose-50'}`}
                         style={{ width: 32, height: 32 }}
                         onClick={e => { if (!isDisabled) { e.stopPropagation(); onEventAction?.('release', arg) } }}
                         title={isDisabled ? 'No editable' : 'Liberar turno'}
                         disabled={isDisabled}
                       >
-                        <Trash className="w-4 h-4" />
+                        <RotateCcw className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
-                        className={`rounded-md bg-white border border-sky-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400 p-1.5 transition text-sky-600 ${!appointmentCanGoToReception ? 'opacity-60 cursor-not-allowed' : 'hover:bg-sky-50'}`}
+                        className={`rounded-md bg-white border border-sky-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400 p-1.5 transition text-sky-600 cursor-pointer ${!appointmentCanGoToReception ? 'opacity-60 cursor-not-allowed' : 'hover:bg-sky-50'}`}
                         style={{ width: 32, height: 32 }}
                         onClick={e => { if (appointmentCanGoToReception) { e.stopPropagation(); onEventAction?.('reception', arg) } }}
                         title={!appointmentCanGoToReception ? 'No disponible para recepción' : 'Ir a recepción'}
@@ -377,6 +375,25 @@ export default function CitasFullCalendar({ events = [], initialView = 'timeGrid
                       >
                         <ArrowUpRight className="w-4 h-4" />
                       </button>
+                      {/* Botón de información del paciente */}
+                      {patient && (
+                        <button
+                          type="button"
+                          className={`rounded-md bg-white border border-sky-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400 p-1.5 transition text-sky-600 hover:bg-sky-50 cursor-pointer`}
+                          style={{ width: 32, height: 32 }}
+                          title="Ver información del paciente"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (typeof onEventAction === 'function') {
+                              onEventAction('info', arg)
+                            }
+                          }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.25v-1.5A2.75 2.75 0 017.25 15h9.5a2.75 2.75 0 012.75 2.75v1.5" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </>

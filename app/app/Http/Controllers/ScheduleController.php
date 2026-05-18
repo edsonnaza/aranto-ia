@@ -406,12 +406,12 @@ class ScheduleController extends Controller
         }
 
         // Buscar la agenda activa para el profesional y fecha
-        $schedule = \App\Models\ProfessionalSchedule::where('professional_id', $validated['professional_id'])
+        $schedule = ProfessionalSchedule::where('professional_id', $validated['professional_id'])
             ->where('start_date', '<=', $validated['appointment_date'])
             ->where(function($q) use ($validated) {
                 $q->whereNull('end_date')->orWhere('end_date', '>=', $validated['appointment_date']);
             })
-            ->where('status', \App\Models\ProfessionalSchedule::STATUS_ACTIVE)
+            ->where('status', ProfessionalSchedule::STATUS_ACTIVE)
             ->first();
 
         $payload = $this->buildAppointmentPayload($validated);
@@ -441,12 +441,12 @@ class ScheduleController extends Controller
         }
 
         // Buscar la agenda activa para el profesional y fecha
-        $schedule = \App\Models\ProfessionalSchedule::where('professional_id', $validated['professional_id'])
+        $schedule = ProfessionalSchedule::where('professional_id', $validated['professional_id'])
             ->where('start_date', '<=', $validated['appointment_date'])
             ->where(function($q) use ($validated) {
                 $q->whereNull('end_date')->orWhere('end_date', '>=', $validated['appointment_date']);
             })
-            ->where('status', \App\Models\ProfessionalSchedule::STATUS_ACTIVE)
+            ->where('status', ProfessionalSchedule::STATUS_ACTIVE)
             ->first();
 
         $payload = $this->buildAppointmentPayload($validated);
