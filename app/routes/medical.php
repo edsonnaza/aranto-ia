@@ -117,11 +117,16 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
 
     // Medical Records (Historia Clínica)
     Route::get('patients/{patient}/medical-records/create', [\App\Http\Controllers\MedicalRecordController::class, 'create'])
+        ->middleware('role:doctor')
         ->name('patients.medical-records.create');
     Route::post('patients/{patient}/medical-records', [\App\Http\Controllers\MedicalRecordController::class, 'store'])
+        ->middleware('role:doctor')
         ->name('patients.medical-records.store');
     Route::get('medical-records/{medicalRecord}', [\App\Http\Controllers\MedicalRecordController::class, 'show'])
         ->name('medical-records.show');
+    Route::post('medical-records/{medicalRecord}/amendments', [\App\Http\Controllers\MedicalRecordController::class, 'storeAmendment'])
+        ->middleware('role:doctor')
+        ->name('medical-records.amendments.store');
     Route::get('medical-record-files/{file}/download', [\App\Http\Controllers\MedicalRecordController::class, 'downloadFile'])
         ->name('medical-record-files.download');
     
