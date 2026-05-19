@@ -145,6 +145,14 @@ class Patient extends Model
     }
 
     /**
+     * Get medical records (historia clínica) for this patient.
+     */
+    public function medicalRecords(): HasMany
+    {
+        return $this->hasMany(\App\Models\MedicalRecord::class)->orderBy('consultation_date', 'desc');
+    }
+
+    /**
      * Check if this patient is active.
      */
     public function isActive(): bool

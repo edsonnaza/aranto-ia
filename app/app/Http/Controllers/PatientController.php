@@ -194,6 +194,7 @@ class PatientController extends Controller
             }),
             'insuranceValid' => $patient->hasValidInsurance(),
             'totalInsurances' => $patient->insurances->count(),
+            'medicalRecords' => $patient->medicalRecords()->with(['doctor','prescriptions','files'])->get(),
         ]);
     }
 

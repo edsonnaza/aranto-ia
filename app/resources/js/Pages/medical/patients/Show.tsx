@@ -64,6 +64,11 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
                 Editar Paciente
               </Link>
             </Button>
+            <Button asChild>
+              <Link href={`/medical/patients/${patient.id}/medical-records/create`}>
+                Nueva Historia Clínica
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link href="/medical/patients">
                 <ArrowLeft className="h-4 w-4 mr-2" />

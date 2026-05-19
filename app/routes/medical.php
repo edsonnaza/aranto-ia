@@ -114,6 +114,16 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('patients.search');
     Route::get('patients/{patient}/summary', [PatientController::class, 'summary'])
         ->name('patients.summary');
+
+    // Medical Records (Historia Clínica)
+    Route::get('patients/{patient}/medical-records/create', [\App\Http\Controllers\MedicalRecordController::class, 'create'])
+        ->name('patients.medical-records.create');
+    Route::post('patients/{patient}/medical-records', [\App\Http\Controllers\MedicalRecordController::class, 'store'])
+        ->name('patients.medical-records.store');
+    Route::get('medical-records/{medicalRecord}', [\App\Http\Controllers\MedicalRecordController::class, 'show'])
+        ->name('medical-records.show');
+    Route::get('medical-record-files/{file}/download', [\App\Http\Controllers\MedicalRecordController::class, 'downloadFile'])
+        ->name('medical-record-files.download');
     
     // Patient Insurance Management
     Route::post('patients/{patient}/insurances', [PatientController::class, 'addInsurance'])
