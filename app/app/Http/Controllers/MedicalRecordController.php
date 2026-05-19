@@ -8,6 +8,7 @@ use App\Models\MedicalRecordFile;
 use App\Models\Patient;
 use App\Models\User;
 use App\Http\Requests\StoreMedicalRecordRequest;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -66,11 +67,33 @@ class MedicalRecordController extends Controller
 
     public function show(MedicalRecord $medicalRecord)
     {
-        $medicalRecord->load('prescriptions', 'files', 'patient', 'doctor');
+        $medicalRecord->load('prescriptions', 'files', 'patient', 'doctor', 'amendments.createdBy');
 
         return Inertia::render('medical/medical-records/Show', [
             'medicalRecord' => $medicalRecord,
         ]);
+    }
+
+    /**
+     * Store an amendment (append-only) for a medical record.
+     */
+    public function storeAmendment(Request $request, MedicalRecord $medicalRecord): RedirectResponse
+    {
+        $validated = $request->validate([
+            'content' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $medicalRecord->amendments()->create([
+                'content' => $validated['content'],
+                'created_by' => auth()->id(),
+            ]);
+
+            return redirect()->route('medical.medical-records.show', $medicalRecord->id)->with('success', 'Enmienda registrada.');
+        } catch (\Throwable $e) {
+            report($e);
+            return redirect()->back()->withErrors('No se pudo guardar la enmienda.');
+        }
     }
 
     public function downloadFile(MedicalRecordFile $file)
