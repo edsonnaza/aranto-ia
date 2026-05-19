@@ -15,8 +15,8 @@ return new class extends Migration
             Schema::create('medical_record_amendments', function (Blueprint $table) {
                 $table->bigIncrements('id');
                 $table->foreignId('medical_record_id')->constrained('medical_records')->cascadeOnDelete();
-                $table->text('content');
                 $table->unsignedBigInteger('created_by')->nullable();
+                $table->text('content');
                 $table->timestamps();
                 $table->softDeletes();
 
