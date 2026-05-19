@@ -18,6 +18,8 @@ class MedicalRecordController extends Controller
 {
     public function create(Patient $patient)
     {
+        $this->authorize('create', \App\Models\MedicalRecord::class);
+
         $doctors = User::select('id', 'name')->limit(200)->get();
 
         return Inertia::render('medical/medical-records/Create', [
@@ -67,6 +69,8 @@ class MedicalRecordController extends Controller
 
     public function show(MedicalRecord $medicalRecord)
     {
+        $this->authorize('view', $medicalRecord);
+
         $medicalRecord->load('prescriptions', 'files', 'patient', 'doctor', 'amendments.createdBy');
 
         return Inertia::render('medical/medical-records/Show', [
@@ -79,6 +83,8 @@ class MedicalRecordController extends Controller
      */
     public function storeAmendment(Request $request, MedicalRecord $medicalRecord): RedirectResponse
     {
+        $this->authorize('update', $medicalRecord);
+
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:2000'],
         ]);
