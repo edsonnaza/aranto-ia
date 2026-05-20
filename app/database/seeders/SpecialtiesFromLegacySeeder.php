@@ -209,7 +209,8 @@ class SpecialtiesFromLegacySeeder extends Seeder
         $usedCodes = [];
 
         foreach ($legacySpecialties as $specialty) {
-            $legacyName = trim($specialty->Nombre);
+            // Asegurar que el texto traído desde la conexión legacy esté en UTF-8
+            $legacyName = trim($this->toUtf8($specialty->Nombre));
             
             // Usar el mapeo si existe, si no, generar uno automático
             if (isset($specialtyMap[$legacyName])) {
@@ -238,7 +239,7 @@ class SpecialtiesFromLegacySeeder extends Seeder
             $specialtiesToInsert[] = [
                 'name' => $name,
                 'code' => $code,
-                'description' => $description,
+                'description' => $this->toUtf8($description),
                 'status' => 'active',
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -270,5 +271,27 @@ class SpecialtiesFromLegacySeeder extends Seeder
         }
 
         return $code ?: strtoupper(substr($name, 0, 6));
+    }
+
+    /**
+     * Convierte una cadena desde el charset legacy (latin1) a UTF-8 si es necesario.
+     */
+    private function toUtf8(string $value): string
+    {
+        if (mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        // Intentar conversión desde ISO-8859-1 (latin1)
+        try {
+            $converted = @mb_convert_encoding($value, 'UTF-8', 'ISO-8859-1');
+            if ($converted !== false) {
+                return $converted;
+            }
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
+        return utf8_encode($value);
     }
 }
