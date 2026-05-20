@@ -6,10 +6,10 @@ use App\Models\ConsultationQueue;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Queue\SerializesModels;
 
-class PatientInConsultation implements ShouldBroadcastNow
+class PatientInConsultation implements ShouldBroadcast
 {
     use InteractsWithSockets, SerializesModels;
 
@@ -40,5 +40,10 @@ class PatientInConsultation implements ShouldBroadcastNow
             'status' => $this->entry->status,
             'started_at' => $this->entry->started_at?->toDateTimeString(),
         ];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'patient.in_consultation';
     }
 }

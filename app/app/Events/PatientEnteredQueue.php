@@ -6,10 +6,10 @@ use App\Models\ConsultationQueue;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Queue\SerializesModels;
 
-class PatientEnteredQueue implements ShouldBroadcastNow
+class PatientEnteredQueue implements ShouldBroadcast
 {
     use InteractsWithSockets, SerializesModels;
 
@@ -30,7 +30,7 @@ class PatientEnteredQueue implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'consultorio.patient-entered';
+        return 'patient.added';
     }
 
     public function broadcastWith()
