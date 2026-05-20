@@ -56,6 +56,11 @@ class MedicalRecord extends Model
         return $this->hasMany(MedicalRecordFile::class);
     }
 
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(MedicalRecordAmendment::class)->orderBy('created_at', 'asc');
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

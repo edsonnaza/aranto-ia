@@ -1,20 +1,22 @@
-import React from 'react'
 import { Head, Link } from '@inertiajs/react'
-import { ArrowLeft, User, Heart, Shield, Calendar, Phone, Mail, MapPin } from 'lucide-react'
+import { ArrowLeft, Shield } from 'lucide-react'
 import HeadingSmall from '@/components/heading-small'
 import AppLayout from '@/layouts/app-layout'
+import PatientSidebarCard from '@/components/medical/PatientSidebarCard'
+import MedicalTimeline from '@/components/medical/MedicalTimeline'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { PlusCircle } from 'lucide-react'
 import { Patient } from '@/types/medical'
 import { type BreadcrumbItem } from '@/types'
-import { formatBirthDate, calculateAge } from '@/utils/date-utils'
 
 interface PatientsShowProps {
   patient: Patient
+  medicalRecords?: any[]
 }
 
-export default function PatientsShow({ patient }: PatientsShowProps) {
+export default function PatientsShow({ patient, medicalRecords = [] }: PatientsShowProps) {
   const breadcrumbs: BreadcrumbItem[] = [
     {
       title: 'Dashboard',
@@ -34,20 +36,6 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
     },
   ]
 
-  // Las funciones de fecha se importan de date-utils
-
-  const getGenderLabel = (gender: string) => {
-    const genderMap: { [key: string]: string } = {
-      'M': 'Masculino',
-      'F': 'Femenino',
-      'OTHER': 'Otro',
-      'male': 'Masculino',
-      'female': 'Femenino',
-      'other': 'Otro',
-    }
-    return genderMap[gender] || 'No especificado'
-  }
-
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${patient.first_name} ${patient.last_name} - Pacientes`} />
@@ -65,8 +53,9 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
               </Link>
             </Button>
             <Button asChild>
-              <Link href={`/medical/patients/${patient.id}/medical-records/create`}>
-                Nueva Historia Clínica
+              <Link href={`/medical/patients/${patient.id}/medical-records/create`} className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Nueva Consulta
               </Link>
             </Button>
             <Button variant="outline" asChild>
@@ -91,178 +80,24 @@ export default function PatientsShow({ patient }: PatientsShowProps) {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Información Personal */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Información Personal
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Nombre Completo</p>
-                  <p className="text-base">{patient.first_name} {patient.last_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Estado</p>
-                  <Badge variant={patient.status === 'active' ? 'default' : 'secondary'}>
-                    {patient.status === 'active' ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                </div>
-              </div>
+        <div className="lg:flex lg:items-start lg:gap-6">
+          <aside className="hidden lg:block">
+            <PatientSidebarCard patient={patient} />
+          </aside>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Fecha de Nacimiento</p>
-                  <p className="text-base flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    {formatBirthDate(patient.birth_date)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Edad</p>
-                  <p className="text-base">
-                    {patient.birth_date ? calculateAge(patient.birth_date) : 'No calculable'}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-500">Género</p>
-                <p className="text-base">
-                  {getGenderLabel(patient.gender || '')}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-500">Registrado</p>
-                <p className="text-base">
-                  {new Date(patient.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Información de Contacto */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Phone className="h-5 w-5" />
-                Información de Contacto
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="text-base flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  {patient.email || 'No registrado'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-500">Teléfono</p>
-                <p className="text-base flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  {patient.phone || 'No registrado'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-500">Dirección</p>
-                <p className="text-base flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-1" />
-                  <span>
-                    {patient.address || 'No registrada'}
-                    {patient.city && (
-                      <span className="block text-sm text-gray-600">
-                        {patient.city}
-                      </span>
-                    )}
-                  </span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Contacto de Emergencia */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Heart className="h-5 w-5" />
-                Contacto de Emergencia
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Nombre del Contacto</p>
-                <p className="text-base">
-                  {patient.emergency_contact_name || 'No registrado'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-500">Teléfono de Emergencia</p>
-                <p className="text-base flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  {patient.emergency_contact_phone || 'No registrado'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Información de Seguro */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Información de Seguro
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {patient.insurance_type ? (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tipo de Seguro</p>
-                    <p className="text-base font-medium">
-                      {patient.insurance_type.name}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Cobertura</p>
-                    <Badge variant="outline" className="text-sm">
-                      {patient.insurance_type.coverage_percentage}% de cobertura
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Número de Póliza</p>
-                    <p className="text-base font-mono">
-                      {patient.insurance_number || 'No registrado'}
-                    </p>
-                  </div>
-
-                  {patient.insurance_type.description && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Descripción</p>
-                      <p className="text-sm text-gray-600">
-                        {patient.insurance_type.description}
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-6">
-                  <Shield className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                  <p className="text-gray-500">No tiene seguro registrado</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <main className="flex-1 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Historia Clínica / Consultas</span>
+                  <span className="text-sm text-muted-foreground">Total: {medicalRecords.length}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MedicalTimeline records={medicalRecords} />
+              </CardContent>
+            </Card>
+          </main>
         </div>
       </div>
     </AppLayout>

@@ -114,6 +114,11 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         ->name('patients.search');
     Route::get('patients/{patient}/summary', [PatientController::class, 'summary'])
         ->name('patients.summary');
+    Route::get('patients/{patient}/vitals', [PatientController::class, 'vitals'])
+        ->name('patients.vitals');
+    // JSON API for paginated/filtered vital signs (used by charts)
+    Route::get('patients/{patient}/vitals/data', [PatientController::class, 'vitalSignsApi'])
+        ->name('patients.vitals.data');
 
     // Medical Records (Historia Clínica)
     Route::get('patients/{patient}/medical-records/create', [\App\Http\Controllers\MedicalRecordController::class, 'create'])

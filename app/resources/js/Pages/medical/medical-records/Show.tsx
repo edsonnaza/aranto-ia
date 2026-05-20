@@ -1,5 +1,5 @@
-import React from 'react'
-import { Head, Link } from '@inertiajs/react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import HeadingSmall from '@/components/heading-small'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,6 +7,27 @@ import { Button } from '@/components/ui/button'
 
 export default function Show({ medicalRecord }: any) {
   const patient = medicalRecord.patient
+  const [amendmentContent, setAmendmentContent] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [])
+
+  const submitAmendment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!amendmentContent.trim()) return
+    router.post(`/medical/medical-records/${medicalRecord.id}/amendments`, { content: amendmentContent })
+  }
+
+  // Keyboard shortcut: Cmd/Ctrl + Enter to submit
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      submitAmendment()
+    }
+  }
 
   return (
     <AppLayout breadcrumbs={[{ title: 'Pacientes', href: '/medical/patients' }, { title: `${patient.first_name} ${patient.last_name}`, href:`/medical/patients/${patient.id}` }, { title: 'Historia Clínica', href: '' }]}>
@@ -71,6 +92,50 @@ export default function Show({ medicalRecord }: any) {
             </CardContent>
           </Card>
         </div>
+
+        {/* Amendments */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Enmiendas / Notas (audit trail)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submitAmendment} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Registrar enmienda</label>
+                <textarea
+                  ref={textareaRef}
+                  value={amendmentContent}
+                  onChange={(e) => setAmendmentContent(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  rows={4}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="Registrar corrección o nota (se guardará como enmienda, no edita el registro original). Usa Cmd/Ctrl+Enter para guardar rápidamente."
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="button" onClick={submitAmendment}>Registrar Enmienda</Button>
+              </div>
+            </form>
+
+            <div className="mt-6">
+              {medicalRecord.amendments && medicalRecord.amendments.length ? (
+                <ul className="space-y-3">
+                  {medicalRecord.amendments.map((a: any) => (
+                    <li key={a.id} className="border rounded p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-700">{a.content}</div>
+                        <div className="text-xs text-gray-500">{a.createdBy?.name || 'Usuario'} • {new Date(a.created_at).toLocaleString()}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500">No hay enmiendas registradas.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   )

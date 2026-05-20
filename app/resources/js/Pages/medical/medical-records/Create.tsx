@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Head, useForm, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import HeadingSmall from '@/components/heading-small'
@@ -24,9 +24,21 @@ export default function Create({ patient, doctors }: CreateProps) {
     doctor_id: '',
     prescriptions: [] as any[],
     files: [] as File[],
+    vital_signs: {
+      blood_pressure: '',
+      temperature: '',
+      pulse: '',
+      spo2: '',
+    } as any,
   })
 
   const [prescriptions, setPrescriptions] = useState<any[]>([])
+  const reasonRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    // Autofocus motivo to speed up capture
+    if (reasonRef.current) reasonRef.current.focus()
+  }, [])
 
   const addPrescription = () => {
     setPrescriptions([...prescriptions, { medication_name: '', dosage: '', frequency: '', duration: '', notes: '' }])
@@ -61,6 +73,14 @@ export default function Create({ patient, doctors }: CreateProps) {
     form.append('notes', data.notes || '')
     form.append('doctor_id', data.doctor_id || '')
 
+    // Vital signs snapshot
+    if (data.vital_signs) {
+      form.append('vital_signs[temperature]', data.vital_signs.temperature || '')
+      form.append('vital_signs[pulse]', data.vital_signs.pulse || '')
+      form.append('vital_signs[spo2]', data.vital_signs.spo2 || '')
+      form.append('vital_signs[blood_pressure]', data.vital_signs.blood_pressure || '')
+    }
+
     // Prescriptions
     prescriptions.forEach((p, idx) => {
       form.append(`prescriptions[${idx}][medication_name]`, p.medication_name || '')
@@ -80,6 +100,13 @@ export default function Create({ patient, doctors }: CreateProps) {
     router.post(`/medical/patients/${patient.id}/medical-records`, form, {
       forceFormData: true,
     })
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      // @ts-ignore
+      handleSubmit(e as unknown as React.FormEvent)
+    }
   }
 
   return (
@@ -115,7 +142,7 @@ export default function Create({ patient, doctors }: CreateProps) {
 
               <div>
                 <Label>Motivo</Label>
-                <Input value={data.reason} onChange={(e) => setData('reason', e.target.value)} />
+                <Input autoFocus ref={reasonRef} value={data.reason} onChange={(e) => setData('reason', e.target.value)} className="text-lg py-2" />
               </div>
 
               <div>
@@ -169,6 +196,32 @@ export default function Create({ patient, doctors }: CreateProps) {
 
                 <div>
                   <Button type="button" onClick={addPrescription}>Agregar Prescripción</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Signos vitales</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-sm">Presión (ej. 120/80)</Label>
+                  <Input value={data.vital_signs.blood_pressure} onChange={(e) => setData('vital_signs', {...data.vital_signs, blood_pressure: e.target.value})} />
+                </div>
+                <div>
+                  <Label className="text-sm">Temperatura (°C)</Label>
+                  <Input type="number" step="0.1" value={data.vital_signs.temperature} onChange={(e) => setData('vital_signs', {...data.vital_signs, temperature: e.target.value})} />
+                </div>
+                <div>
+                  <Label className="text-sm">Pulso (bpm)</Label>
+                  <Input type="number" value={data.vital_signs.pulse} onChange={(e) => setData('vital_signs', {...data.vital_signs, pulse: e.target.value})} />
+                </div>
+                <div>
+                  <Label className="text-sm">Saturación (SpO2 %)</Label>
+                  <Input type="number" value={data.vital_signs.spo2} onChange={(e) => setData('vital_signs', {...data.vital_signs, spo2: e.target.value})} />
                 </div>
               </div>
             </CardContent>

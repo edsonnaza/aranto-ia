@@ -57,6 +57,10 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         href: { url: '/medical', method: 'get' },
       },
       {
+        title: 'Historias Clínicas',
+        href: { url: '/medical/patients', method: 'get' },
+      },
+      {
         title: 'Agenda',
         href: { url: '/medical/schedule', method: 'get' },
       },

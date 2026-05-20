@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Patient;
 use App\Models\InsuranceType;
+use App\Models\VitalSign;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 
 class PatientController extends Controller
 {
@@ -194,8 +196,106 @@ class PatientController extends Controller
             }),
             'insuranceValid' => $patient->hasValidInsurance(),
             'totalInsurances' => $patient->insurances->count(),
-            'medicalRecords' => $patient->medicalRecords()->with(['doctor','prescriptions','files'])->get(),
+            'medicalRecords' => $patient->medicalRecords()->with(['doctor','prescriptions','files','amendments.createdBy'])->get(),
         ]);
+    }
+
+    /**
+     * Show vitals history page for a patient.
+     */
+    public function vitals(Patient $patient): Response
+    {
+        $patient->load(['insuranceType']);
+
+        // Provide an initial slice of vitals (last 500) for the page
+        $vitals = \App\Models\VitalSign::where('patient_id', $patient->id)
+            ->orderByDesc('recorded_at')
+            ->limit(500)
+            ->get()
+            ->map(function ($v) {
+                return [
+                    'id' => $v->id,
+                    'temperature' => $v->temperature,
+                    'pulse' => $v->pulse,
+                    'spo2' => $v->spo2,
+                    'respiratory_rate' => $v->respiratory_rate,
+                    'bp_systolic' => $v->bp_systolic,
+                    'bp_diastolic' => $v->bp_diastolic,
+                    'blood_pressure' => $v->blood_pressure,
+                    'recorded_at' => $v->recorded_at ? $v->recorded_at->toDateTimeString() : $v->created_at->toDateTimeString(),
+                ];
+            });
+
+        return Inertia::render('medical/patients/VitalsHistory', [
+            'patient' => $patient,
+            'vitalSeries' => $vitals->reverse()->values(), // chronological asc
+        ]);
+    }
+
+    /**
+     * JSON endpoint: paginated and filtered vital signs for a patient.
+     * Query params: metric, start, end, per_page, order
+     */
+    public function vitalSignsApi(Request $request, Patient $patient): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'metric' => ['nullable', 'in:temperature,pulse,spo2,respiratory_rate,bp_systolic,bp_diastolic,blood_pressure'],
+            'start' => ['nullable', 'date'],
+            'end' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:2000'],
+            'order' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $metric = $validated['metric'] ?? null;
+        $perPage = $validated['per_page'] ?? 200;
+        $order = $validated['order'] ?? 'desc';
+
+        $query = VitalSign::where('patient_id', $patient->id);
+
+        if (!empty($validated['start'])) {
+            $query->where('recorded_at', '>=', Carbon::parse($validated['start']));
+        }
+
+        if (!empty($validated['end'])) {
+            $query->where('recorded_at', '<=', Carbon::parse($validated['end']));
+        }
+
+        $query->orderBy('recorded_at', $order)->orderBy('id', $order);
+
+        $paginator = $query->paginate($perPage)->withQueryString();
+
+        // Transform collection depending on requested metric to keep payload small
+        $collection = $paginator->getCollection()->map(function ($v) use ($metric) {
+            $base = [
+                'id' => $v->id,
+                'recorded_at' => $v->recorded_at ? $v->recorded_at->toDateTimeString() : $v->created_at->toDateTimeString(),
+            ];
+
+            if (!$metric) {
+                return array_merge($base, [
+                    'temperature' => $v->temperature,
+                    'pulse' => $v->pulse,
+                    'spo2' => $v->spo2,
+                    'respiratory_rate' => $v->respiratory_rate,
+                    'bp_systolic' => $v->bp_systolic,
+                    'bp_diastolic' => $v->bp_diastolic,
+                    'blood_pressure' => $v->blood_pressure,
+                ]);
+            }
+
+            if ($metric === 'blood_pressure') {
+                return array_merge($base, [
+                    'systolic' => $v->bp_systolic,
+                    'diastolic' => $v->bp_diastolic,
+                ]);
+            }
+
+            return array_merge($base, ['value' => $v->{$metric}]);
+        });
+
+        $paginator->setCollection($collection);
+
+        return response()->json($paginator);
     }
 
     /**

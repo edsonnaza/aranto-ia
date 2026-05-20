@@ -153,6 +153,22 @@ class Patient extends Model
     }
 
     /**
+     * Get vital signs time series for this patient.
+     */
+    public function vitalSigns(): HasMany
+    {
+        return $this->hasMany(\App\Models\VitalSign::class)->orderBy('recorded_at', 'desc');
+    }
+
+    /**
+     * Get last recorded vital sign for this patient.
+     */
+    public function lastVitalSign()
+    {
+        return \App\Models\VitalSign::where('patient_id', $this->id)->orderByDesc('recorded_at')->orderByDesc('created_at')->first();
+    }
+
+    /**
      * Check if this patient is active.
      */
     public function isActive(): bool

@@ -178,9 +178,9 @@ export default function PatientsIndex({
                 <Eye className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild size="sm" variant="ghost">
-              <Link href={`/medical/patients/${patient.id}/edit`}>
-                <Pencil className="h-4 w-4" />
+            <Button asChild size="sm" variant="ghost" title="Nueva Consulta">
+              <Link href={`/medical/patients/${patient.id}/medical-records/create`}> 
+                <PlusCircle className="h-4 w-4" />
               </Link>
             </Button>
             <AlertDialog>

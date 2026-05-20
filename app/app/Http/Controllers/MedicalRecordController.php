@@ -7,15 +7,18 @@ use App\Models\MedicalPrescription;
 use App\Models\MedicalRecordFile;
 use App\Models\Patient;
 use App\Models\User;
+use App\Models\VitalSign;
 use App\Http\Requests\StoreMedicalRecordRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Http\RedirectResponse;
+use App\Traits\HandlesVitalSigns;
 
 class MedicalRecordController extends Controller
 {
+    use HandlesVitalSigns;
     public function create(Patient $patient)
     {
         $this->authorize('create', \App\Models\MedicalRecord::class);
@@ -42,6 +45,16 @@ class MedicalRecordController extends Controller
             if (!empty($data['prescriptions']) && is_array($data['prescriptions'])) {
                 foreach ($data['prescriptions'] as $presc) {
                     $medicalRecord->prescriptions()->create(array_merge($presc, ['created_by' => auth()->id()]));
+                }
+            }
+
+            // Persist vital signs snapshot into `vital_signs` table for time-series tracking
+            if (!empty($data['vital_signs']) && is_array($data['vital_signs'])) {
+                try {
+                    $this->persistVitalSignSnapshot($medicalRecord, $data['vital_signs']);
+                } catch (\Throwable $e) {
+                    // non-fatal: report and continue
+                    report($e);
                 }
             }
 
