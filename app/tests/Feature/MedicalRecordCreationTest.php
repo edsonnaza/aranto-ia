@@ -37,9 +37,11 @@ class MedicalRecordCreationTest extends TestCase
             ],
         ];
 
-        // Disable middleware (CSRF/session) for this POST in test environment
-        $this->withoutMiddleware();
-        $response = $this->actingAs($user)->post(route('medical.patients.medical-records.store', ['patient' => $patient->id]), $payload);
+        // Provide a CSRF token in session and include it in payload to satisfy VerifyCsrfToken
+        $token = 'test_token_' . uniqid();
+        $this->withSession(['_token' => $token]);
+
+        $response = $this->actingAs($user)->post(route('medical.patients.medical-records.store', ['patient' => $patient->id]), array_merge($payload, ['_token' => $token]));
 
         $response->assertRedirect(route('medical.patients.show', $patient->id));
 
