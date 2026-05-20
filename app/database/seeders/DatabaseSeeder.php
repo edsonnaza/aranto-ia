@@ -15,5 +15,10 @@ class DatabaseSeeder extends Seeder
     {
         // Execute the master legacy migration seeder which includes all phases
         $this->call(MasterLegacyMigrationSeeder::class);
+
+        // En entornos locales o de testing, asegurar usuario doctor para pruebas
+        if (app()->environment('local') || app()->environment('testing')) {
+            $this->call(DoctorTestUserSeeder::class);
+        }
     }
 }
