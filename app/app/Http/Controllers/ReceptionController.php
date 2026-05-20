@@ -8,6 +8,7 @@ use App\Models\Professional;
 use App\Models\InsuranceType;
 use App\Models\ScheduleAppointment;
 use App\Models\ServiceCategory;
+use App\Models\ConsultationQueue;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -140,6 +141,24 @@ class ReceptionController extends Controller
                     ->unique()
                     ->implode(', ');
 
+                // Check if there's an active queue entry for this reception
+                $queued = ConsultationQueue::where('reception_id', $request->id)
+                    ->whereIn('status', ['waiting', 'called', 'in_consultation'])
+                    ->latest('created_at')
+                    ->first();
+
+                $queueDoctorId = null;
+                $queueDoctorName = null;
+                $queueStatus = null;
+                $queuePriority = null;
+
+                if ($queued) {
+                    $queueDoctorId = $queued->doctor_id;
+                    $queueDoctorName = \App\Models\User::find($queueDoctorId)?->name ?? null;
+                    $queueStatus = $queued->status;
+                    $queuePriority = $queued->priority;
+                }
+
                 return [
                     'id' => $request->id,
                     'request_number' => $request->request_number,
@@ -156,6 +175,16 @@ class ReceptionController extends Controller
                     'insurance_type_name' => $insuranceNames ?: 'Sin seguro',
                     'payment_status' => $request->payment_status ?? 'pending',
                     'professional_names' => $professionalNames ?: 'No asignado',
+                    // Primary professional (first detail) for quick defaulting in the UI
+                    'primary_professional_id' => optional($request->details->first())->professional_id ?? null,
+                    'primary_professional_name' => optional(optional($request->details->first())->professional)->full_name ?? null,
+                    // Queue info if patient already enqueued for this reception
+                    'is_queued' => (bool) $queued,
+                    'queue_id' => $queued?->id ?? null,
+                    'queue_doctor_id' => $queueDoctorId,
+                    'queue_doctor_name' => $queueDoctorName,
+                    'queue_status' => $queueStatus,
+                    'queue_priority' => $queuePriority,
                 ];
             });
 
@@ -429,5 +458,90 @@ class ReceptionController extends Controller
             'found' => true,
             'source' => 'base_price'
         ]);
+    }
+
+    /**
+     * Send a paid (or authorised) service request to the consultorio queue.
+     * Expected payload: doctor_id (required), priority (optional)
+     */
+    public function sendToConsultorio(ServiceRequest $serviceRequest, Request $request)
+    {
+        // Accept either a user id (users.id) or a professional id (professionals.id) from the frontend.
+        $validated = $request->validate([
+            'doctor_id' => 'required',
+            'priority' => 'nullable',
+        ]);
+
+        // Only allow if paid or sender has explicit permission
+        if (!$serviceRequest->isFullyPaid() && !$request->user()->can('send-to-consultorio')) {
+            return redirect()->back()->withErrors('El servicio debe estar pagado para enviarlo automáticamente a consultorio.');
+        }
+
+        $rawDoctorId = $validated['doctor_id'];
+        $resolvedUserId = null;
+
+        // If the provided id matches a User, prefer it
+        $user = \App\Models\User::find($rawDoctorId);
+        if ($user && method_exists($user, 'hasRole') && $user->hasRole('doctor')) {
+            $resolvedUserId = $user->id;
+        } else {
+            // Try resolving as a Professional id -> find linked user by user_id or email
+            $professional = Professional::find($rawDoctorId);
+            if ($professional) {
+                if (!empty($professional->user_id)) {
+                    $resolvedUserId = $professional->user_id;
+                } elseif (!empty($professional->email)) {
+                    $linked = \App\Models\User::where('email', $professional->email)->first();
+                    if ($linked && method_exists($linked, 'hasRole') && $linked->hasRole('doctor')) {
+                        $resolvedUserId = $linked->id;
+                    }
+                }
+            }
+        }
+
+        if (!$resolvedUserId) {
+            return redirect()->back()->withErrors('El profesional seleccionado no es un médico válido o no está vinculado a un usuario.');
+        }
+
+        $priority = 'normal';
+        if (isset($validated['priority'])) {
+            $p = $validated['priority'];
+            if (is_numeric($p)) {
+                $priority = ((int)$p > 0) ? 'urgent' : 'normal';
+            } elseif (in_array($p, ['normal', 'urgent'])) {
+                $priority = $p;
+            }
+        }
+
+        // Prevent duplicate entries for the same reception: update if exists.
+        $existing = ConsultationQueue::where('reception_id', $serviceRequest->id)
+            ->whereIn('status', ['waiting', 'called', 'in_consultation'])
+            ->first();
+
+        if ($existing) {
+            if ($existing->doctor_id == $resolvedUserId && $existing->priority == $priority) {
+                return redirect()->back()->with('info', 'El paciente ya está en la cola de consultorio.');
+            }
+
+            $existing->doctor_id = $resolvedUserId;
+            $existing->priority = $priority;
+            $existing->save();
+
+            event(new \App\Events\PatientEnteredQueue($existing));
+
+            return redirect()->back()->with('success', 'Entrada de cola actualizada correctamente.');
+        }
+
+        $entry = ConsultationQueue::create([
+            'patient_id' => $serviceRequest->patient_id,
+            'reception_id' => $serviceRequest->id,
+            'doctor_id' => $resolvedUserId,
+            'priority' => $priority,
+            'status' => 'waiting',
+        ]);
+
+        event(new \App\Events\PatientEnteredQueue($entry));
+
+        return redirect()->back()->with('success', 'Paciente enviado a la cola de consultorio.');
     }
 }

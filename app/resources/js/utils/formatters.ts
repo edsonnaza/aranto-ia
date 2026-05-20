@@ -128,3 +128,32 @@ export function getPaymentMethodLabel(method: string): string {
   
   return methodConfig[method.toLowerCase()] || method
 }
+
+/**
+ * Label mapping for consultation queue statuses
+ */
+export function getQueueStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    waiting: 'Esperando',
+    called: 'Llamado',
+    in_consultation: 'En consulta',
+    done: 'Finalizado',
+    no_show: 'No se presentó'
+  }
+
+  return map[status] || status
+}
+
+/**
+ * Human-friendly labels for priority values
+ */
+export function getPriorityLabel(priority: string): string {
+  const map: Record<string, string> = {
+    normal: 'Normal',
+    urgent: 'Urgente',
+    low: 'Baja',
+    high: 'Alta'
+  }
+
+  return map[priority] || priority
+}

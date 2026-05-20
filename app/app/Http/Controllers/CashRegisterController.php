@@ -11,6 +11,9 @@ use App\Models\Professional;
 use App\Models\Transaction;
 use App\Models\ServiceRequest;
 use App\Models\InsuranceType;
+use App\Models\User;
+use App\Models\ConsultationQueue;
+use App\Events\PatientEnteredQueue;
 use App\Notifications\ReceptionPaymentUpdatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -347,6 +350,9 @@ class CashRegisterController extends Controller
                 'status' => $request->status,
                 'payment_status' => $request->payment_status,
                 'reception_type' => $request->reception_type,
+                // Primary professional assigned on the service request (if any)
+                'primary_professional_id' => optional($request->details->first())->professional_id ?? null,
+                'primary_professional_name' => optional(optional($request->details->first())->professional)->full_name ?? null,
                 'priority' => $request->priority,
                 'total_amount' => $request->total_amount,
                 'paid_amount' => $request->paid_amount,
@@ -589,6 +595,113 @@ class CashRegisterController extends Controller
                 ->receptionPaymentRecipients()
                 ->each
                 ->notify(new ReceptionPaymentUpdatedNotification($updatedServiceRequest, $message));
+
+            // Optionally auto-send the patient to consultorio (lista de espera)
+            // Frontend may include `send_to_consultorio` and `doctor_id` in the payment request.
+            if ($request->has('send_to_consultorio') && $request->filled('doctor_id')) {
+                try {
+                    $doctor = User::find($request->input('doctor_id'));
+                    if ($doctor && method_exists($doctor, 'hasRole') && $doctor->hasRole('doctor')) {
+                        $priority = 'normal';
+                        $p = $request->input('priority');
+                        if (is_numeric($p)) {
+                            $priority = ((int)$p > 0) ? 'urgent' : 'normal';
+                        } elseif (in_array($p, ['normal', 'urgent'])) {
+                            $priority = $p === 'urgent' ? 'urgent' : 'normal';
+                        }
+
+                        // Prevent duplicate: update existing entry if present
+                        $existing = ConsultationQueue::where('reception_id', $updatedServiceRequest->id)
+                            ->whereIn('status', ['waiting', 'called', 'in_consultation'])
+                            ->first();
+
+                        if ($existing) {
+                                if ($existing->doctor_id != $doctor->id || $existing->priority != $priority) {
+                                    $existing->doctor_id = $doctor->id;
+                                    $existing->priority = $priority;
+                                    $existing->save();
+                                event(new PatientEnteredQueue($existing));
+                            } else {
+                                // already queued for same doctor/priority; nothing to do
+                                Log::info('Patient already queued for this reception and doctor', ['reception_id' => $updatedServiceRequest->id, 'doctor_id' => $doctor->id]);
+                            }
+                        } else {
+                                $entry = ConsultationQueue::create([
+                                    'patient_id' => $updatedServiceRequest->patient_id,
+                                    'reception_id' => $updatedServiceRequest->id,
+                                    'doctor_id' => $doctor->id,
+                                    'priority' => $priority,
+                                    'status' => 'waiting',
+                                ]);
+
+                            event(new PatientEnteredQueue($entry));
+                        }
+                    } else {
+                        Log::warning('Doctor not valid for auto-send to consultorio', ['doctor_id' => $request->input('doctor_id')]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Error auto-sending patient to consultorio', ['error' => $e->getMessage(), 'service_request_id' => $updatedServiceRequest->id ?? null]);
+                }
+            }
+
+            // If the request just became fully paid, and there is a professional assigned
+            // on the service request details, automatically enqueue the patient to that
+            // professional's consultorio queue (only if not already enqueued).
+            if ($isFullyPaid) {
+                try {
+                    $assignedProfessionalId = $serviceRequest->details()->whereNotNull('professional_id')->pluck('professional_id')->first();
+                    if ($assignedProfessionalId) {
+                        $professional = Professional::find($assignedProfessionalId);
+                        $doctorUserId = $professional?->user_id ?? null;
+
+                        // Fallback: try to resolve a linked User by professional email
+                        if (!$doctorUserId && $professional?->email) {
+                            $linkedUser = User::where('email', $professional->email)->first();
+                            if ($linkedUser && method_exists($linkedUser, 'hasRole') && $linkedUser->hasRole('doctor')) {
+                                $doctorUserId = $linkedUser->id;
+                            }
+                        }
+
+                        if (!$doctorUserId) {
+                            Log::warning('Professional assigned but no linked doctor user found for auto-send', [
+                                'professional_id' => $assignedProfessionalId,
+                                'service_request_id' => $updatedServiceRequest->id ?? null,
+                                'professional_email' => $professional?->email ?? null,
+                            ]);
+                        }
+
+                        if ($doctorUserId) {
+                            $already = ConsultationQueue::where('reception_id', $updatedServiceRequest->id)
+                                ->whereIn('status', ['waiting', 'called', 'in_consultation'])
+                                ->exists();
+
+                            if (!$already) {
+                                $priority = 'normal';
+                                $p = $request->input('priority');
+                                if (is_numeric($p)) {
+                                    $priority = ((int)$p > 0) ? 'urgent' : 'normal';
+                                } elseif (in_array($p, ['normal', 'urgent'])) {
+                                    $priority = $p === 'urgent' ? 'urgent' : 'normal';
+                                } else {
+                                    $priority = $updatedServiceRequest->priority === 'urgent' ? 'urgent' : 'normal';
+                                }
+
+                                $entry = ConsultationQueue::create([
+                                    'patient_id' => $updatedServiceRequest->patient_id,
+                                    'reception_id' => $updatedServiceRequest->id,
+                                    'doctor_id' => $doctorUserId,
+                                    'priority' => $priority,
+                                    'status' => 'waiting',
+                                ]);
+
+                                event(new PatientEnteredQueue($entry));
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Error auto-sending fully paid patient to consultorio', ['error' => $e->getMessage(), 'service_request_id' => $updatedServiceRequest->id ?? null]);
+                }
+            }
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;

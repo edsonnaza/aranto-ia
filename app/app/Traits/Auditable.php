@@ -19,6 +19,13 @@ use App\Models\AuditLog;
 trait Auditable
 {
     /**
+     * Snapshot of original attributes used for audit. This is stored
+     * in a non-persisted property to avoid writing it to the database.
+     *
+     * @var array|null
+     */
+    protected $auditable_original_snapshot = null;
+    /**
      * Boot the auditable trait and register model event listeners.
      */
     public static function bootAuditable(): void
@@ -58,7 +65,9 @@ trait Auditable
                 $model->updated_by = $userId;
             }
 
-            $model->auditable_original = $model->getOriginal();
+            // Store the original attributes in a non-persistent property
+            // so Eloquent won't try to include it in the update SQL.
+            $model->auditable_original_snapshot = $model->getOriginal();
         });
 
         // Created
@@ -68,7 +77,7 @@ trait Auditable
 
         // Updated
         static::updated(function ($model) {
-            $old = $model->auditable_original ?? $model->getOriginal();
+            $old = $model->auditable_original_snapshot ?? $model->getOriginal();
             $new = $model->getAttributes();
             self::logAuditableEvent($model, 'updated', $old, $new, 'updated');
         });

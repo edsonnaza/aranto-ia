@@ -10,10 +10,12 @@ import { Textarea } from '@/components/ui/textarea'
 
 interface CreateProps {
   patient: any
-  doctors: { id: number, name: string }[]
+  doctors?: { id: number, name: string }[]
+  currentDoctor?: { id: number, name: string } | null
+  fromQueue?: boolean
 }
 
-export default function Create({ patient, doctors }: CreateProps) {
+export default function Create({ patient, doctors = [], currentDoctor = null, fromQueue = false }: CreateProps) {
   const { data, setData, errors, processing } = useForm({
     consultation_date: new Date().toISOString().slice(0,16),
     reason: '',
@@ -21,7 +23,7 @@ export default function Create({ patient, doctors }: CreateProps) {
     diagnosis: '',
     treatment: '',
     notes: '',
-    doctor_id: '',
+    doctor_id: currentDoctor ? String(currentDoctor.id) : '',
     prescriptions: [] as any[],
     files: [] as File[],
     vital_signs: {
@@ -38,6 +40,8 @@ export default function Create({ patient, doctors }: CreateProps) {
   useEffect(() => {
     // Autofocus motivo to speed up capture
     if (reasonRef.current) reasonRef.current.focus()
+    // If we have a currentDoctor, ensure the form field is set for submission
+    if (currentDoctor) setData('doctor_id', String(currentDoctor.id))
   }, [])
 
   const addPrescription = () => {
@@ -97,6 +101,8 @@ export default function Create({ patient, doctors }: CreateProps) {
       })
     }
 
+    if (fromQueue) form.append('from_queue', '1')
+
     router.post(`/medical/patients/${patient.id}/medical-records`, form, {
       forceFormData: true,
     })
@@ -131,12 +137,16 @@ export default function Create({ patient, doctors }: CreateProps) {
 
                 <div>
                   <Label>Médico</Label>
-                  <select className="w-full border rounded px-2 py-2" value={data.doctor_id} onChange={(e) => setData('doctor_id', e.target.value)}>
-                    <option value="">Seleccionar</option>
-                    {doctors.map(d => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
+                  {currentDoctor ? (
+                    <div className="px-3 py-2 border rounded bg-slate-50 text-sm">Atendiendo como: <strong>{currentDoctor.name}</strong></div>
+                  ) : (
+                    <select className="w-full border rounded px-2 py-2" value={data.doctor_id} onChange={(e) => setData('doctor_id', e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      {doctors.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\ProfessionalController;
 use App\Http\Controllers\SpecialtyController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ReceptionController;
+use App\Http\Controllers\ConsultationQueueController;
 use App\Http\Controllers\CommissionController;
 use App\Http\Controllers\ScheduleController;
 use App\Models\CommissionLiquidation;
@@ -200,6 +201,49 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         // Get professionals for selection
         Route::get('/professionals', [ProfessionalController::class, 'apiGetProfessionals'])
             ->name('professionals');
+
+        // Send a service request to consultorio (from reception)
+        Route::post('/service-requests/{serviceRequest}/send-to-consultorio', [ReceptionController::class, 'sendToConsultorio'])
+            ->name('service-requests.send-to-consultorio');
+    });
+
+    // Consultorio / Lista de espera
+    Route::prefix('consultorio')->name('consultorio.')->group(function () {
+        // Doctor view: su cola filtrada
+        Route::get('/queue', [ConsultationQueueController::class, 'index'])
+            ->middleware('role:doctor')
+            ->name('queue.index');
+
+        // Shortcut root for consultorio
+        Route::get('/', [ConsultationQueueController::class, 'index'])
+            ->middleware('role:doctor')
+            ->name('index');
+
+        // Crear entrada en la cola (usado por Recepción)
+        Route::post('/queue', [ConsultationQueueController::class, 'store'])
+            ->name('queue.store');
+
+        // Acciones del médico sobre su cola
+        Route::post('/queue/{consultation}/call', [ConsultationQueueController::class, 'call'])
+            ->middleware('role:doctor')
+            ->name('queue.call');
+
+        Route::post('/queue/{consultation}/start', [ConsultationQueueController::class, 'start'])
+            ->middleware('role:doctor')
+            ->name('queue.start');
+
+        Route::patch('/queue/{consultation}/finish', [ConsultationQueueController::class, 'finish'])
+            ->middleware('role:doctor')
+            ->name('queue.finish');
+
+        // Call the next patient in doctor's queue
+        Route::post('/queue/call-next', [ConsultationQueueController::class, 'callNext'])
+            ->middleware('role:doctor')
+            ->name('queue.call-next');
+
+        // Public waiting-room monitor (TV)
+        Route::get('/waiting-room', [ConsultationQueueController::class, 'waitingRoom'])
+            ->name('waiting-room');
     });
 
     // Schedule Module

@@ -99,6 +99,19 @@ Si necesitas importar una base legacy completa y preparar entorno desde cero:
 bash ./scripts/setup-complete.sh /ruta/al/archivo.sql
 ```
 
+## Consultorio (Lista de espera)
+
+Se agregó un flujo de "consultorio" para separar la lógica clínica de la financiera.
+
+- Ver la cola del médico (debe estar autenticado como `doctor`): `/medical/consultorio/queue`
+- Desde Recepción se puede enviar un `service_request` a la cola mediante la acción `POST /medical/reception/service-requests/{serviceRequest}/send-to-consultorio` (payload: `doctor_id`, `priority`).
+
+Reglas básicas:
+- Solo se puede enviar a consultorio si el servicio está pagado (o si el usuario tiene permiso explícito para forzar envío).
+- La atención y generación de `MedicalRecord` se realiza dentro del contexto del médico autenticado.
+
+```
+
 ## Desarrollo Diario
 
 ### Arranque rápido con Reverb

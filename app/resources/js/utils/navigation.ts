@@ -53,6 +53,10 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         href: { url: '/medical/reception', method: 'get' },
       },
       {
+        title: 'Consultorio',
+        href: { url: '/medical/consultorio/queue', method: 'get' },
+      },
+      {
         title: 'Atención Médica',
         href: { url: '/medical', method: 'get' },
       },

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { CreditCard, Banknote, Building2, Smartphone, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
 import { ReceiptPrint } from '@/components/ui/ReceiptPrint';
+// send-to-consultorio now automatic on pago completo; no UI checkbox
 
 interface ServiceRequest {
   id: string;
@@ -82,6 +83,7 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentCompleted, setPaymentCompleted] = useState(false);
+    // El envío a consultorio se realizará automáticamente cuando el pago quede completo.
 
   // Calcular montos para pagos parciales
   const totalAmount = serviceRequest?.total_cost || 0;
@@ -128,10 +130,14 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
       pos_number: s.pos_number || null,
     }));
 
+    const isCompletePayment = Math.abs(leftover) <= 0.01 && totalSplits > 0;
+
     await router.post('/cash-register/process-service-payment', {
       service_request_id: serviceRequest.id,
       payments: paymentsPayload,
       notes: notes,
+      // Enviar automáticamente si el pago completa la deuda
+      send_to_consultorio: isCompletePayment ? 1 : 0,
     }, {
       preserveScroll: true,
       preserveState: true,
@@ -439,6 +445,8 @@ export function PaymentModal({ isOpen, onClose, serviceRequest, onPaymentProcess
                   rows={2}
                 />
               </div>
+
+              <div className="text-sm text-gray-500">El envío a consultorio se realizará automáticamente si el pago queda completo.</div>
             </div>
 
             </div>
