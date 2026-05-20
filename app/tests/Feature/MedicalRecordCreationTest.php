@@ -37,6 +37,9 @@ class MedicalRecordCreationTest extends TestCase
             ],
         ];
 
+        // Disable CSRF middleware for this POST in test environment
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
         $response = $this->actingAs($user)->post(route('medical.patients.medical-records.store', ['patient' => $patient->id]), $payload);
 
         $response->assertRedirect(route('medical.patients.show', $patient->id));
