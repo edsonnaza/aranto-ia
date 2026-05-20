@@ -90,6 +90,9 @@ class LegacyMigrationService
                 }
 
                 try {
+                    // Convertir cadenas desde el charset de la conexión legacy a UTF-8
+                    $rowArray = $this->convertRowToUtf8($rowArray);
+
                     $this->mainDB->table($targetTable)->insert($rowArray);
                     $count++;
                 } catch (Exception $e) {
@@ -114,6 +117,34 @@ class LegacyMigrationService
                 'target_table' => $targetTable,
             ];
         }
+    }
+
+    /**
+     * Convierte recursivamente los valores de la fila al encoding UTF-8
+     * según el charset configurado en la conexión `legacy`.
+     */
+    private function convertRowToUtf8(array $row): array
+    {
+        $legacyCharset = config('database.connections.legacy.charset', 'latin1');
+        $sourceEncoding = strtolower($legacyCharset) === 'latin1' ? 'ISO-8859-1' : $legacyCharset;
+
+        foreach ($row as $key => $value) {
+            if (is_string($value)) {
+                // Si no es UTF-8 válido, intentamos convertir desde el encoding legacy
+                if (!mb_check_encoding($value, 'UTF-8')) {
+                    try {
+                        $row[$key] = mb_convert_encoding($value, 'UTF-8', $sourceEncoding);
+                    } catch (\Throwable $t) {
+                        // Fallback simple
+                        $row[$key] = utf8_encode($value);
+                    }
+                }
+            } elseif (is_array($value)) {
+                $row[$key] = $this->convertRowToUtf8($value);
+            }
+        }
+
+        return $row;
     }
 
     /**
