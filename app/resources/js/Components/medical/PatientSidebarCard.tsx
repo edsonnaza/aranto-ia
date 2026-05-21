@@ -1,16 +1,24 @@
 import React from 'react'
 import { Link, usePage } from '@inertiajs/react'
+import type { SharedData } from '@/types'
+import type { Patient } from '@/types/medical'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { User, Phone, Mail, Shield, Heart, Calendar} from 'lucide-react'
 import { calculateAge, formatBirthDate } from '@/utils/date-utils'
 
-export default function PatientSidebarCard({ patient }: any) {
-  const page: any = usePage()
+interface PatientSidebarCardProps {
+  patient: Patient
+}
+
+type RoleLike = { name?: string } | string
+
+export default function PatientSidebarCard({ patient }: PatientSidebarCardProps) {
+  const page = usePage<SharedData>()
   const user = page.props?.auth?.user
-  const roles = user?.roles || []
-  const permissions = user?.permissions || []
-  const isDoctor = roles.some((r: any) => r.name === 'doctor') || permissions.includes('medical.record.create')
+  const roles = (user?.roles ?? []) as RoleLike[]
+  const permissions = (user?.permissions ?? []) as string[]
+  const isDoctor = roles.some((r) => (typeof r === 'string' ? r === 'doctor' : r?.name === 'doctor')) || permissions.includes('medical.record.create')
 
    const getGenderLabel = (gender: string) => {
     const genderMap: { [key: string]: string } = {

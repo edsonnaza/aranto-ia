@@ -6,6 +6,24 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Class VitalSign
+ *
+ * @property int $id
+ * @property int $patient_id
+ * @property int|null $medical_record_id
+ * @property float|null $temperature
+ * @property int|null $pulse
+ * @property int|null $spo2
+ * @property int|null $respiratory_rate
+ * @property int|null $bp_systolic
+ * @property int|null $bp_diastolic
+ * @property string|null $blood_pressure
+ * @property \Illuminate\Support\Carbon|null $recorded_at
+ *
+ * @property-read \App\Models\Patient $patient
+ * @property-read \App\Models\MedicalRecord|null $medicalRecord
+ */
 class VitalSign extends Model
 {
     use HasFactory;

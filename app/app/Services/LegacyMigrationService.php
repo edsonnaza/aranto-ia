@@ -135,8 +135,8 @@ class LegacyMigrationService
                     try {
                         $row[$key] = mb_convert_encoding($value, 'UTF-8', $sourceEncoding);
                     } catch (\Throwable $t) {
-                        // Fallback simple
-                        $row[$key] = utf8_encode($value);
+                        // Fallback simple: attempt a generic conversion from ISO-8859-1
+                        $row[$key] = @mb_convert_encoding($value, 'UTF-8', 'ISO-8859-1');
                     }
                 }
             } elseif (is_array($value)) {

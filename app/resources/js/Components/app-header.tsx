@@ -41,37 +41,36 @@ import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        icon: Folder,
+        title: 'Dashboard',
+        href: dashboard(),
+        icon: LayoutGrid,
     },
     {
         title: 'Documentation',
         href: 'https://laravel.com/docs/starter-kits#react',
-                ...prev,
-            ].slice(0, 20));
-        },
-    );
+        icon: BookOpen,
+    },
+];
 
-    useReceptionPaymentNotifications((event) => {
-        if (!canSeeReceptionNotifications) return;
+const rightNavItems: NavItem[] = [
+    {
+        title: 'Docs',
+        href: 'https://laravel.com/docs',
+        icon: BookOpen,
+    },
+    {
+        title: 'Repo',
+        href: 'https://github.com',
+        icon: Folder,
+    },
+];
 
-        const patientName = event.service_request.patient_name;
-        const message = patientName
-            ? `${event.message} · ${patientName}`
-            : event.message;
+export default function AppHeader() {
+    const page = usePage<SharedData>();
+    const { auth, breadcrumbs } = page.props;
+    const getInitials = useInitials();
 
-        setNotifications((prev) => [
-            {
-                id: `reception-payment-${event.service_request.id}-${Date.now()}`,
-                message,
-                createdAt: new Date().toISOString(),
-                href: '/medical/reception',
-                read: false,
-                source: 'reception',
-                type: 'payment-updated',
-            },
-            ...prev,
-        ].slice(0, 20));
-    });
+    const activeItemStyles = 'font-semibold text-black dark:text-white';
 
     return (
         <>
@@ -158,7 +157,7 @@ const mainNavItems: NavItem[] = [
                             <NavigationMenuList className="flex h-full items-stretch space-x-2">
                                 {mainNavItems.map((item, index) => (
                                     <NavigationMenuItem
-                                        key={index}
+                                        key={item.title}
                                         className="relative flex h-full items-center"
                                     >
                                         <Link

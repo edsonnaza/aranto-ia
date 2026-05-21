@@ -208,7 +208,7 @@ class PatientController extends Controller
         $patient->load(['insuranceType']);
 
         // Provide an initial slice of vitals (last 500) for the page
-        $vitals = \App\Models\VitalSign::where('patient_id', $patient->id)
+        $vitals = VitalSign::where('patient_id', $patient->id)
             ->orderByDesc('recorded_at')
             ->limit(500)
             ->get()
@@ -422,7 +422,7 @@ class PatientController extends Controller
         $genderMap = ['M' => 'Masculino', 'F' => 'Femenino', 'OTHER' => 'Otro'];
 
         $birthDate = $patient->birth_date
-            ? \Carbon\Carbon::parse((string) $patient->birth_date)
+            ? Carbon::parse((string) $patient->birth_date)
             : null;
 
         return response()->json([
@@ -446,7 +446,7 @@ class PatientController extends Controller
                 'coverage_percentage' => $primaryInsurance->coverage_percentage ?? null,
                 'number' => $primaryInsurance->number ?? null,
             ] : null,
-            'created_at' => \Carbon\Carbon::parse((string) $patient->created_at)->format('d/m/Y'),
+            'created_at' => Carbon::parse((string) $patient->created_at)->format('d/m/Y'),
         ]);
     }
 

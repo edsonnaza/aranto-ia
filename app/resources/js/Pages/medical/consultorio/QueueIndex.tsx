@@ -11,11 +11,30 @@ interface QueueIndexProps {
 }
 
 export default function QueueIndex({ queue }: QueueIndexProps) {
+  function playDing() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      o.type = 'sine'
+      o.frequency.value = 880
+      g.gain.value = 0.03
+      o.connect(g)
+      g.connect(ctx.destination)
+      o.start()
+      setTimeout(() => { o.stop(); ctx.close().catch(() => {}) }, 180)
+    } catch (e) {
+      // ignore audio errors
+    }
+  }
+
   useConsultorioNotifications(() => {
-    // Recargar la lista de la cola cuando entra un paciente nuevo
+    // Reproducir sonido y recargar la lista de la cola cuando entra un paciente nuevo
+    playDing()
     toast.success('Nuevo paciente en la cola')
     router.reload({ only: ['queue'], preserveUrl: true })
   })
+
   return (
     <AppLayout breadcrumbs={[{ title: 'Consultorio', href: '/medical/consultorio' }, { title: 'Lista de Espera', href: '' }]}> 
       <Head title="Lista de Espera - Consultorio" />

@@ -203,153 +203,39 @@ class ReceptionController extends Controller
      */
     public function create(): Response
     {
-        $professionals = [];
-        $medicalServices = [];
-        $insuranceTypes = [];
-        $initialContext = null;
-        
-        try {
-            // Cargar profesionales
-            $professionals = Professional::where('status', 'active')
-                ->with('commissionSettings')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get()
-                ->map(function ($professional) {
+        // Delegar la carga pesada a métodos privados para reducir la complejidad del método
+        $professionals = $this->getActiveProfessionals();
+        // Asegurar formato esperado por el frontend
+        $professionals = array_map(function ($p) {
+            return array_merge($p, [
+                'value' => $p['id'] ?? null,
+                'label' => $p['full_name'] ?? (($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')),
+            ]);
+        }, $professionals);
+
+        $medicalServices = $this->getMedicalServicesGroupedByCategory();
+        // Ajustar servicios para incluir claves 'value' y 'label'
+        $medicalServices = array_map(function ($cat) {
+            return [
+                'id' => $cat['id'],
+                'category' => $cat['category'],
+                'services' => array_map(function ($s) {
                     return [
-                        'value' => $professional->id,
-                        'id' => $professional->id,
-                        'label' => $professional->full_name,
-                        'first_name' => $professional->first_name,
-                        'last_name' => $professional->last_name,
-                        'full_name' => $professional->full_name,
-                        'document_type' => $professional->document_type,
-                        'document_number' => $professional->document_number,
-                        'phone' => $professional->phone,
-                        'email' => $professional->email,
-                        'status' => $professional->status,
-                        'commission_percentage' => $professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0,
+                        'value' => $s['id'],
+                        'id' => $s['id'],
+                        'label' => $s['name'],
+                        'name' => $s['name'],
+                        'code' => $s['code'] ?? null,
+                        'base_price' => $s['base_price'] ?? 0,
+                        'estimated_duration' => $s['estimated_duration'] ?? 30,
                     ];
-                })->toArray();
-        } catch (\Exception $e) {
-            \Log::error('Error loading professionals in ReceptionController: ' . $e->getMessage());
-        }
+                }, $cat['services']),
+            ];
+        }, $medicalServices);
 
-        try {
-            // Cargar servicios médicos agrupados por categoría
-            $medicalServices = ServiceCategory::where('status', 'active')
-                ->with(['services' => function ($query) {
-                    $query->where('status', 'active')->orderBy('name');
-                }])
-                ->orderBy('name')
-                ->get()
-                ->map(function ($category) {
-                    return [
-                        'id' => $category->id,
-                        'category' => $category->name,
-                        'services' => $category->services->map(function ($service) {
-                            return [
-                                'value' => $service->id,
-                                'id' => $service->id,
-                                'label' => $service->name,
-                                'name' => $service->name,
-                                'code' => $service->code,
-                                'base_price' => $service->base_price ?? 0,
-                                'estimated_duration' => $service->duration_minutes ?? 30,
-                            ];
-                        })->toArray(),
-                    ];
-                })->toArray();
-        } catch (\Exception $e) {
-            \Log::error('Error loading medical services in ReceptionController: ' . $e->getMessage());
-        }
+        $insuranceTypes = $this->getActiveInsuranceTypes();
 
-        try {
-            // Cargar tipos de seguros
-            $insuranceTypes = InsuranceType::where('status', 'active')
-                ->orderBy('name')
-                ->get()
-                ->map(function ($insurance) {
-                    return [
-                        'value' => $insurance->id,
-                        'id' => $insurance->id,
-                        'label' => $insurance->name,
-                        'name' => $insurance->name,
-                        'description' => $insurance->description,
-                        'coverage_percentage' => $insurance->coverage_percentage,
-                    ];
-                })->toArray();
-        } catch (\Exception $e) {
-            \Log::error('Error loading insurance types in ReceptionController: ' . $e->getMessage());
-        }
-
-        $appointmentId = request()->integer('appointment_id');
-
-        if ($appointmentId) {
-            $appointment = ScheduleAppointment::with(['patient.insurances', 'patient.insuranceType', 'professional', 'medicalService'])
-                ->find($appointmentId);
-
-            if ($appointment) {
-                $defaultInsurance = null;
-
-                if ($appointment->patient) {
-                    $defaultInsurance = $appointment->patient->insurances
-                        ->filter(function ($insurance) {
-                            $validUntil = $insurance->pivot->valid_until;
-
-                            return empty($validUntil) || Carbon::parse((string) $validUntil)->endOfDay()->gte(now());
-                        })
-                        ->sortByDesc(fn ($insurance) => (int) $insurance->pivot->is_primary)
-                        ->first();
-
-                    if (!$defaultInsurance && $appointment->patient->insuranceType) {
-                        $defaultInsurance = $appointment->patient->insuranceType;
-                    }
-                }
-
-                $serviceIds = collect($appointment->medical_service_ids ?? [])
-                    ->when($appointment->medical_service_id, fn ($collection) => $collection->prepend((int) $appointment->medical_service_id))
-                    ->filter()
-                    ->map(fn ($serviceId) => (int) $serviceId)
-                    ->unique()
-                    ->values();
-
-                $services = MedicalService::query()
-                    ->whereIn('id', $serviceIds->all())
-                    ->get(['id', 'name', 'duration_minutes'])
-                    ->map(fn ($service) => [
-                        'id' => $service->id,
-                        'name' => $service->name,
-                        'duration_minutes' => $service->duration_minutes,
-                    ])
-                    ->values()
-                    ->all();
-
-                $initialContext = [
-                    'appointment' => [
-                        'id' => $appointment->id,
-                        'status' => $appointment->status,
-                        'professional_id' => $appointment->professional_id,
-                        'professional_name' => $appointment->professional?->full_name,
-                        'medical_service_name' => collect($services)->pluck('name')->implode(', '),
-                        'medical_service_ids' => $serviceIds->all(),
-                        'medical_service_names' => collect($services)->pluck('name')->values()->all(),
-                        'services' => $services,
-                    ],
-                    'patient' => $appointment->patient ? [
-                        'id' => $appointment->patient->id,
-                        'name' => $appointment->patient->full_name,
-                        'default_insurance_type_id' => $defaultInsurance?->id,
-                        'default_insurance_name' => $defaultInsurance?->name,
-                    ] : null,
-                    'request_date' => $appointment->appointment_date?->format('Y-m-d'),
-                    'request_time' => $appointment->start_time
-                        ? Carbon::parse((string) $appointment->start_time)->format('H:i')
-                        : null,
-                    'notes' => $appointment->notes,
-                ];
-            }
-        }
+        $initialContext = $this->buildInitialContextFromAppointment(request()->integer('appointment_id'));
 
         return Inertia::render('medical/reception/Create', [
             'patients' => [],
@@ -423,6 +309,183 @@ class ReceptionController extends Controller
             \Log::error('Error getting professionals: ' . $e->getMessage());
             return [];
         }
+    }
+
+    /**
+     * Obtener tipos de seguros activos
+     *
+     * @return array
+     */
+    private function getActiveInsuranceTypes()
+    {
+        try {
+            return InsuranceType::where('status', 'active')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($insurance) {
+                    return [
+                        'value' => $insurance->id,
+                        'id' => $insurance->id,
+                        'label' => $insurance->name,
+                        'name' => $insurance->name,
+                        'description' => $insurance->description,
+                        'coverage_percentage' => $insurance->coverage_percentage,
+                    ];
+                })->toArray();
+        } catch (\Exception $e) {
+            \Log::error('Error getting insurance types: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Build initial context for reception Create form from an appointment.
+     *
+     * @param int|null $appointmentId
+     * @return array|null
+     */
+    private function buildInitialContextFromAppointment(?int $appointmentId): ?array
+    {
+        if (empty($appointmentId)) {
+            return null;
+        }
+
+        try {
+            $appointment = ScheduleAppointment::with(['patient.insurances', 'patient.insuranceType', 'professional', 'medicalService'])
+                ->find($appointmentId);
+
+            if (!$appointment) {
+                return null;
+            }
+
+            $patient = $appointment->patient;
+            $defaultInsurance = $patient ? $this->resolveDefaultInsuranceFromPatient($patient) : null;
+
+            $serviceIds = $this->extractServiceIdsFromAppointment($appointment);
+            $services = $this->mapServices($serviceIds);
+
+            $medicalServiceNames = collect($services)->pluck('name')->implode(', ');
+
+            return [
+                'appointment' => [
+                    'id' => $appointment->id,
+                    'status' => $appointment->status,
+                    'professional_id' => $appointment->professional_id,
+                    'professional_name' => $appointment->professional?->full_name,
+                    'medical_service_name' => $medicalServiceNames,
+                    'medical_service_ids' => $serviceIds,
+                    'medical_service_names' => collect($services)->pluck('name')->values()->all(),
+                    'services' => array_values($services),
+                ],
+                'patient' => $patient ? [
+                    'id' => $patient->id,
+                    'name' => $patient->full_name,
+                    'default_insurance_type_id' => $defaultInsurance?->id,
+                    'default_insurance_name' => $defaultInsurance?->name,
+                ] : null,
+                'request_date' => $appointment->appointment_date?->format('Y-m-d'),
+                'request_time' => $appointment->start_time
+                    ? Carbon::parse((string) $appointment->start_time)->format('H:i')
+                    : null,
+                'notes' => $appointment->notes,
+            ];
+        } catch (\Exception $e) {
+            \Log::error('Error building initial context from appointment in ReceptionController: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Resolve default insurance for a patient.
+     *
+     * @param  mixed  $patient
+     * @return InsuranceType|null
+     */
+    private function resolveDefaultInsuranceFromPatient($patient): ?InsuranceType
+    {
+        try {
+            if (empty($patient) || empty($patient->insurances)) {
+                return null;
+            }
+
+            $insurances = collect($patient->insurances);
+
+            $validInsurances = $insurances->filter(function ($insurance) {
+                $validUntil = $insurance->pivot->valid_until ?? null;
+                if (empty($validUntil)) {
+                    return true;
+                }
+                try {
+                    return Carbon::parse((string) $validUntil)->endOfDay()->gte(now());
+                } catch (\Exception $ex) {
+                    return false;
+                }
+            });
+
+            $sorted = $validInsurances->sortByDesc(function ($insurance) {
+                return (int) ($insurance->pivot->is_primary ?? 0);
+            });
+
+            $default = $sorted->first();
+
+            if (!$default && !empty($patient->insuranceType)) {
+                $default = $patient->insuranceType;
+            }
+
+            return $default;
+        } catch (\Exception $e) {
+            \Log::warning('Failed to resolve default insurance: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extract service IDs from appointment (normalizes legacy fields).
+     *
+     * @param ScheduleAppointment $appointment
+     * @return int[]
+     */
+    private function extractServiceIdsFromAppointment(ScheduleAppointment $appointment): array
+    {
+        $ids = [];
+
+        if (!empty($appointment->medical_service_ids) && is_iterable($appointment->medical_service_ids)) {
+            $ids = array_map('intval', (array) $appointment->medical_service_ids);
+        }
+
+        if (!empty($appointment->medical_service_id)) {
+            array_unshift($ids, (int) $appointment->medical_service_id);
+        }
+
+        // Remove falsy values, keep unique
+        $ids = array_values(array_filter(array_unique($ids), function ($v) { return !empty($v); }));
+
+        return $ids;
+    }
+
+    /**
+     * Map service records to a simple serializable array.
+     *
+     * @param int[] $serviceIds
+     * @return array
+     */
+    private function mapServices(array $serviceIds): array
+    {
+        if (empty($serviceIds)) {
+            return [];
+        }
+
+        $services = MedicalService::query()
+            ->whereIn('id', $serviceIds)
+            ->get(['id', 'name', 'duration_minutes']);
+
+        return $services->map(function ($service) {
+            return [
+                'id' => $service->id,
+                'name' => $service->name,
+                'duration_minutes' => $service->duration_minutes,
+            ];
+        })->values()->all();
     }
 
     /**

@@ -7,8 +7,22 @@ import { createRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
 import { configureEcho } from '@laravel/echo-react';
 
+const _csrfMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="csrf-token"]') : null;
+const _csrf = _csrfMeta ? (_csrfMeta as HTMLMetaElement).getAttribute('content') : undefined;
+
 configureEcho({
     broadcaster: 'reverb',
+    authTransport: 'ajax',
+    authEndpoint: '/broadcasting/auth',
+    auth: {
+        headers: {
+            'X-CSRF-TOKEN': _csrf,
+        },
+    },
+    // ensure XHR sends cookies when performing the /broadcasting/auth request
+    // some runtimes accept this flag; keep it for interoperability
+    // @ts-ignore
+    withCredentials: true,
 });
 
 const appName = 'Aranto';

@@ -10,7 +10,7 @@ trait HandlesVitalSigns
      * Persist a VitalSign row for a medical record snapshot.
      * Accepts $vitals as array with possible keys: temperature, pulse, spo2, respiratory_rate, bp_systolic, bp_diastolic, blood_pressure
      */
-    protected function persistVitalSignSnapshot($medicalRecord, array $vitals = null): ?VitalSign
+    protected function persistVitalSignSnapshot($medicalRecord, ?array $vitals = null): ?VitalSign
     {
         if (empty($vitals) || !is_array($vitals)) {
             return null;

@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Class MedicalRecordFile
+ *
+ * @property int $id
+ * @property int $medical_record_id
+ * @property string $file_path
+ * @property string|null $original_name
+ * @property int|null $uploaded_by
+ *
+ * @property-read \App\Models\MedicalRecord $medicalRecord
+ */
 class MedicalRecordFile extends Model
 {
     use HasFactory, SoftDeletes, Auditable;

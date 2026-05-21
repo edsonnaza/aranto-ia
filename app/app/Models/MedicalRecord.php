@@ -9,6 +9,22 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Class MedicalRecord
+ *
+ * @property int $id
+ * @property int $patient_id
+ * @property int|null $doctor_id
+ * @property \Illuminate\Support\Carbon|null $consultation_date
+ * @property string|null $reason
+ * @property array|null $vital_signs
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ *
+ * @property-read \App\Models\Patient $patient
+ * @property-read \App\Models\User|null $doctor
+ * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\MedicalRecordFile[] $files
+ */
 class MedicalRecord extends Model
 {
     use HasFactory, SoftDeletes, Auditable;

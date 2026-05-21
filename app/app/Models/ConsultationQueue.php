@@ -5,6 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Class ConsultationQueue
+ *
+ * @property int $id
+ * @property int $patient_id
+ * @property int|null $reception_id
+ * @property int|null $doctor_id
+ * @property string $status
+ * @property int|null $priority
+ * @property \Illuminate\Support\Carbon|null $called_at
+ * @property \Illuminate\Support\Carbon|null $started_at
+ * @property \Illuminate\Support\Carbon|null $finished_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read \App\Models\Patient $patient
+ * @property-read \App\Models\User|null $doctor
+ */
 class ConsultationQueue extends Model
 {
     protected $table = 'consultation_queue';
@@ -24,6 +42,8 @@ class ConsultationQueue extends Model
         'called_at' => 'datetime',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function patient(): BelongsTo

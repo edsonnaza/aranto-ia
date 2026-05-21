@@ -5,11 +5,9 @@ namespace App\Http\Controllers;
 use App\Events\PatientFinished;
 use App\Models\ConsultationQueue;
 use App\Models\MedicalRecord;
-use App\Models\MedicalPrescription;
 use App\Models\MedicalRecordFile;
 use App\Models\Patient;
 use App\Models\User;
-use App\Models\VitalSign;
 use App\Http\Requests\StoreMedicalRecordRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -23,7 +21,7 @@ class MedicalRecordController extends Controller
     use HandlesVitalSigns;
     public function create(Patient $patient)
     {
-        $this->authorize('create', \App\Models\MedicalRecord::class);
+        $this->authorize('create', MedicalRecord::class);
 
         $user = auth()->user();
         $isDoctor = $user && method_exists($user, 'hasRole') && $user->hasRole('doctor');
@@ -163,10 +161,12 @@ class MedicalRecordController extends Controller
 
     public function downloadFile(MedicalRecordFile $file)
     {
-        if (!Storage::disk('public')->exists($file->file_path)) {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+        if (!$disk->exists($file->file_path)) {
             abort(404);
         }
 
-        return Storage::disk('public')->download($file->file_path, $file->original_name ?: null);
+        return $disk->download($file->file_path, $file->original_name ?: null);
     }
 }
