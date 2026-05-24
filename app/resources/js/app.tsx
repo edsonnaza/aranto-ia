@@ -6,24 +6,34 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
 import { configureEcho } from '@laravel/echo-react';
+// DEBUG: Verifica que las variables estén bien
+console.log('VITE_REVERB_HOST', import.meta.env.VITE_REVERB_HOST);
+console.log('VITE_REVERB_PORT', import.meta.env.VITE_REVERB_PORT);
+console.log('VITE_REVERB_APP_KEY', import.meta.env.VITE_REVERB_APP_KEY);
+console.log('VITE_REVERB_SCHEME', import.meta.env.VITE_REVERB_SCHEME);
+
 
 const _csrfMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="csrf-token"]') : null;
-const _csrf = _csrfMeta ? (_csrfMeta as HTMLMetaElement).getAttribute('content') : undefined;
+const csrfToken = _csrfMeta ? (_csrfMeta as HTMLMetaElement).getAttribute('content') ?? '' : '';
+
 
 configureEcho({
-    broadcaster: 'reverb',
-    authTransport: 'ajax',
-    authEndpoint: '/broadcasting/auth',
-    auth: {
-        headers: {
-            'X-CSRF-TOKEN': _csrf,
+        broadcaster: 'reverb',
+        key: import.meta.env.VITE_REVERB_APP_KEY,
+        wsHost: import.meta.env.VITE_REVERB_HOST,
+        wsPort: Number(import.meta.env.VITE_REVERB_PORT),
+        wssPort: Number(import.meta.env.VITE_REVERB_PORT),
+        scheme: import.meta.env.VITE_REVERB_SCHEME,
+        forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
+        // ...existing config...
+        authTransport: 'ajax',
+        authEndpoint: '/broadcasting/auth',
+        auth: {
+            headers: { 'X-CSRF-TOKEN': csrfToken }
         },
-    },
-    // ensure XHR sends cookies when performing the /broadcasting/auth request
-    // some runtimes accept this flag; keep it for interoperability
-    // @ts-ignore
-    withCredentials: true,
+        withCredentials: true,
 });
+
 
 const appName = 'Aranto';
 

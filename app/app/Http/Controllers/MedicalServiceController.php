@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Validation\Rule;
 
 class MedicalServiceController extends Controller
 {
@@ -256,6 +255,7 @@ class MedicalServiceController extends Controller
             'default_commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'status' => ['required', 'string', 'in:active,inactive'],
             'prices' => ['nullable', 'array'],
+            'prices.*.id' => ['nullable', 'string'],
             'prices.*.insurance_type_id' => ['required', 'integer', 'exists:insurance_types,id'],
             'prices.*.price' => ['required', 'numeric', 'min:0'],
             'prices.*.effective_from' => ['required', 'date'],
@@ -287,12 +287,39 @@ class MedicalServiceController extends Controller
                 // Crear/actualizar nuevos precios
                 foreach ($validated['prices'] as $priceData) {
                     if ($priceData['insurance_type_id'] > 0 && $priceData['price'] > 0) {
+                        $existingPriceId = null;
+                        if (!empty($priceData['id'])) {
+                            if (is_string($priceData['id']) && preg_match('/^existing-(\d+)$/', $priceData['id'], $matches)) {
+                                $existingPriceId = (int)$matches[1];
+                            } elseif (is_numeric($priceData['id'])) {
+                                $existingPriceId = (int)$priceData['id'];
+                            }
+                        }
+
+                        $duplicateQuery = ServicePrice::where('service_id', $medicalService->id)
+                            ->where('insurance_type_id', $priceData['insurance_type_id'])
+                            ->where('effective_from', $priceData['effective_from']);
+
+                        if ($existingPriceId) {
+                            $duplicateQuery->where('id', '<>', $existingPriceId);
+                        }
+
+                        if ($duplicateQuery->exists()) {
+                            throw new \Exception('Ya existe un precio para este seguro con la misma fecha de inicio.');
+                        }
+
+                        $attributes = [
+                            'service_id' => $medicalService->id,
+                            'insurance_type_id' => $priceData['insurance_type_id'],
+                            'effective_from' => $priceData['effective_from'],
+                        ];
+
+                        if ($existingPriceId) {
+                            $attributes['id'] = $existingPriceId;
+                        }
+
                         ServicePrice::updateOrCreate(
-                            [
-                                'service_id' => $medicalService->id,
-                                'insurance_type_id' => $priceData['insurance_type_id'],
-                                'effective_from' => $priceData['effective_from'],
-                            ],
+                            $attributes,
                             [
                                 'price' => $priceData['price'],
                                 'effective_until' => $priceData['effective_until'] ?? null,
@@ -355,7 +382,19 @@ class MedicalServiceController extends Controller
         $validated['service_id'] = $medicalService->id;
         $validated['created_by'] = auth()->id();
 
-        ServicePrice::create($validated);
+        ServicePrice::updateOrCreate(
+            [
+                'service_id' => $validated['service_id'],
+                'insurance_type_id' => $validated['insurance_type_id'],
+                'effective_from' => $validated['effective_from'],
+            ],
+            [
+                'price' => $validated['price'],
+                'effective_until' => $validated['effective_until'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => $validated['created_by'],
+            ]
+        );
 
         return redirect()
             ->route('medical-services.show', $medicalService)
@@ -404,22 +443,23 @@ class MedicalServiceController extends Controller
             })
             ->orderBy('name')
             ->limit(5)
-            ->get()
-            ->map(function ($service) {
-                // Obtener el precio más reciente de cualquier tipo de seguro como referencia
-                $currentPrice = $service->currentPrices()->first();
-                $priceDisplay = $currentPrice ? '₲ ' . number_format($currentPrice->price, 0, ',', '.') : 'Sin precio';
-                
-                return [
-                    'id' => $service->id,
-                    'label' => $service->name,
-                    'subtitle' => ($service->category ? $service->category->name : 'Sin Categoría') . ' - ' . $priceDisplay,
-                    'code' => $service->code,
-                    'current_price' => $currentPrice ? $currentPrice->price : null,
-                    'duration_minutes' => $service->duration_minutes,
-                    'category' => $service->category ? $service->category->name : 'Sin Categoría'
-                ];
-            });
+            ->getModels();
+
+        $services = collect($services)->map(function ($service) {
+            // Obtener el precio más reciente de cualquier tipo de seguro como referencia
+            $currentPrice = $service->currentPrices()->first();
+            $priceDisplay = $currentPrice ? '₲ ' . number_format($currentPrice->price, 0, ',', '.') : 'Sin precio';
+
+            return [
+                'id' => $service->id,
+                'label' => $service->name,
+                'subtitle' => ($service->category ? $service->category->name : 'Sin Categoría') . ' - ' . $priceDisplay,
+                'code' => $service->code,
+                'current_price' => $currentPrice ? $currentPrice->price : null,
+                'duration_minutes' => $service->duration_minutes,
+                'category' => $service->category ? $service->category->name : 'Sin Categoría'
+            ];
+        });
 
         return response()->json($services);
     }

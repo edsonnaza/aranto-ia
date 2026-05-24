@@ -13,7 +13,6 @@ use App\Models\ServiceRequest;
 use App\Models\InsuranceType;
 use App\Models\User;
 use App\Models\ConsultationQueue;
-use App\Events\PatientEnteredQueue;
 use App\Notifications\ReceptionPaymentUpdatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -611,7 +610,7 @@ class CashRegisterController extends Controller
                         }
 
                         // Delegate to the model helper which handles duplicates and broadcasting
-                        \App\Models\ConsultationQueue::enqueueFromServiceRequest($updatedServiceRequest, $doctor->id, $priority);
+                        ConsultationQueue::enqueueFromServiceRequest($updatedServiceRequest, $doctor->id, $priority);
                     } else {
                         Log::warning('Doctor not valid for auto-send to consultorio', ['doctor_id' => $request->input('doctor_id')]);
                     }
@@ -639,7 +638,7 @@ class CashRegisterController extends Controller
                         }
                     }
 
-                    \App\Models\ConsultationQueue::enqueueFromServiceRequest($updatedServiceRequest, $doctorUserId, $request->input('priority') ?? null);
+                    ConsultationQueue::enqueueFromServiceRequest($updatedServiceRequest, $doctorUserId, $request->input('priority') ?? null);
                 } catch (\Throwable $e) {
                     Log::error('Error auto-sending fully paid patient to consultorio', ['error' => $e->getMessage(), 'service_request_id' => $updatedServiceRequest->id ?? null]);
                 }

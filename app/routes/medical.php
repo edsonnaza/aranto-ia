@@ -25,6 +25,10 @@ use App\Models\CommissionLiquidation;
 |
 */
 
+// Ruta pública para la sala de espera (TV)
+Route::get('/medical/consultorio/waiting-room', [ConsultationQueueController::class, 'waitingRoom'])
+    ->name('medical.consultorio.waiting-room');
+
 Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->group(function () {
     
     // Route Model Bindings
@@ -240,10 +244,6 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
         Route::post('/queue/call-next', [ConsultationQueueController::class, 'callNext'])
             ->middleware('role:doctor')
             ->name('queue.call-next');
-
-        // Public waiting-room monitor (TV)
-        Route::get('/waiting-room', [ConsultationQueueController::class, 'waitingRoom'])
-            ->name('waiting-room');
     });
 
     // Schedule Module

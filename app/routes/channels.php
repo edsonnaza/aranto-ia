@@ -35,3 +35,11 @@ Broadcast::channel('consultorio.{id}', function ($user, $id) {
 
     return (int) $user->id === (int) $id;
 });
+
+Broadcast::channel('doctor.{id}.queue', function ($user, $id) {
+    if (!($user instanceof User)) {
+        return false;
+    }
+
+    return (int) $user->id === (int) $id;
+});

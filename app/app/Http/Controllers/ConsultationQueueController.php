@@ -7,7 +7,7 @@ use App\Events\PatientEnteredQueue;
 use App\Events\PatientFinished;
 use App\Events\PatientInConsultation;
 use App\Models\ConsultationQueue;
-use App\Models\Patient;
+//use App\Models\Patient;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

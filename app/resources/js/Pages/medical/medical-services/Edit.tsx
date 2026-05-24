@@ -187,6 +187,7 @@ export default function EditMedicalService({
         category_id: Number(data.category_id),
         preparation_instructions: data.requires_preparation ? (data.preparation_instructions || '') : '',
         prices: prices.map(price => ({
+          id: price.id,
           insurance_type_id: price.insurance_type_id,
           price: price.price,
           effective_from: price.effective_from,

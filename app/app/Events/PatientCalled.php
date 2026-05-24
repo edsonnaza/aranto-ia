@@ -23,6 +23,7 @@ class PatientCalled implements ShouldBroadcast
     public function broadcastOn()
     {
         return [
+            new PrivateChannel('doctor.' . $this->entry->doctor_id . '.queue'),
             new PrivateChannel('consultorio.' . $this->entry->doctor_id),
             new Channel('waiting-room'),
         ];

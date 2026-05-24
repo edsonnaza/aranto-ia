@@ -80,6 +80,12 @@ export interface User {
     [key: string]: unknown; // This allows for additional properties...
 }
 
+declare global {
+    interface Window {
+        Echo?: any
+    }
+}
+
 // Re-export other type modules so consumers can import from '@/types'
 export * from './medical'
 export * from './commission'

@@ -1,73 +1,150 @@
-import React from 'react'
-import { Head, router, Link } from '@inertiajs/react'
-import { useConsultorioNotifications } from '@/hooks/medical/useConsultorioNotifications'
+import { Head, router, usePage } from '@inertiajs/react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { getPriorityLabel, getQueueStatusLabel } from '@/utils/formatters'
 import AppLayout from '@/layouts/app-layout'
-import { Button } from '@/components/ui/button'
+import useConsultorioRealtime, {
+  QueueItem,
+  QueuePagination,
+  RealtimePayload,
+} from '@/hooks/medical/useConsultorioRealtime'
+import QueueHeader from '@/components/medical/consultorio/QueueHeader'
+import QueueCard from '@/components/medical/consultorio/QueueCard'
+import EmptyQueueState from '@/components/medical/consultorio/EmptyQueueState'
+import PaginationControls from '@/components/medical/consultorio/PaginationControls'
 
 interface QueueIndexProps {
-  queue: any
+  queue: QueuePagination
+}
+
+const enrichQueueItem = (payload: RealtimePayload): QueueItem => ({
+  id: payload.id,
+  patient: {
+    id: payload.patient.id,
+    first_name: '',
+    last_name: '',
+    display: payload.patient.name,
+  },
+  status: payload.status,
+  priority: payload.priority ?? 'normal',
+  created_at: payload.created_at ?? new Date().toISOString(),
+  called_at: payload.called_at ?? null,
+  started_at: payload.started_at ?? null,
+  finished_at: payload.finished_at ?? null,
+})
+
+interface PageProps {
+  auth?: {
+    user?: {
+      id: number
+    }
+  }
 }
 
 export default function QueueIndex({ queue }: QueueIndexProps) {
-  function playDing() {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const o = ctx.createOscillator()
-      const g = ctx.createGain()
-      o.type = 'sine'
-      o.frequency.value = 880
-      g.gain.value = 0.03
-      o.connect(g)
-      g.connect(ctx.destination)
-      o.start()
-      setTimeout(() => { o.stop(); ctx.close().catch(() => {}) }, 180)
-    } catch (e) {
-      // ignore audio errors
-    }
-  }
+  const page = usePage<PageProps & Record<string, unknown>>()
+  const doctorId = page.props?.auth?.user?.id ?? null
+  const [itemMap, setItemMap] = useState<Record<number, QueueItem>>({})
+  const [removedIds, setRemovedIds] = useState<number[]>([])
 
-  useConsultorioNotifications(() => {
-    // Reproducir sonido y recargar la lista de la cola cuando entra un paciente nuevo
-    playDing()
-    toast.success('Nuevo paciente en la cola')
-    router.reload({ only: ['queue'], preserveUrl: true })
+  const queueItems = useMemo(() => {
+    const baseItems = queue.data ?? []
+    const merged = baseItems
+      .map((item) => itemMap[item.id] ?? item)
+      .filter((item) => !removedIds.includes(item.id))
+
+    const extraItems = Object.values(itemMap).filter(
+      (item) => !baseItems.some((baseItem) => baseItem.id === item.id) && !removedIds.includes(item.id)
+    )
+
+    return [...extraItems, ...merged]
+  }, [queue.data, itemMap, removedIds])
+
+  const updateItem = useCallback((payload: RealtimePayload) => {
+    setItemMap((prev) => ({
+      ...prev,
+      [payload.id]: {
+        ...(prev[payload.id] ?? enrichQueueItem(payload)),
+        status: payload.status,
+        called_at: payload.called_at ?? prev[payload.id]?.called_at ?? null,
+        started_at: payload.started_at ?? prev[payload.id]?.started_at ?? null,
+        finished_at: payload.finished_at ?? prev[payload.id]?.finished_at ?? null,
+      },
+    }))
+  }, [])
+
+  const removeItem = useCallback((payload: RealtimePayload) => {
+    setRemovedIds((current) => (current.includes(payload.id) ? current : [...current, payload.id]))
+  }, [])
+
+  useConsultorioRealtime(doctorId, {
+    onPatientAdded(payload) {
+      setRemovedIds((current) => current.filter((id) => id !== payload.id))
+      setItemMap((current) => {
+        if (current[payload.id]) {
+          return current
+        }
+
+        toast.success('Nuevo paciente en tu cola')
+        return {
+          ...current,
+          [payload.id]: enrichQueueItem(payload),
+        }
+      })
+    },
+    onPatientCalled(payload) {
+      updateItem(payload)
+      toast.success('Paciente llamado')
+    },
+    onPatientStarted(payload) {
+      updateItem(payload)
+      toast('Paciente en consulta')
+    },
+    onPatientFinished(payload) {
+      removeItem(payload)
+      toast.success('Consulta finalizada')
+    },
+    playSound: true,
   })
 
+  const handleCall = useCallback((itemId: number) => {
+    router.post(`/medical/consultorio/queue/${itemId}/call`)
+  }, [])
+
+  const handleStart = useCallback((itemId: number) => {
+    router.post(`/medical/consultorio/queue/${itemId}/start`)
+  }, [])
+
   return (
-    <AppLayout breadcrumbs={[{ title: 'Consultorio', href: '/medical/consultorio' }, { title: 'Lista de Espera', href: '' }]}> 
+    <AppLayout
+      breadcrumbs={[
+        { title: 'Consultorio', href: '/medical/consultorio' },
+        { title: 'Lista de Espera', href: '' },
+      ]}
+    >
       <Head title="Lista de Espera - Consultorio" />
 
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold">Mi Cola de Pacientes</h1>
+      <div className="space-y-6">
+        <QueueHeader pagination={queue} />
 
-        <div className="space-y-2">
-          {queue.data?.length ? queue.data.map((item: any) => (
-            <div key={item.id} className="flex items-center justify-between p-3 border rounded">
-              <div>
-                <div className="font-medium">{item.patient.display}</div>
-                <div className="text-sm text-gray-500">Prioridad: {getPriorityLabel(item.priority)} • {item.created_at}{item.status ? ` • ${getQueueStatusLabel(item.status)}` : ''}</div>
-              </div>
-              <div className="flex gap-2">
-                <Link href={`/medical/patients/${item.patient.id}/medical-records/create`} className="inline-block">
-                  <Button>Atender</Button>
-                </Link>
-                <Button variant="outline" onClick={() => router.post(`/medical/consultorio/queue/${item.id}/call`)}>Llamar</Button>
-                <Button variant="ghost" onClick={() => router.post(`/medical/consultorio/queue/${item.id}/start`)}>Iniciar</Button>
-              </div>
-            </div>
-          )) : (
-            <div className="text-gray-500">No hay pacientes en la cola.</div>
+        <section className="space-y-4">
+          {queueItems.length === 0 ? (
+            <EmptyQueueState />
+          ) : (
+            queueItems.map((item) => (
+              <QueueCard
+                key={item.id}
+                item={item}
+                onCall={() => handleCall(item.id)}
+                onStart={() => handleStart(item.id)}
+              />
+            ))
           )}
-        </div>
+        </section>
 
-        <div className="pt-4">
-          {/* Simple pagination controls from Inertia paginator */}
-          {queue.links?.map((link: any, idx: number) => (
-            <span key={idx} className="mx-1" dangerouslySetInnerHTML={{ __html: link.url ? `<a href='${link.url}'>${link.label}</a>` : link.label }} />
-          ))}
-        </div>
+        <footer className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
+          <div className="text-sm text-slate-500">Actualización realtime activa para tu cola de consultorio.</div>
+          <PaginationControls links={queue.links} />
+        </footer>
       </div>
     </AppLayout>
   )
