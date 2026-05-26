@@ -133,7 +133,7 @@ class ConsultationQueue extends Model
                     $existing->doctor_id = $doctorUserId;
                     $existing->priority = $priority;
                     $existing->save();
-                    event(new PatientEnteredQueue($existing));
+                    broadcast(new PatientEnteredQueue($existing))->toOthers();
                 } else {
                     Log::info('Patient already queued with same doctor and priority', ['reception_id' => $serviceRequest->id, 'doctor_id' => $doctorUserId]);
                 }
@@ -149,7 +149,7 @@ class ConsultationQueue extends Model
                 'status' => 'waiting',
             ]);
 
-            event(new PatientEnteredQueue($entry));
+            broadcast(new PatientEnteredQueue($entry))->toOthers();
 
             return $entry;
         } catch (\Throwable $e) {

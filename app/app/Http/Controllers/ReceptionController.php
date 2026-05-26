@@ -590,7 +590,7 @@ class ReceptionController extends Controller
             $existing->priority = $priority;
             $existing->save();
 
-            event(new \App\Events\PatientEnteredQueue($existing));
+            broadcast(new \App\Events\PatientEnteredQueue($existing))->toOthers();
 
             return redirect()->back()->with('success', 'Entrada de cola actualizada correctamente.');
         }
@@ -603,7 +603,7 @@ class ReceptionController extends Controller
             'status' => 'waiting',
         ]);
 
-        event(new \App\Events\PatientEnteredQueue($entry));
+        broadcast(new \App\Events\PatientEnteredQueue($entry))->toOthers();
 
         return redirect()->back()->with('success', 'Paciente enviado a la cola de consultorio.');
     }

@@ -100,7 +100,7 @@ class ConsultationQueueController extends Controller
                 $existing->save();
 
                 // Notify listeners about the update
-                event(new PatientEnteredQueue($existing));
+                broadcast(new PatientEnteredQueue($existing))->toOthers();
 
                 return redirect()->back()->with('success', 'Entrada de cola actualizada correctamente.');
             }
@@ -114,25 +114,32 @@ class ConsultationQueueController extends Controller
             'status' => 'waiting',
         ]);
 
-        event(new PatientEnteredQueue($entry));
+        broadcast(new PatientEnteredQueue($entry))->toOthers();
 
         return redirect()->back()->with('success', 'Paciente enviado a la cola de consultorio.');
     }
 
-    public function call(ConsultationQueue $consultation)
-    {
-        $user = auth()->user();
-        if (!$user || $consultation->doctor_id !== $user->id) abort(403);
+   public function call(ConsultationQueue $consultation)
+{
+    $user = auth()->user();
+    if (!$user || $consultation->doctor_id !== $user->id) abort(403);
 
-        $consultation->update([
-            'status' => 'called',
-            'called_at' => now(),
-        ]);
+    $consultation->update([
+        'status' => 'called',
+        'called_at' => now(),
+    ]);
 
-        event(new PatientCalled($consultation));
+    $patientName = $consultation->patient->full_name ?? ($consultation->patient->first_name . ' ' . $consultation->patient->last_name);
 
-        return redirect()->back();
-    }
+    broadcast(new PatientCalled(
+        $consultation->id,
+        $patientName,
+        $user->id,
+        $user->name
+    ))->toOthers();
+
+    return redirect()->back();
+}
 
     public function start(ConsultationQueue $consultation)
     {
