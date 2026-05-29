@@ -1,6 +1,7 @@
 import * as React from "react"
 import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
+import "../../../css/calendar-overrides.css"
 import { es } from "date-fns/locale"
 
 import type { DateRange } from "react-day-picker"

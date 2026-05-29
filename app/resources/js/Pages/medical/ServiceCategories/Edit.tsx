@@ -74,18 +74,18 @@ export default function ServiceCategoryEdit({ category }: EditProps) {
                 <div className="grid gap-6 md:grid-cols-3">
                     {/* Form */}
                     <div className="md:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Información de la Categoría</CardTitle>
+                        <Card className="p-0">
+                            <CardHeader className="px-4 py-3">
+                                <CardTitle className="text-base">Información de la Categoría</CardTitle>
                                 <CardDescription>
                                     Modifique los datos de la categoría de servicios
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleSubmit} className="space-y-6">
-                                    <div className="grid gap-4 md:grid-cols-2">
+                            <CardContent className="px-4 py-3">
+                                <form onSubmit={handleSubmit} className="space-y-3">
+                                    <div className="grid gap-2 md:grid-cols-2">
                                         {/* Name */}
-                                        <div className="md:col-span-2">
+                                        <div className="md:col-span-2 space-y-1.5">
                                             <Label htmlFor="name">
                                                 Nombre de la Categoría *
                                             </Label>
@@ -102,7 +102,7 @@ export default function ServiceCategoryEdit({ category }: EditProps) {
                                         </div>
 
                                         {/* Status */}
-                                        <div>
+                                        <div className="space-y-1.5">
                                             <Label htmlFor="status">Estado</Label>
                                             <Select
                                                 value={data.status}
@@ -121,7 +121,7 @@ export default function ServiceCategoryEdit({ category }: EditProps) {
                                     </div>
 
                                     {/* Description */}
-                                    <div>
+                                    <div className="space-y-1.5">
                                         <Label htmlFor="description">
                                             Descripción
                                         </Label>
@@ -137,7 +137,7 @@ export default function ServiceCategoryEdit({ category }: EditProps) {
                                     </div>
 
                                     {/* Submit Button */}
-                                    <div className="flex justify-end gap-4">
+                                    <div className="flex justify-end gap-2 pt-2">
                                         <Link href={`/medical/service-categories/${category.id}`}>
                                             <Button type="button" variant="outline">
                                                 Cancelar

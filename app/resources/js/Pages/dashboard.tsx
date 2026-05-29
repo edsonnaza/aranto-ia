@@ -199,7 +199,7 @@ export default function Dashboard({
                                     <XAxis dataKey="label" tickLine={false} axisLine={false} />
                                     <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                                     <Tooltip
-                                        formatter={(value: number) => [value, 'Pacientes']}
+                                        formatter={(value?: number) => [value ?? 0, 'Pacientes']}
                                         labelFormatter={(label) => `Dia: ${label}`}
                                     />
                                     <Area
@@ -235,14 +235,14 @@ export default function Dashboard({
                                                 outerRadius={100}
                                                 innerRadius={48}
                                                 paddingAngle={3}
-                                                label={({ percent }) => `${Math.round(percent * 100)}%`}
+                                                label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
                                                 labelLine={false}
                                             >
                                                 {data.map((_: unknown, index: number) => (
                                                     <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                                 ))}
                                             </Pie>
-                                            <Tooltip formatter={(value: number, name: string) => [value, name]} />
+                                            <Tooltip formatter={(value?: number, name?: string) => [value ?? 0, name ?? '']} />
                                             <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                                         </PieChart>
                                     </ResponsiveContainer>

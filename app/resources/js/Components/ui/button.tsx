@@ -10,15 +10,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+          "bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs hover:bg-emerald-700 dark:hover:bg-emerald-400 focus-visible:ring-emerald-500/50 dark:focus-visible:ring-emerald-400/40",
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         outline:
-          "border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+          "border border-emerald-600 dark:border-emerald-400 bg-white dark:bg-emerald-950 text-emerald-700 dark:text-white shadow-xs hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-900 dark:hover:text-emerald-200 focus-visible:ring-emerald-500/50 dark:focus-visible:ring-emerald-400/40",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-900 dark:text-white shadow-xs hover:bg-emerald-200 dark:hover:bg-emerald-800/40 focus-visible:ring-emerald-500/50 dark:focus-visible:ring-emerald-400/40",
+        ghost: "hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-900 dark:hover:text-white focus-visible:ring-emerald-500/50 dark:focus-visible:ring-emerald-400/40",
+        link: "text-emerald-700 dark:text-emerald-400 underline-offset-4 hover:underline focus-visible:ring-emerald-500/50 dark:focus-visible:ring-emerald-400/40",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

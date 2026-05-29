@@ -180,54 +180,54 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Tesorería" />
 
-      <div className="space-y-6 p-4 md:p-6">
+      <div className="space-y-6 min-h-screen bg-white dark:bg-emerald-950 transition-colors p-4 md:p-6">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-gray-900">Tesorería</h1>
-          <p className="text-sm text-gray-500">Resumen de cajas y movimientos del día.</p>
+          <h1 className="text-2xl font-semibold text-black dark:text-white">Tesorería</h1>
+          <p className="text-sm text-muted-foreground">Resumen de cajas y movimientos del día.</p>
         </div>
 
         {/* Stats - Fila 1: balances principales */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {/* Saldo global — hero card */}
-          <Card className="border-emerald-200 bg-linear-to-br from-emerald-50 to-teal-50 lg:col-span-1">
+          <Card className="lg:col-span-1">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-emerald-700">Saldo global de tesorería</CardTitle>
+              <CardTitle className="text-sm font-medium">Saldo global de tesorería</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold tracking-tight text-emerald-800">{formatCurrency(stats.global_treasury_balance)}</p>
-              <p className="mt-1 text-[11px] text-emerald-600">Suma de saldo final del último cierre de cajas</p>
+              <p className="text-3xl font-bold tracking-tight">{formatCurrency(stats.global_treasury_balance)}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Suma de saldo final del último cierre de cajas</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Saldo en cajas abiertas</CardTitle>
+              <CardTitle className="text-sm font-medium">Saldo en cajas abiertas</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-sky-700">{formatCurrency(stats.total_open_balance)}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">{stats.open_sessions_count} caja(s) abiertas</p>
+                <p className="text-2xl font-bold">{formatCurrency(stats.total_open_balance)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{stats.open_sessions_count} caja(s) abiertas</p>
               </div>
-              <DollarSign className="h-8 w-8 text-sky-400 opacity-60" />
+              <DollarSign className="h-8 w-8 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
 
-          <Card className={stats.last_closing_balance !== null ? 'border-violet-200 bg-violet-50/40' : ''}>
+          <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Último cierre de caja</CardTitle>
+              <CardTitle className="text-sm font-medium">Último cierre de caja</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-violet-700">
+                <p className="text-2xl font-bold">
                   {stats.last_closing_balance !== null ? formatCurrency(stats.last_closing_balance) : '—'}
                 </p>
                 {stats.last_closing_date && (
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {formatRelativeDate(stats.last_closing_date)} · {formatDateTime(stats.last_closing_date)} · {stats.last_closing_user}
                   </p>
                 )}
               </div>
-              <Lock className="h-8 w-8 text-violet-400 opacity-60" />
+              <Lock className="h-8 w-8 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
         </div>
@@ -236,56 +236,56 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Ingresos hoy</CardTitle>
+              <CardTitle className="text-sm font-medium">Ingresos hoy</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
               <div>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(stats.today_income)}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">Acum. total: {formatCurrency(stats.all_time_income)}</p>
+                <p className="text-xl font-bold">{formatCurrency(stats.today_income)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Acum. total: {formatCurrency(stats.all_time_income)}</p>
               </div>
-              <TrendingUp className="h-7 w-7 text-green-400 opacity-60" />
+              <TrendingUp className="h-7 w-7 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Egresos hoy</CardTitle>
+              <CardTitle className="text-sm font-medium">Egresos hoy</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
               <div>
-                <p className="text-xl font-bold text-red-600">{formatCurrency(stats.today_expense)}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">Acum. total: {formatCurrency(stats.all_time_expense)}</p>
+                <p className="text-xl font-bold">{formatCurrency(stats.today_expense)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Acum. total: {formatCurrency(stats.all_time_expense)}</p>
               </div>
-              <TrendingDown className="h-7 w-7 text-red-400 opacity-60" />
+              <TrendingDown className="h-7 w-7 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Balance del día</CardTitle>
+              <CardTitle className="text-sm font-medium">Balance del día</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
               <div>
-                <p className={`text-xl font-bold ${stats.today_income - stats.today_expense >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p className={`text-xl font-bold ${stats.today_income - stats.today_expense >= 0 ? 'text-black dark:text-white' : 'text-black dark:text-white'}`}> {/* Solo acento verde en botones/links */}
                   {stats.today_income - stats.today_expense >= 0 ? '+' : ''}{formatCurrency(stats.today_income - stats.today_expense)}
                 </p>
-                <p className="mt-0.5 text-[11px] text-slate-400">Ingresos − Egresos hoy</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Ingresos − Egresos hoy</p>
               </div>
-              <DollarSign className="h-7 w-7 text-slate-300 opacity-60" />
+              <DollarSign className="h-7 w-7 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm font-medium text-gray-500">Cajas abiertas / cerradas hoy</CardTitle>
+              <CardTitle className="text-sm font-medium">Cajas abiertas / cerradas hoy</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
-              <p className="text-2xl font-bold text-gray-900">
-                <span className="text-sky-600">{stats.open_sessions_count}</span>
-                <span className="mx-1 text-gray-300">/</span>
-                <span className="text-slate-500">{stats.closed_today_count}</span>
+              <p className="text-2xl font-bold">
+                <span>{stats.open_sessions_count}</span>
+                <span className="mx-1 text-muted-foreground">/</span>
+                <span className="text-muted-foreground">{stats.closed_today_count}</span>
               </p>
-              <Archive className="h-7 w-7 text-slate-400 opacity-60" />
+              <Archive className="h-7 w-7 text-muted-foreground opacity-60" />
             </CardContent>
           </Card>
         </div>
@@ -512,41 +512,41 @@ export default function TreasuryIndex({ stats, open_sessions, recent_transaction
 
         {/* Modal detalle de cobro con múltiples métodos */}
         {detailGroup && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailGroup(null)}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60" onClick={() => setDetailGroup(null)}>
+            <div className="bg-white dark:bg-emerald-950 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900">Detalle del cobro</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatConceptDates(detailGroup.concept)}</p>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">Detalle del cobro</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-300 mt-0.5">{formatConceptDates(detailGroup.concept)}</p>
                 </div>
-                <button onClick={() => setDetailGroup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">{'×'}</button>
+                <button onClick={() => setDetailGroup(null)} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-white text-lg leading-none">{'×'}</button>
               </div>
 
               <div className="space-y-2">
-                <div className="grid grid-cols-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 pb-1 border-b">
+                <div className="grid grid-cols-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-300 pb-1 border-b">
                   <span>Método</span>
                   <span className="text-right">Monto</span>
                   <span className="text-right">Hora</span>
                 </div>
                 {detailGroup.splits.map((tx) => (
                   <div key={tx.id} className="grid grid-cols-3 text-sm items-center">
-                    <span className="font-medium text-gray-700">{tx.payment_method ? methodLabel(tx.payment_method) : 'Sin método'}</span>
-                    <span className={`text-right font-semibold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
+                    <span className="font-medium text-gray-700 dark:text-white">{tx.payment_method ? methodLabel(tx.payment_method) : 'Sin método'}</span>
+                    <span className={`text-right font-semibold ${tx.type === 'INCOME' ? 'text-green-600 dark:text-emerald-300' : 'text-red-500 dark:text-red-400'}`}>
                       {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                     </span>
-                    <span className="text-right text-[11px] text-slate-400">{formatTime(tx.created_at)}</span>
+                    <span className="text-right text-[11px] text-slate-400 dark:text-slate-300">{formatTime(tx.created_at)}</span>
                   </div>
                 ))}
               </div>
 
               <div className="mt-4 border-t pt-3 flex justify-between items-center">
                 <div>
-                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Total cobrado</span>
-                  <p className="text-base font-bold text-green-600">{formatCurrency(detailGroup.totalAmount)}</p>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-300 uppercase tracking-wide">Total cobrado</span>
+                  <p className="text-base font-bold text-green-600 dark:text-emerald-300">{formatCurrency(detailGroup.totalAmount)}</p>
                 </div>
                 <button
                   onClick={() => setDetailGroup(null)}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                  className="rounded-lg bg-slate-100 dark:bg-emerald-900 px-4 py-2 text-sm font-medium text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-emerald-800 transition-colors"
                 >
                   Cerrar
                 </button>

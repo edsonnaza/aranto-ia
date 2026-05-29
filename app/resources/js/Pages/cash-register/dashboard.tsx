@@ -386,7 +386,9 @@ export default function CashRegisterDashboard({
                                                             GENERAL_EXPENSE: 'Gasto general',
                                                             OPENING_BALANCE: 'Apertura de caja',
                                                         };
-                                                        return categories[transaction.category] || 'Transacción';
+                                                        return transaction.category && categories[transaction.category]
+                                                            ? categories[transaction.category]
+                                                            : 'Transacción';
                                                     })()}
                                                 </td>
                                                 <td className="p-4 align-middle text-right [&:has([role=checkbox])]:pr-0">

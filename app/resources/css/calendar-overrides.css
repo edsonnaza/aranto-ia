@@ -1,0 +1,49 @@
+/* Calendar dark/light mode overrides for Aranto */
+
+:root {
+  --calendar-bg: var(--color-card, #fff);
+  --calendar-fg: var(--color-card-foreground, #222);
+  --calendar-border: var(--color-border, #e5e7eb);
+  --calendar-selected-bg: var(--color-primary, #059669);
+  --calendar-selected-fg: var(--color-primary-foreground, #fff);
+  --calendar-today-border: var(--color-primary, #059669);
+}
+
+.dark {
+  --calendar-bg: var(--color-card, #102a1c);
+  --calendar-fg: var(--color-card-foreground, #fff);
+  --calendar-border: var(--color-border, #14532d);
+  --calendar-selected-bg: var(--color-primary, #34d399);
+  --calendar-selected-fg: var(--color-primary-foreground, #222);
+  --calendar-today-border: var(--color-primary, #34d399);
+}
+
+.rdp {
+  background: var(--calendar-bg) !important;
+  color: var(--calendar-fg) !important;
+  border-radius: 0.75rem !important;
+  border: 1px solid var(--calendar-border) !important;
+  box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.04);
+}
+
+.rdp-day_selected, .rdp-day_selected:focus {
+  background: var(--calendar-selected-bg) !important;
+  color: var(--calendar-selected-fg) !important;
+}
+
+.rdp-day_today {
+  border: 1.5px solid var(--calendar-today-border) !important;
+}
+
+.rdp-day {
+  border-radius: 0.5rem !important;
+  transition: background 0.2s;
+}
+
+.rdp-caption_label, .rdp-head_cell {
+  color: var(--calendar-fg) !important;
+}
+
+.rdp-day_outside {
+  opacity: 0.5;
+}

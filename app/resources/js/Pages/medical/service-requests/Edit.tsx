@@ -195,18 +195,18 @@ export default function ServiceRequestEdit({
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-card-foreground">
               Editar Solicitud #{serviceRequest.request_number}
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Modifica los detalles de la solicitud de servicio médico
             </p>
           </div>
 
           {/* Status Warning */}
           {serviceRequest.status !== 'pending' && (
-            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
-              <div className="text-sm text-yellow-800">
+            <div className="mb-6 bg-warning/20 border border-warning rounded-md p-4">
+              <div className="text-sm text-warning-foreground">
                 ⚠️ Esta solicitud está en estado "{serviceRequest.status}". 
                 Algunos cambios pueden no estar permitidos.
               </div>
@@ -215,19 +215,19 @@ export default function ServiceRequestEdit({
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="text-sm text-red-700">{error}</div>
+            <div className="mb-6 bg-destructive/20 border border-destructive rounded-md p-4">
+              <div className="text-sm text-destructive-foreground">{error}</div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Patient and Basic Info */}
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Información Básica</h2>
+            <div className="bg-card shadow rounded-lg p-6 border border-border">
+              <h2 className="text-lg font-medium text-card-foreground mb-4">Información Básica</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Paciente *
                   </label>
                   <SelectItem
@@ -245,7 +245,7 @@ export default function ServiceRequestEdit({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Tipo de Recepción *
                   </label>
                   <SelectItem
@@ -261,7 +261,7 @@ export default function ServiceRequestEdit({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Prioridad *
                   </label>
                   <SelectItem
@@ -277,14 +277,14 @@ export default function ServiceRequestEdit({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Fecha de Solicitud *
                   </label>
                   <input
                     type="date"
                     value={requestDate}
                     onChange={(e) => setRequestDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     required
                   />
                 </div>
@@ -297,19 +297,19 @@ export default function ServiceRequestEdit({
                     type="time"
                     value={requestTime}
                     onChange={(e) => setRequestTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Notas
                   </label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Notas adicionales sobre la solicitud..."
                   />
                 </div>
@@ -317,26 +317,26 @@ export default function ServiceRequestEdit({
             </div>
 
             {/* Services Cart */}
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="bg-card shadow rounded-lg p-6 border border-border">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-gray-900">Servicios Solicitados</h2>
+                <h2 className="text-lg font-medium text-card-foreground">Servicios Solicitados</h2>
               </div>
 
               {services.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   No hay servicios en esta solicitud.
                 </div>
               ) : (
                 <div className="space-y-4">
                   {services.map((service, index) => (
-                    <div key={service.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={service.id} className="border border-border rounded-lg p-4 bg-background">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-medium text-gray-900">Servicio #{index + 1}</h3>
+                        <h3 className="font-medium text-card-foreground">Servicio #{index + 1}</h3>
                         {services.length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeServiceFromCart(service.id)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-destructive hover:text-destructive/80"
                           >
                             <TrashIcon className="h-5 w-5" />
                           </button>
@@ -345,7 +345,7 @@ export default function ServiceRequestEdit({
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-muted-foreground mb-1">
                             Servicio Médico *
                           </label>
                           <SelectItem
@@ -363,7 +363,7 @@ export default function ServiceRequestEdit({
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-muted-foreground mb-1">
                             Profesional *
                           </label>
                           <SearchableInput
@@ -378,7 +378,7 @@ export default function ServiceRequestEdit({
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-muted-foreground mb-1">
                             Seguro *
                           </label>
                           <SelectItem
@@ -405,12 +405,12 @@ export default function ServiceRequestEdit({
                             min="0"
                             value={service.unit_price}
                             onChange={(e) => updateService(service.id, 'unit_price', Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-muted-foreground mb-1">
                             Cantidad
                           </label>
                           <input
@@ -419,7 +419,7 @@ export default function ServiceRequestEdit({
                             max="10"
                             value={service.quantity}
                             onChange={(e) => updateService(service.id, 'quantity', Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                           />
                         </div>
 
@@ -427,20 +427,20 @@ export default function ServiceRequestEdit({
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Total
                           </label>
-                          <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-900 font-medium">
+                          <div className="px-3 py-2 bg-muted border border-border rounded-md text-card-foreground font-medium">
                             €{calculateServiceTotal(service).toFixed(2)}
                           </div>
                         </div>
 
                         <div className="md:col-span-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-muted-foreground mb-1">
                             Instrucciones de Preparación
                           </label>
                           <textarea
                             value={service.preparation_instructions}
                             onChange={(e) => updateService(service.id, 'preparation_instructions', e.target.value)}
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                             placeholder="Instrucciones especiales para el paciente..."
                           />
                         </div>
@@ -452,10 +452,10 @@ export default function ServiceRequestEdit({
 
               {/* Cart Total */}
               {services.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="mt-6 pt-4 border-t border-border">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-medium text-gray-900">Total General:</span>
-                    <span className="text-xl font-bold text-indigo-600">
+                    <span className="text-lg font-medium text-card-foreground">Total General:</span>
+                    <span className="text-xl font-bold text-primary">
                       €{calculateGrandTotal().toFixed(2)}
                     </span>
                   </div>
@@ -468,14 +468,14 @@ export default function ServiceRequestEdit({
               <button
                 type="button"
                 onClick={() => window.history.back()}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                className="px-4 py-2 border border-border rounded-md text-muted-foreground bg-background hover:bg-muted/50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={loading || !patientId || services.length === 0}
-                className="px-4 py-2 border border-transparent rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-transparent rounded-md text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Actualizando...' : 'Actualizar Solicitud'}
               </button>

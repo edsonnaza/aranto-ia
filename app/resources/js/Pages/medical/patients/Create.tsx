@@ -103,19 +103,19 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
           description="Registra un nuevo paciente en el sistema médico"
         />
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Información Personal */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
+          <Card className="p-0">
+            <CardHeader className="px-4 py-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="h-4 w-4" />
                 Información Personal
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2 px-4 py-3">
               {/* Información de Documento */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="document_type">
                     Tipo de Documento <span className="text-red-500">*</span>
                   </Label>
@@ -134,7 +134,7 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="document_number">
                     Número de Documento <span className="text-red-500">*</span>
                   </Label>
@@ -153,8 +153,8 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="first_name">
                     Nombre <span className="text-red-500">*</span>
                   </Label>
@@ -172,7 +172,7 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="last_name">
                     Apellido <span className="text-red-500">*</span>
                   </Label>
@@ -191,8 +191,8 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
@@ -207,7 +207,7 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="phone">Teléfono</Label>
                   <Input
                     id="phone"
@@ -223,8 +223,8 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="birth_date">Fecha de Nacimiento</Label>
                   <Input
                     id="birth_date"
@@ -238,7 +238,7 @@ export default function PatientsCreate({ insuranceTypes }: PatientsCreateProps) 
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="gender">Género</Label>
                   <Select value={data.gender} onValueChange={(value) => setData('gender', value)}>
                     <SelectTrigger className={errors.gender ? 'border-red-500' : ''}>

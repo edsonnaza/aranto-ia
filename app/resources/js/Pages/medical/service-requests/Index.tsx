@@ -135,15 +135,15 @@ export default function ServiceRequestsIndex({
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Solicitudes de Servicio</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-semibold text-card-foreground">Solicitudes de Servicio</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Gestiona todas las solicitudes de servicios médicos
             </p>
           </div>
           <div className="mt-4 sm:mt-0">
             <button
               onClick={navigateToCreate}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+              className="inline-flex items-center px-4 py-2 border border-primary rounded-md shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
             >
               <PlusIcon className="h-4 w-4 mr-2" />
               Nueva Solicitud
@@ -153,32 +153,32 @@ export default function ServiceRequestsIndex({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="text-sm text-red-700">{error}</div>
+          <div className="mb-6 bg-destructive/20 border border-destructive rounded-md p-4">
+            <div className="text-sm text-destructive-foreground">{error}</div>
           </div>
         )}
 
         {/* Filters */}
-        <div className="bg-white shadow rounded-lg p-4 mb-6">
+        <div className="bg-card shadow rounded-lg p-4 mb-6 border border-border">
           <form className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Buscar
               </label>
               <input
                 type="text"
                 defaultValue={filters.search || ''}
                 placeholder="Número, paciente..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Estado
               </label>
               <select
                 defaultValue={filters.status || ''}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
               >
                 <option value="">Todos los estados</option>
                 <option value="pending_confirmation">Pendiente</option>
@@ -189,12 +189,12 @@ export default function ServiceRequestsIndex({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Tipo de Recepción
               </label>
               <select
                 defaultValue={filters.reception_type || ''}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
               >
                 <option value="">Todos los tipos</option>
                 <option value="scheduled">Programada</option>
@@ -206,7 +206,7 @@ export default function ServiceRequestsIndex({
             <div className="flex items-end">
               <button
                 type="submit"
-                className="w-full px-3 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-gray-600 hover:bg-gray-700"
+                className="w-full px-3 py-2 border border-primary rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
               >
                 Filtrar
               </button>
@@ -215,67 +215,67 @@ export default function ServiceRequestsIndex({
         </div>
 
         {/* Results Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="bg-card shadow rounded-lg overflow-hidden border border-border">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Solicitud
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Paciente
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Tipo/Prioridad
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Estado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Fecha
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Total
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-background divide-y divide-border">
                 {data.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
                       No se encontraron solicitudes de servicio.
                     </td>
                   </tr>
                 ) : (
                   data.map((request: ServiceRequest) => (
-                    <tr key={request.id} className="hover:bg-gray-50">
+                    <tr key={request.id} className="hover:bg-muted/50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-card-foreground">
                             #{request.request_number}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-muted-foreground">
                             {request.service_details?.length || 0} servicio(s)
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-card-foreground">
                             {request.patient?.name} {request.patient?.last_name}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-muted-foreground">
                             {request.patient?.phone}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="space-y-1">
-                          <div className="text-sm text-gray-900">
+                          <div className="text-sm text-card-foreground">
                             {getReceptionTypeLabel(request.reception_type)}
                           </div>
                           {getPriorityBadge(request.priority)}
@@ -289,18 +289,18 @@ export default function ServiceRequestsIndex({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm text-gray-900">
+                          <div className="text-sm text-card-foreground">
                             {formatDate(request.request_date)}
                           </div>
                           {request.request_time && (
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-muted-foreground">
                               {request.request_time}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-card-foreground">
                           {formatCurrency(request.total_amount || 0)}
                         </div>
                       </td>
@@ -308,35 +308,32 @@ export default function ServiceRequestsIndex({
                         <div className="flex items-center justify-center space-x-2">
                           <button
                             onClick={() => navigateToShow(request.id)}
-                            className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                            className="text-muted-foreground hover:text-card-foreground cursor-pointer"
                             title="Ver detalles"
                           >
                             <EyeIcon className="h-4 w-4" />
                           </button>
-                          
                           {request.status === 'pending_confirmation' && (
                             <>
                               <button
                                 onClick={() => navigateToEdit(request.id)}
-                                className="text-indigo-400 hover:text-indigo-600"
+                                className="text-primary hover:text-primary/80"
                                 title="Editar"
                                 disabled={loading}
                               >
                                 <EditIcon className="h-4 w-4" />
                               </button>
-                              
                               <button
                                 onClick={() => confirmServiceRequest(request.id)}
-                                className="text-green-400 hover:text-green-600"
+                                className="text-green-600 hover:text-green-700"
                                 title="Confirmar"
                                 disabled={loading}
                               >
                                 <CheckIcon className="h-4 w-4" />
                               </button>
-                              
                               <button
                                 onClick={() => cancelServiceRequest(request.id, 'Cancelado desde la lista')}
-                                className="text-red-400 hover:text-red-600"
+                                className="text-destructive hover:text-destructive/80"
                                 title="Cancelar"
                                 disabled={loading}
                               >
@@ -355,28 +352,26 @@ export default function ServiceRequestsIndex({
 
           {/* Pagination */}
           {meta.total > 0 && (
-            <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="bg-card px-4 py-3 border-t border-border sm:px-6">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-700">
+                <div className="text-sm text-muted-foreground">
                   Mostrando <span className="font-medium">{meta.from || 0}</span> a{' '}
                   <span className="font-medium">{meta.to || 0}</span> de{' '}
                   <span className="font-medium">{meta.total}</span> resultados
                 </div>
-                
                 <div className="flex space-x-2">
                   {links.prev && (
                     <a
                       href={links.prev}
-                      className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      className="px-3 py-2 text-sm font-medium text-muted-foreground bg-background border border-border rounded-md hover:bg-muted/50"
                     >
                       Anterior
                     </a>
                   )}
-                  
                   {links.next && (
                     <a
                       href={links.next}
-                      className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      className="px-3 py-2 text-sm font-medium text-muted-foreground bg-background border border-border rounded-md hover:bg-muted/50"
                     >
                       Siguiente
                     </a>

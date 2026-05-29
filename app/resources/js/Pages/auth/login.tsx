@@ -19,21 +19,21 @@ export default function Login({ status, canResetPassword }: LoginProps) {
     return (
         <>
             <Head title="Iniciar sesión" />
-            <div className="min-h-svh bg-slate-100 p-4 md:p-6">
-                <div className="mx-auto grid min-h-[calc(100svh-2rem)] max-w-6xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:grid-cols-2">
+            <div className="min-h-svh bg-white dark:bg-[#0f1a1e] p-4 md:p-6">
+                <div className="mx-auto grid min-h-[calc(100svh-2rem)] max-w-6xl overflow-hidden rounded-3xl border border-emerald-200/70 dark:border-emerald-700/30 bg-white dark:bg-linear-to-r dark:from-emerald-900/30 dark:to-[#1a2529]/60 shadow-xl md:grid-cols-2">
                     <section className="relative hidden h-full min-h-250 md:flex">
                         <img
                             src="/images/landing-logo.png"
                             alt="Panel informativo de Aranto"
                             className="h-full w-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-linear-to-t from-slate-950/80 via-slate-900/30 to-transparent" />
+                        <div className="absolute inset-0 bg-linear-to-t from-[#0f1a1e]/80 via-[#1a2529]/30 to-transparent" />
                         <div className="absolute inset-x-0 bottom-0 space-y-4 p-10 text-white">
-                            <p className="text-xs uppercase tracking-[0.24em] text-slate-200">Aranto - Sistema Médico Integral</p>
+                            <p className="text-xs uppercase tracking-[0.24em] text-emerald-200">Aranto - Sistema Médico Integral</p>
                             <h2 className="max-w-md text-xl font-semibold leading-tight">
                                 Gestión Médica Integral para Sanatorios
                             </h2>
-                            <ul className="space-y-2 text-sm text-slate-100/90">
+                            <ul className="space-y-2 text-sm text-emerald-100/90">
                                 <li>Control de pacientes, profesionales y servicios.</li>
                                 <li>Liquidaciones de comision con validacion operativa.</li>
                                 <li>Cobros centralizados en caja con historial auditado.</li>
@@ -44,19 +44,19 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     <section className="flex items-center justify-center p-6 sm:p-10 md:p-12">
                         <div className="w-full max-w-md space-y-8">
                             <Link href={home()} className="flex w-full justify-center">
-                                <img src="/logo-brand.png" alt="Aranto" className="h-22 w-auto object-contain dark:hidden" />
-                                <img src="/logo-brand-dark.png" alt="Aranto" className="hidden h-22 w-auto object-contain dark:block" />
+                                <img src="/logo-brand.png" alt="Aranto" className="h-20 w-auto object-contain dark:hidden" />
+                                <img src="/logo-brand-dark.png" alt="Aranto" className="hidden h-20 w-auto object-contain dark:block" />
                             </Link>
 
                             <div className="space-y-2 items-center text-center">
-                                <h1 className="text-2xl font-semibold text-slate-900">Inicia sesion en tu cuenta</h1>
-                                <p className="text-sm text-slate-600">
-                                    Ingresa con tu email o nombre de usuario. Las cuentas nuevas se habilitan por invitacion via email.
+                                <h1 className="text-2xl font-bold text-black dark:text-white">Inicia sesión en tu cuenta</h1>
+                                <p className="text-sm text-[#1f2937] dark:text-[#cbd5db]">
+                                    Ingresa con tu email o nombre de usuario. Las cuentas nuevas se habilitan por invitación vía email.
                                 </p>
                             </div>
 
                             {status && (
-                                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                                <div className="rounded-md border border-emerald-200/70 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 dark:border-emerald-700/30 dark:bg-emerald-900/20 dark:text-emerald-300">
                                     {status}
                                 </div>
                             )}
@@ -80,6 +80,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                                     tabIndex={1}
                                                     autoComplete="username"
                                                     placeholder="correo@ejemplo.com o nombre"
+                                                    className="border-emerald-300 dark:border-emerald-700/50 focus:ring-emerald-500/50 dark:focus:ring-emerald-400/40 dark:bg-emerald-900/20 text-emerald-900 dark:text-white placeholder:text-black dark:placeholder:text-white"
                                                 />
                                                 <InputError message={errors.email} />
                                             </div>
@@ -90,7 +91,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                                     {canResetPassword && (
                                                         <TextLink
                                                             href={request()}
-                                                            className="ml-auto text-sm"
+                                                            className="ml-auto text-sm text-emerald-700 dark:text-emerald-400 hover:underline"
                                                             tabIndex={5}
                                                         >
                                                             ¿Olvidaste tu contraseña?
@@ -105,6 +106,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                                     tabIndex={2}
                                                     autoComplete="current-password"
                                                     placeholder="Contraseña"
+                                                    className="border-emerald-300 dark:border-emerald-700/50 focus:ring-emerald-500/50 dark:focus:ring-emerald-400/40 dark:bg-emerald-900/20 text-emerald-900 dark:text-white placeholder:text-black dark:placeholder:text-white"
                                                 />
                                                 <InputError message={errors.password} />
                                             </div>
@@ -120,7 +122,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                                             <Button
                                                 type="submit"
-                                                className="mt-2 w-full"
+                                                className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 focus:ring-emerald-500/50 dark:focus:ring-emerald-400/40"
                                                 tabIndex={4}
                                                 disabled={processing}
                                                 data-test="login-button"
@@ -133,7 +135,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                 )}
                             </Form>
 
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-[#6b7280] dark:text-[#a0abb2]">
                                 Si necesitas acceso por primera vez, solicita invitación al administrador del sistema.
                             </p>
                         </div>

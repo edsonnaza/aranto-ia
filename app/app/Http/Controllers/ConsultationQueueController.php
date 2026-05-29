@@ -190,7 +190,13 @@ class ConsultationQueueController extends Controller
         if (!$next) return redirect()->back()->with('info', 'No hay pacientes en espera');
 
         $next->update(['status' => 'called', 'called_at' => now()]);
-        event(new PatientCalled($next));
+        $patientName = $next->patient->full_name ?? ($next->patient->first_name . ' ' . $next->patient->last_name);
+        event(new PatientCalled(
+            $next->id,
+            $patientName,
+            $user->id,
+            $user->name
+        ));
 
         return redirect()->back()->with('success', 'Paciente llamado: ' . ($next->patient->full_name ?? ''));
     }

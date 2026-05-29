@@ -22,15 +22,15 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
   onPageSizeChange,
   loading,
 }) => (
-  <div className="flex items-center space-x-6 lg:space-x-8">
-    <div className="flex items-center space-x-2">
-      <p className="text-sm font-medium">Filas por página</p>
+  <div className="flex items-center w-full justify-between flex-wrap gap-4 py-4 px-2">
+    <div className="flex items-center space-x-4 min-w-220px">
+      <p className="text-sm font-medium whitespace-nowrap">Filas por página</p>
       <Select
         value={`${perPage}`}
         onValueChange={onPageSizeChange}
         disabled={loading}
       >
-        <SelectTrigger className="h-8 w-70px">
+        <SelectTrigger className="h-8 min-w-80px px-3">
           <SelectValue placeholder={perPage} />
         </SelectTrigger>
         <SelectContent side="top">

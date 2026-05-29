@@ -5,6 +5,7 @@ import type { ReceptionStats } from '@/hooks/medical'
 import { useDateFormat } from '@/hooks/useDateFormat'
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ColumnDef } from '@tanstack/react-table'
 import { Link } from '@inertiajs/react'
 import { useState } from 'react'
@@ -14,118 +15,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import {  getPaymentStatusBadgeConfig, getReceptionTypeBadgeConfig, getQueueStatusLabel } from '@/utils/formatters'
 import { toast } from 'sonner'
-//import { useCurrencyFormatter } from '@/stores/currency'
-
-// interface ReceptionStats {
-//   pending_requests: number
-//   confirmed_requests: number
-//   completed_requests: number
-//   total_revenue: number
-// }
-
-// interface RecentRequest {
-//   id: number
-//   request_number: string
-//   patient_name: string
-//   status: string
-//   created_at: string
-// }
-
-// interface ReceptionIndexProps {
-//   stats: ReceptionStats
-//   recentRequests: RecentRequest[]
-// }
-
-// export default function ReceptionIndex({ stats, recentRequests }: ReceptionIndexProps) {
-//   const breadcrumbs = [
-//     { href: '/medical', title: 'Sistema Médico' },
-//     { href: '/medical/reception', title: 'Recepción', current: true }
-//   ]
-
-//   return (
-//     <AppLayout breadcrumbs={breadcrumbs}>
-//       <Head title="Recepción - Dashboard" />
-      
-//       <div className="p-4 md:p-6">
-//         <div>
-//           <h1 className="text-2xl font-semibold text-gray-900">Dashboard de Recepción</h1>
-//           <p className="mt-1 text-sm text-gray-500">
-//             Gestión de solicitudes de servicios médicos y recepción de pacientes
-//           </p>
-//         </div>
-
-//         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-//           <div className="bg-white rounded-lg shadow p-6">
-//             <h3 className="text-sm font-medium text-gray-500">Solicitudes Pendientes</h3>
-//             <p className="text-2xl font-bold text-gray-900">{stats.pending_requests}</p>
-//           </div>
-          
-//           <div className="bg-white rounded-lg shadow p-6">
-//             <h3 className="text-sm font-medium text-gray-500">Confirmadas Hoy</h3>
-//             <p className="text-2xl font-bold text-gray-900">{stats.confirmed_requests}</p>
-//           </div>
-          
-//           <div className="bg-white rounded-lg shadow p-6">
-//             <h3 className="text-sm font-medium text-gray-500">Completadas</h3>
-//             <p className="text-2xl font-bold text-gray-900">{stats.completed_requests}</p>
-//           </div>
-          
-//           <div className="bg-white rounded-lg shadow p-6">
-//             <h3 className="text-sm font-medium text-gray-500">Ingresos del Día</h3>
-//             <p className="text-2xl font-bold text-gray-900">
-//               ₲ {stats.total_revenue?.toLocaleString('es-PY') || '0'}
-//             </p>
-//           </div>
-//         </div>
-
-//         <div className="mt-8 bg-white rounded-lg shadow">
-//           <div className="p-6">
-//             <h2 className="text-lg font-medium text-gray-900 mb-4">Solicitudes Recientes</h2>
-//             {recentRequests?.length > 0 ? (
-//               <div className="space-y-3">
-//                 {recentRequests.map((request) => (
-//                   <div key={request.id} className="flex items-center justify-between p-3 border border-gray-200 rounded">
-//                     <div>
-//                       <p className="font-medium text-gray-900">#{request.request_number}</p>
-//                       <p className="text-sm text-gray-500">{request.patient_name}</p>
-//                     </div>
-//                     <div>
-//                       <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-//                         {request.status}
-//                       </span>
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             ) : (
-//               <p className="text-gray-500 text-center py-4">No hay solicitudes recientes</p>
-//             )}
-//           </div>
-//         </div>
-//       </div>
-//     </AppLayout>
-//   )
-// }
-
-
+ 
 // Simple SVG Icons
 const ClockIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 )
-
-// const CalendarIcon = ({ className }: { className?: string }) => (
-//   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-//   </svg>
-// )
-
-// const UserGroupIcon = ({ className }: { className?: string }) => (
-//   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-//   </svg>
-// )
 
 const DocumentTextIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -303,7 +199,7 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
   }
 
   // Professionals list for quick send-to-consultorio from reception
-  const { professionals, loading: professionalsLoading } = useProfessionals()
+  const { professionals} = useProfessionals()
 
   const [openSendFor, setOpenSendFor] = useState<number | null>(null)
   const [selectedDoctor, setSelectedDoctor] = useState<number | null>(null)
@@ -575,31 +471,22 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
     { href: '/medical/reception', title: 'Recepción', current: true }
   ]
 
-  // Stats cards with dynamic data
+  // Stats cards estilo dashboard neutro
   const statsCards = [
     {
       title: 'Total Solicitudes',
       value: dynamicStats?.total_requests ?? 0,
-      icon: DocumentTextIcon,
-      color: 'bg-blue-500',
-      textColor: 'text-blue-700',
-      bgColor: 'bg-blue-50'
+      icon: DocumentTextIcon
     },
     {
       title: 'Sin Pagar',
       value: dynamicStats?.total_pending_count ?? 0,
-      icon: ClockIcon,
-      color: 'bg-orange-500',
-      textColor: 'text-orange-700',
-      bgColor: 'bg-orange-50'
+      icon: ClockIcon
     },
     {
       title: 'Pagadas',
       value: dynamicStats?.total_paid_count ?? 0,
-      icon: DocumentTextIcon,
-      color: 'bg-green-500',
-      textColor: 'text-green-700',
-      bgColor: 'bg-green-50'
+      icon: DocumentTextIcon
     }
   ]
 
@@ -657,43 +544,30 @@ export default function ReceptionIndex({  requests, filters }: ReceptionIndexPro
           {statsCards.map((stat, index) => {
             const Icon = stat.icon
             return (
-              <div key={index} className={`${stat.bgColor} overflow-hidden shadow rounded-lg`}>
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="shrink-0">
-                      <Icon className={`h-6 w-6 ${stat.textColor}`} />
-                    </div>
-                    <div className="ml-5 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
-                          {stat.title}
-                        </dt>
-                        <dd>
-                          <div className="text-lg font-medium text-gray-900">
-                            {stat.value}
-                          </div>
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                  <Icon className="h-5 w-5 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                </CardContent>
+              </Card>
             )
           })}
         </div>
 
         {/* Requests Data Table */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
+        <div className="rounded-xl border bg-white dark:bg-emerald-950 border-slate-200 dark:border-emerald-900/60 shadow-sm">
+          <div className="px-6 pt-6 pb-2">
+            <h3 className="text-lg leading-6 font-semibold text-black dark:text-white">
               Solicitudes Recientes (Últimos 7 días)
             </h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Todas las solicitudes de servicios con paginación y búsqueda
             </p>
           </div>
-          
-          <div className="px-4 pb-5">
+          <div className="px-6 pb-6">
             <DataTable
               columns={columns}
               data={requests}

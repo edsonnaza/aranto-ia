@@ -98,15 +98,15 @@ export default function Create({ services = [], specialties = [] }: Props) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Personal Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Información Personal</CardTitle>
+            <Card className="p-0">
+              <CardHeader className="px-4 py-3">
+                <CardTitle className="text-base">Información Personal</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+              <CardContent className="space-y-2 px-4 py-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="first_name">Nombres *</Label>
                     <Input
                       id="first_name"
@@ -120,7 +120,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                     )}
                   </div>
 
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="last_name">Apellidos *</Label>
                     <Input
                       id="last_name"
@@ -135,8 +135,8 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="identification">Identificación</Label>
                     <Input
                       id="identification"
@@ -150,7 +150,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                     )}
                   </div>
 
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="phone">Teléfono</Label>
                     <Input
                       id="phone"
@@ -165,7 +165,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
@@ -180,7 +180,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   )}
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="address">Dirección</Label>
                   <Textarea
                     id="address"
@@ -198,13 +198,13 @@ export default function Create({ services = [], specialties = [] }: Props) {
             </Card>
 
             {/* Professional Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Información Profesional</CardTitle>
+            <Card className="p-0">
+              <CardHeader className="px-4 py-3">
+                <CardTitle className="text-base">Información Profesional</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+              <CardContent className="space-y-2 px-4 py-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="license_number">Número de Licencia</Label>
                     <Input
                       id="license_number"
@@ -218,7 +218,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                     )}
                   </div>
 
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="commission_percentage">Porcentaje de Comisión (%)</Label>
                     <Input
                       id="commission_percentage"
@@ -237,7 +237,7 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 mt-2">
                   <Checkbox
                     id="is_active"
                     checked={data.is_active}
@@ -250,12 +250,12 @@ export default function Create({ services = [], specialties = [] }: Props) {
 
             {/* Specialties */}
             {specialties && specialties.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Especialidades *</CardTitle>
+              <Card className="p-0">
+                <CardHeader className="px-4 py-3">
+                  <CardTitle className="text-base">Especialidades *</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <CardContent className="px-4 py-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {specialties.map((specialty) => (
                       <div key={specialty.id} className="flex items-center space-x-2">
                         <Checkbox
@@ -283,12 +283,12 @@ export default function Create({ services = [], specialties = [] }: Props) {
 
             {/* Services */}
             {services && services.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Servicios Médicos</CardTitle>
+              <Card className="p-0">
+                <CardHeader className="px-4 py-3">
+                  <CardTitle className="text-base">Servicios Médicos</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <CardContent className="px-4 py-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {services.map((service) => (
                       <div key={service.id} className="flex items-center space-x-2">
                         <Checkbox
