@@ -5,13 +5,21 @@ FROM composer:2 AS composer_build
 
 WORKDIR /app
 
+
+# Copia todo el contexto, pero ignora archivos definidos en .dockerignore
 COPY . .
 
+# Limpia cualquier caché PHP que haya entrado por error
+RUN rm -f bootstrap/cache/*.php
+
+# Instala dependencias optimizadas
 RUN composer install \
     --no-dev \
-    --optimize-autoloader \
-    --no-interaction
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
 
+# Genera rutas y acciones Wayfinder
 RUN php artisan wayfinder:generate --with-form
 
 
