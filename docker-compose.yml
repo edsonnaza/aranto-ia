@@ -82,7 +82,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database/init:/docker-entrypoint-initdb.d
+      - ./infra-docker-database/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-password}"]
       timeout: 20s

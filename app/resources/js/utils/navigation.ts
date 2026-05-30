@@ -33,6 +33,7 @@ export const MODULE_PERMISSIONS = {
   CATALOGS: 'access-catalogs',
   USERS: 'access-user-management',
   AUDIT: 'access-audit-logs',
+  LABORATORY: 'access-laboratory',
 } as const
 
 // Todos los items de navegación disponibles
@@ -71,6 +72,45 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
       {
         title: 'Citas',
         href: { url: '/medical/appointments', method: 'get' },
+      },
+      {
+        title: 'Laboratorio',
+        icon: BarChart3,
+        permission: MODULE_PERMISSIONS.LABORATORY,
+        items: [
+          {
+            title: 'Bandeja de Trabajo',
+            href: { url: '/laboratory', method: 'get' },
+          },
+          {
+            title: 'Recepción de Muestras',
+            href: { url: '/laboratory/samples', method: 'get' },
+          },
+          {
+            title: 'Resultados',
+            href: { url: '/laboratory/results', method: 'get' },
+          },
+          {
+            title: 'Validaciones',
+            href: { url: '/laboratory/validations', method: 'get' },
+          },
+          {
+            title: 'Informes PDF',
+            href: { url: '/laboratory/reports', method: 'get' },
+          },
+          {
+            title: 'Microbiología',
+            href: { url: '/laboratory/microbiology', method: 'get' },
+          },
+          {
+            title: 'Control de Calidad',
+            href: { url: '/laboratory/qc', method: 'get' },
+          },
+          {
+            title: 'Configuración',
+            href: { url: '/laboratory/settings', method: 'get' },
+          },
+        ],
       },
     ],
   },
