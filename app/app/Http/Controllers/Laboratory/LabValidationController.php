@@ -2,39 +2,87 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Laboratory\StoreLabValidationRequest;
-use App\DTOs\Laboratory\LabValidationDTO;
 use App\Models\Laboratory\LabValidation;
-use App\Services\Laboratory\LabValidationService;
+use App\Models\Laboratory\LabTestRequest;
+use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class LabValidationController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $validations = LabValidation::with(['sample', 'validatedBy'])->latest()->paginate(20);
+        $query = LabValidation::query();
+
+        if ($request->search) {
+            $query->whereHas('sample', function ($q) use ($request) {
+                $q->where('sample_number', 'like', "%{$request->search}%");
+            });
+        }
+
+        if ($request->validated_by) {
+            $query->where('validated_by', $request->validated_by);
+        }
+
+        $validations = $query
+            ->with(['sample.patient', 'testRequest.testProfile', 'validatedBy'])
+            ->latest('validated_at')
+            ->paginate(20)
+            ->withQueryString();
+
         return Inertia::render('laboratory/validations/Index', [
             'validations' => $validations,
+            'filters' => $request->only(['search', 'validated_by']),
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('laboratory/validations/Create');
+        // Get test requests that are completed but not validated
+        $testRequests = LabTestRequest::where('status', 'completed')
+            ->whereDoesntHave('validations')
+            ->with(['sample.patient', 'testProfile', 'results'])
+            ->get();
+
+        return Inertia::render('laboratory/validations/Create', [
+            'testRequests' => $testRequests,
+            'testRequestId' => $request->test_request_id,
+        ]);
     }
 
-    public function store(StoreLabValidationRequest $request, LabValidationService $service): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        $dto = new LabValidationDTO(...$request->validated());
-        $service->store($dto);
-        return redirect()->route('laboratory.validations.index')->with('success', 'Validación registrada');
+        $validated = $request->validate([
+            'lab_sample_id' => 'required|exists:lab_samples,id',
+            'lab_test_request_id' => 'required|exists:lab_test_requests,id',
+            'comments' => 'nullable|string',
+        ]);
+
+        $validated['validated_by'] = auth()->id();
+        $validated['validated_at'] = now();
+
+        LabValidation::create($validated);
+
+        // Update test request status
+        LabTestRequest::find($validated['lab_test_request_id'])
+            ->update(['status' => 'validated']);
+
+        return redirect()
+            ->route('laboratory.validations.index')
+            ->with('success', 'Validación registrada exitosamente.');
     }
 
     public function show(LabValidation $validation): Response
     {
-        $validation->load(['sample', 'validatedBy']);
+        $validation->load([
+            'sample.patient',
+            'sample.sampleType',
+            'testRequest.testProfile',
+            'testRequest.results.parameter',
+            'validatedBy',
+        ]);
+
         return Inertia::render('laboratory/validations/Show', [
             'validation' => $validation,
         ]);
@@ -42,21 +90,36 @@ class LabValidationController extends Controller
 
     public function edit(LabValidation $validation): Response
     {
+        $validation->load(['sample', 'testRequest']);
+
         return Inertia::render('laboratory/validations/Edit', [
             'validation' => $validation,
         ]);
     }
 
-    public function update(StoreLabValidationRequest $request, LabValidation $validation, LabValidationService $service): RedirectResponse
+    public function update(Request $request, LabValidation $validation): RedirectResponse
     {
-        $dto = new LabValidationDTO(...$request->validated());
-        $service->update($validation, $dto);
-        return redirect()->route('laboratory.validations.index')->with('success', 'Validación actualizada');
+        $validated = $request->validate([
+            'comments' => 'nullable|string',
+        ]);
+
+        $validation->update($validated);
+
+        return redirect()
+            ->route('laboratory.validations.index')
+            ->with('success', 'Validación actualizada exitosamente.');
     }
 
     public function destroy(LabValidation $validation): RedirectResponse
     {
+        // Revert test request status
+        $validation->testRequest->update(['status' => 'completed']);
+
         $validation->delete();
-        return redirect()->route('laboratory.validations.index')->with('success', 'Validación eliminada');
+
+        return redirect()
+            ->route('laboratory.validations.index')
+            ->with('success', 'Validación eliminada exitosamente.');
     }
 }
+

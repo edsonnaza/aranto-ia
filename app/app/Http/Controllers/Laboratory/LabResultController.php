@@ -2,39 +2,98 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Laboratory\StoreLabResultRequest;
-use App\DTOs\Laboratory\LabResultDTO;
 use App\Models\Laboratory\LabResult;
-use App\Services\Laboratory\LabResultService;
+use App\Models\Laboratory\LabTestRequest;
+use App\Models\Laboratory\LabTestParameter;
+use App\Models\Laboratory\LabEquipment;
+use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class LabResultController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $results = LabResult::with(['sample', 'parameter', 'equipment'])->latest()->paginate(20);
+        $query = LabResult::query();
+
+        if ($request->search) {
+            $query->whereHas('sample', function ($q) use ($request) {
+                $q->where('sample_number', 'like', "%{$request->search}%");
+            });
+        }
+
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        $results = $query
+            ->with(['sample.patient', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+
         return Inertia::render('laboratory/results/Index', [
             'results' => $results,
+            'filters' => $request->only(['search', 'status']),
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('laboratory/results/Create');
+        $testRequests = LabTestRequest::where('status', 'in_process')
+            ->with(['sample.patient', 'testProfile'])
+            ->get();
+
+        $parameters = LabTestParameter::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        $equipments = LabEquipment::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('laboratory/results/Create', [
+            'testRequests' => $testRequests,
+            'parameters' => $parameters,
+            'equipments' => $equipments,
+            'testRequestId' => $request->test_request_id,
+        ]);
     }
 
-    public function store(StoreLabResultRequest $request, LabResultService $service): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        $dto = new LabResultDTO(...$request->validated());
-        $service->store($dto);
-        return redirect()->route('laboratory.results.index')->with('success', 'Resultado registrado');
+        $validated = $request->validate([
+            'lab_sample_id' => 'required|exists:lab_samples,id',
+            'lab_test_request_id' => 'required|exists:lab_test_requests,id',
+            'lab_test_parameter_id' => 'required|exists:lab_test_parameters,id',
+            'equipment_id' => 'nullable|exists:lab_equipments,id',
+            'value' => 'required|string',
+            'calculated_percentage' => 'nullable|numeric',
+            'is_out_of_range' => 'nullable|boolean',
+            'status' => ['required', Rule::in(['pending', 'validated', 'rejected'])],
+        ]);
+
+        $validated['entered_by'] = auth()->id();
+
+        LabResult::create($validated);
+
+        return redirect()
+            ->route('laboratory.results.index')
+            ->with('success', 'Resultado registrado exitosamente.');
     }
 
     public function show(LabResult $result): Response
     {
-        $result->load(['sample', 'parameter', 'equipment']);
+        $result->load([
+            'sample.patient',
+            'testRequest.testProfile',
+            'parameter',
+            'equipment',
+            'enteredBy',
+        ]);
+
         return Inertia::render('laboratory/results/Show', [
             'result' => $result,
         ]);
@@ -42,21 +101,51 @@ class LabResultController extends Controller
 
     public function edit(LabResult $result): Response
     {
+        $parameters = LabTestParameter::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        $equipments = LabEquipment::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('laboratory/results/Edit', [
             'result' => $result,
+            'parameters' => $parameters,
+            'equipments' => $equipments,
         ]);
     }
 
-    public function update(StoreLabResultRequest $request, LabResult $result, LabResultService $service): RedirectResponse
+    public function update(Request $request, LabResult $result): RedirectResponse
     {
-        $dto = new LabResultDTO(...$request->validated());
-        $service->update($result, $dto);
-        return redirect()->route('laboratory.results.index')->with('success', 'Resultado actualizado');
+        $validated = $request->validate([
+            'lab_test_parameter_id' => 'required|exists:lab_test_parameters,id',
+            'equipment_id' => 'nullable|exists:lab_equipments,id',
+            'value' => 'required|string',
+            'calculated_percentage' => 'nullable|numeric',
+            'is_out_of_range' => 'nullable|boolean',
+            'status' => ['required', Rule::in(['pending', 'validated', 'rejected'])],
+        ]);
+
+        $result->update($validated);
+
+        return redirect()
+            ->route('laboratory.results.index')
+            ->with('success', 'Resultado actualizado exitosamente.');
     }
 
     public function destroy(LabResult $result): RedirectResponse
     {
+        if ($result->status === 'validated') {
+            return redirect()
+                ->back()
+                ->with('error', 'No se pueden eliminar resultados validados.');
+        }
+
         $result->delete();
-        return redirect()->route('laboratory.results.index')->with('success', 'Resultado eliminado');
+
+        return redirect()
+            ->route('laboratory.results.index')
+            ->with('success', 'Resultado eliminado exitosamente.');
     }
 }
