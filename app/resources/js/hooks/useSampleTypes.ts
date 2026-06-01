@@ -2,19 +2,18 @@ import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import type { Errors } from '@inertiajs/core';
 
-interface LabResultData {
-  lab_sample_id: number;
-  lab_test_request_id: number;
-  lab_test_parameter_id: number;
-  equipment_id?: number;
-  value: string;
-  calculated_percentage?: number;
-  is_out_of_range?: boolean;
-  status: string;
+interface SampleTypeData {
+  name: string;
+  code: string;
+  description?: string;
+  container_type: string;
+  preservation_requirements?: string;
+  stability_hours?: number;
+  status: 'active' | 'inactive';
   [key: string]: string | number | boolean | undefined | null | Date | File | Blob;
 }
 
-export function useLabResults() {
+export function useSampleTypes() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Errors | null>(null);
 
@@ -22,16 +21,16 @@ export function useLabResults() {
     setLoading(true);
     setError(null);
     router.reload({
-      only: ['results'],
+      only: ['sampleTypes'],
       onFinish: () => setLoading(false),
       onError: (err) => setError(err),
     });
   };
 
-  const create = (data: LabResultData, onSuccess?: () => void) => {
+  const create = (data: SampleTypeData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.post('/medical/laboratory/results', data, {
+    router.post('/medical/laboratory/sample-types', data, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -43,10 +42,10 @@ export function useLabResults() {
     });
   };
 
-  const update = (id: number, data: LabResultData, onSuccess?: () => void) => {
+  const update = (id: number, data: SampleTypeData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.put(`/medical/laboratory/results/${id}`, data, {
+    router.put(`/medical/laboratory/sample-types/${id}`, data, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -61,7 +60,7 @@ export function useLabResults() {
   const destroy = (id: number, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.delete(`/medical/laboratory/results/${id}`, {
+    router.delete(`/medical/laboratory/sample-types/${id}`, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();

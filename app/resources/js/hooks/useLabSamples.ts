@@ -1,9 +1,23 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import type { Errors } from '@inertiajs/core';
+
+interface LabSampleData {
+  service_request_detail_id?: number;
+  patient_id: number;
+  lab_sample_type_id: number;
+  sample_number: string;
+  barcode?: string;
+  collected_at: string;
+  received_at?: string;
+  status?: string;
+  remarks?: string;
+  [key: string]: string | number | boolean | undefined | null | Date | File | Blob;
+}
 
 export function useLabSamples() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Errors | null>(null);
 
   const refresh = () => {
     setLoading(true);
@@ -15,10 +29,10 @@ export function useLabSamples() {
     });
   };
 
-  const create = (data: any, onSuccess?: () => void) => {
+  const create = (data: LabSampleData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.post('/laboratory/samples', data, {
+    router.post('/medical/laboratory/samples', data as any, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -30,10 +44,10 @@ export function useLabSamples() {
     });
   };
 
-  const update = (id: number, data: any, onSuccess?: () => void) => {
+  const update = (id: number, data: LabSampleData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.put(`/laboratory/samples/${id}`, data, {
+    router.put(`/medical/laboratory/samples/${id}`, data as any, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -48,7 +62,7 @@ export function useLabSamples() {
   const destroy = (id: number, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.delete(`/laboratory/samples/${id}`, {
+    router.delete(`/medical/laboratory/samples/${id}`, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();

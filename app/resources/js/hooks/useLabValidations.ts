@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import type { Errors } from '@inertiajs/core';
+
+interface LabValidationData {
+  lab_sample_id: number;
+  lab_test_request_id: number;
+  comments?: string;
+  [key: string]: string | number | boolean | undefined | null | Date | File | Blob;
+}
 
 export function useLabValidations() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Errors | null>(null);
 
   const refresh = () => {
     setLoading(true);
@@ -15,10 +23,10 @@ export function useLabValidations() {
     });
   };
 
-  const create = (data: any, onSuccess?: () => void) => {
+  const create = (data: LabValidationData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.post('/laboratory/validations', data, {
+    router.post('/medical/laboratory/validations', data, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -30,10 +38,10 @@ export function useLabValidations() {
     });
   };
 
-  const update = (id: number, data: any, onSuccess?: () => void) => {
+  const update = (id: number, data: LabValidationData, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.put(`/laboratory/validations/${id}`, data, {
+    router.put(`/medical/laboratory/validations/${id}`, data, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -48,7 +56,7 @@ export function useLabValidations() {
   const destroy = (id: number, onSuccess?: () => void) => {
     setLoading(true);
     setError(null);
-    router.delete(`/laboratory/validations/${id}`, {
+    router.delete(`/medical/laboratory/validations/${id}`, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();

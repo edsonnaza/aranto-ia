@@ -4,6 +4,8 @@ namespace App\Models\Laboratory;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Laboratory\LabWorksheet;
+use App\Models\Laboratory\LabTestRequest;
 
 class LabWorksheetItem extends Model
 {

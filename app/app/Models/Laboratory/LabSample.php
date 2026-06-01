@@ -5,6 +5,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Patient;
 use App\Models\User;
+use App\Models\Laboratory\LabSampleType;
+use App\Models\Laboratory\LabTestRequest;
+use App\Models\Laboratory\LabResult;
+use App\Models\Laboratory\LabValidation;
+use App\Models\Laboratory\LabReport;
 
 class LabSample extends Model
 {

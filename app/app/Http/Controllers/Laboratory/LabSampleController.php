@@ -38,10 +38,15 @@ class LabSampleController extends Controller
             ->withQueryString();
 
         $sampleTypes = LabSampleType::active()->orderBy('name')->get();
+        $patients = Patient::where('status', 'active')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
 
         return Inertia::render('laboratory/samples/Index', [
             'samples' => $samples,
             'sampleTypes' => $sampleTypes,
+            'patients' => $patients,
             'filters' => $request->only(['search', 'status', 'sample_type_id']),
         ]);
     }
