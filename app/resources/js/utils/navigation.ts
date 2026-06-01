@@ -80,35 +80,35 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         items: [
           {
             title: 'Bandeja de Trabajo',
-            href: { url: '/laboratory', method: 'get' },
+            href: { url: '/medical/laboratory', method: 'get' },
           },
           {
             title: 'Recepción de Muestras',
-            href: { url: '/laboratory/samples', method: 'get' },
+            href: { url: '/medical/laboratory/samples', method: 'get' },
           },
           {
             title: 'Resultados',
-            href: { url: '/laboratory/results', method: 'get' },
+            href: { url: '/medical/laboratory/results', method: 'get' },
           },
           {
             title: 'Validaciones',
-            href: { url: '/laboratory/validations', method: 'get' },
+            href: { url: '/medical/laboratory/validations', method: 'get' },
           },
           {
             title: 'Informes PDF',
-            href: { url: '/laboratory/reports', method: 'get' },
+            href: { url: '/medical/laboratory/reports', method: 'get' },
           },
           {
             title: 'Microbiología',
-            href: { url: '/laboratory/microbiology', method: 'get' },
+            href: { url: '/medical/laboratory/microbiology', method: 'get' },
           },
           {
             title: 'Control de Calidad',
-            href: { url: '/laboratory/qc', method: 'get' },
+            href: { url: '/medical/laboratory/qc', method: 'get' },
           },
           {
             title: 'Configuración',
-            href: { url: '/laboratory/settings', method: 'get' },
+            href: { url: '/medical/laboratory/settings', method: 'get' },
           },
         ],
       },
