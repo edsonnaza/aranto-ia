@@ -14,11 +14,15 @@ Route::middleware(['auth', 'verified'])
     ->group(function () {
         // Dashboard
         Route::get('/', [LabDashboardController::class, 'index'])->name('dashboard');
+
+        // Laboratory Reception (service request flow)
+        Route::get('create', [LabSampleController::class, 'create'])->name('create');
         
         // Sample Types
         Route::resource('sample-types', LabSampleTypeController::class);
         
         // Samples
+        Route::post('samples/bulk', [LabSampleController::class, 'bulkStore'])->name('samples.bulk-store');
         Route::resource('samples', LabSampleController::class);
         
         // Test Requests

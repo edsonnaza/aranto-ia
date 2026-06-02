@@ -64,17 +64,20 @@ class SetupAllDatabase extends Command
             $customPath = $this->option('backup-path');
             
             if (!$customPath) {
-                $customPath = '/Users/edsonnaza/Desktop/db_legacy_infomed.sql';
+                // Buscar archivo dinámicamente sin hardcodear
+                $homeDir = getenv('HOME') ?: $_SERVER['HOME'] ?? '~';
+                $customPath = $homeDir . '/Desktop/db_legacy_infomed.sql';
             }
 
             $this->line("Buscando archivo: $customPath");
 
             // Intentar localizar el archivo en varias ubicaciones
+            $projectRoot = dirname(dirname(dirname(__DIR__)));
             $possiblePaths = [
                 $customPath,
-                $_SERVER['HOME'] . '/Desktop/db_legacy_infomed.sql',
+                getenv('HOME') . '/Desktop/db_legacy_infomed.sql',
                 '/tmp/db_legacy_infomed.sql',
-                dirname(dirname(dirname(__DIR__))) . '/db_legacy_infomed.sql',
+                $projectRoot . '/db_legacy_infomed.sql',
             ];
 
             $actualPath = null;
@@ -91,7 +94,7 @@ class SetupAllDatabase extends Command
                 foreach ($possiblePaths as $path) {
                     $this->line("  - $path");
                 }
-                $this->line('Saltando importación legacy');
+                $this->line('<fg=yellow>Saltando importación legacy</>');
                 return false;
             }
 
@@ -102,7 +105,7 @@ class SetupAllDatabase extends Command
             
             // Obtener el nombre del contenedor MySQL
             $process = new Process(['docker', 'compose', 'ps', 'mysql', '-q']);
-            $process->setWorkingDirectory(dirname(dirname(dirname(__DIR__))));
+            $process->setWorkingDirectory($projectRoot);
             $process->run();
             $mysqlContainer = trim($process->getOutput());
 
@@ -115,7 +118,7 @@ class SetupAllDatabase extends Command
 
             // Copiar archivo al contenedor
             $process = new Process(['docker', 'cp', $actualPath, $mysqlContainer . ':/tmp/db_legacy_infomed.sql']);
-            $process->setWorkingDirectory(dirname(dirname(dirname(__DIR__))));
+            $process->setWorkingDirectory($projectRoot);
             $process->setTimeout(120);
             $process->run();
 
@@ -133,7 +136,7 @@ class SetupAllDatabase extends Command
                    'mysql -uroot -p4r4nt0 -e "SET GLOBAL log_bin_trust_function_creators=0;"';
 
             $process = new Process(['docker', 'compose', 'exec', '-T', 'mysql', 'bash', '-c', $cmd]);
-            $process->setWorkingDirectory(dirname(dirname(dirname(__DIR__))));
+            $process->setWorkingDirectory($projectRoot);
             $process->setTimeout(600);
             $process->run();
 

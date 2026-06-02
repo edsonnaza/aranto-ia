@@ -85,11 +85,11 @@ return [
 
         'legacy' => [
             'driver' => 'mysql',
-            'host' => env('DB_HOST', 'mysql'),
-            'port' => env('DB_PORT', '3306'),
-            'database' => 'db_legacy_infomed',
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'host' => env('DB_LEGACY_HOST', env('DB_HOST', 'mysql')),
+            'port' => env('DB_LEGACY_PORT', env('DB_PORT', '3306')),
+            'database' => env('DB_LEGACY_DATABASE', 'db_legacy_infomed'),
+            'username' => env('DB_LEGACY_USERNAME', 'root'),
+            'password' => env('DB_LEGACY_PASSWORD', '4r4nt0'),
             'charset' => 'latin1',
             'collation' => 'latin1_bin',
             'prefix' => '',

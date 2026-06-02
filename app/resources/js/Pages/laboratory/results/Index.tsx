@@ -1,25 +1,52 @@
 
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import Modal from '@/resources/js/components/ui/Modal';
-import ConfirmDialog from '@/resources/js/components/ui/ConfirmDialog';
+import Modal from '../../../Components/ui/Modal';
+import ConfirmDialog from '../../../Components/ui/ConfirmDialog';
 import ResultForm from './ResultForm';
-import { useLabResults } from '@/resources/js/hooks/useLabResults';
-import { toast } from 'sooner';
+import { useLabResults } from '../../../hooks/useLabResults';
+import { toast } from 'sonner';
 
+interface Parameter {
+  id: number;
+  name: string;
+}
 
-export default function ResultsIndex({ results }: any) {
+interface Sample {
+  id: number;
+  sample_number: string;
+}
+
+interface Result {
+  id: number;
+  sample_id?: number;
+  lab_sample_id?: number;
+  lab_test_request_id?: number;
+  lab_test_parameter_id?: number;
+  value?: string;
+  status?: string;
+  sample?: Sample;
+  parameter?: Parameter;
+}
+
+interface ResultsIndexProps {
+  results: {
+    data: Result[];
+  };
+}
+
+export default function ResultsIndex({ results }: ResultsIndexProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [editResult, setEditResult] = useState<any | null>(null);
+  const [editResult, setEditResult] = useState<Result | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<any | null>(null);
+  const [deleteResult, setDeleteResult] = useState<Result | null>(null);
   const { destroy } = useLabResults();
 
   const handleCreate = () => {
     setEditResult(null);
     setModalOpen(true);
   };
-  const handleEdit = (result: any) => {
+  const handleEdit = (result: Result) => {
     setEditResult(result);
     setModalOpen(true);
   };
@@ -27,7 +54,7 @@ export default function ResultsIndex({ results }: any) {
     setModalOpen(false);
     setEditResult(null);
   };
-  const handleDelete = (result: any) => {
+  const handleDelete = (result: Result) => {
     setDeleteResult(result);
     setConfirmOpen(true);
   };
@@ -66,7 +93,7 @@ export default function ResultsIndex({ results }: any) {
               </tr>
             </thead>
             <tbody>
-              {results.data.map((result: any) => (
+              {results.data.map((result: Result) => (
                 <tr key={result.id}>
                   <td>{result.id}</td>
                   <td>{result.sample?.sample_number}</td>

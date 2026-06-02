@@ -1,8 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
-import { AppLayout } from '@/resources/js/layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/resources/js/components/ui/card';
-import { Button } from '@/resources/js/components/ui/button';
-import { Badge } from '@/resources/js/components/ui/badge';
+import AppLayout from '../../../layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
+import { Button } from '../../../Components/ui/button';
+import { Badge } from '../../../Components/ui/badge';
 import { ArrowLeft, ClipboardList, User, Calendar, Clock, AlertCircle } from 'lucide-react';
 
 interface TestRequest {

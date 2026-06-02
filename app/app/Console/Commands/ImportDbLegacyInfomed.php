@@ -18,16 +18,50 @@ class ImportDbLegacyInfomed extends Command
         $this->info('═══════════════════════════════════════════════════════════');
         $this->newLine();
 
-        // Obtener la ruta del archivo
-        $backupFile = $this->option('backup-path') ?? '/Users/edsonnaza/Desktop/db_legacy_infomed.sql';
-
+        // Obtener la ruta del archivo (relativa al proyecto o absoluta)
+        $projectRoot = base_path();
+        $projectDir = dirname($projectRoot);
+        
+        // Si se especifica --backup-path, resolverlo relativo a projectDir (donde está docker-compose.yml)
+        if ($this->option('backup-path')) {
+            $backupFile = $this->option('backup-path');
+            // Si es ruta relativa, hacerla relativa a projectDir
+            if (!str_starts_with($backupFile, '/')) {
+                $backupFile = $projectDir . '/' . $backupFile;
+            }
+        } else {
+            // Intentar encontrar en Desktop del usuario
+            $homeDir = getenv('HOME') ?: expanduser('~');
+            $backupFile = $homeDir . '/Desktop/db_legacy_infomed.sql';
+            
+            // Si no existe en Desktop, intentar en la raíz del proyecto
+            if (!file_exists($backupFile)) {
+                $backupFile = $projectRoot . '/db_legacy_infomed.sql';
+            }
+        }
+        
         // Verificar que el archivo existe
         if (!file_exists($backupFile)) {
             $this->error('✗ Error: Archivo no encontrado');
-            $this->line("  Buscado en: {$backupFile}");
             $this->newLine();
-            $this->line('Uso: php artisan import:db_legacy_infomed --backup-path=/ruta/al/archivo.sql');
-            $this->line('Ejemplo: php artisan import:db_legacy_infomed --backup-path=/Users/edsonnaza/Desktop/db_legacy_infomed.sql');
+            $this->line('Se buscó en:');
+            $this->line("  • {$homeDir}/Desktop/db_legacy_infomed.sql");
+            $this->line("  • {$projectRoot}/db_legacy_infomed.sql");
+            $this->newLine();
+            $this->line('Soluciones:');
+            $this->line('  1. Copiar archivo a Desktop:');
+            $this->line("     cp /ruta/al/db_legacy_infomed.sql {$homeDir}/Desktop/");
+            $this->newLine();
+            $this->line('  2. Copiar archivo a raíz del proyecto:');
+            $this->line("     cp /ruta/al/db_legacy_infomed.sql {$projectRoot}/");
+            $this->newLine();
+            $this->line('  3. O usar opción --backup-path (ruta relativa o absoluta):');
+            $this->line('     php artisan import:db_legacy_infomed --backup-path=../db_legacy_infomed.sql');
+            $this->line('     php artisan import:db_legacy_infomed --backup-path=/ruta/absoluta/db_legacy_infomed.sql');
+            $this->newLine();
+            $this->line('<fg=yellow>⚠ IMPORTANTE:</> Ejecuta este comando desde el HOST, no desde dentro del contenedor:');
+            $this->line('  ✗ NO: docker compose exec app php artisan import:db_legacy_infomed');
+            $this->line('  ✓ SÍ: php artisan import:db_legacy_infomed');
             return 1;
         }
 
@@ -131,7 +165,25 @@ class ImportDbLegacyInfomed extends Command
         $this->info('<fg=green>✓ IMPORTACIÓN COMPLETADA EXITOSAMENTE</>');
         $this->info('═══════════════════════════════════════════════════════════');
         $this->newLine();
-        $this->line("Próximo paso: ejecuta <fg=blue>php artisan setup:all-database</>");
+
+        // Ejecutar setup:all-database dentro del contenedor automáticamente
+        $this->info('Ejecutando setup:all-database dentro del contenedor...');
+        $process = new Process(['docker', 'compose', 'exec', '-T', 'app', 'php', 'artisan', 'setup:all-database']);
+        $process->setWorkingDirectory($projectDir);
+        $process->setTimeout(300);
+        $process->run(function ($type, $buffer) {
+            $this->getOutput()->write($buffer);
+        });
+
+        if (!$process->isSuccessful()) {
+            $this->error('✗ Error al ejecutar setup:all-database');
+            $this->error($process->getErrorOutput());
+            $this->newLine();
+            $this->line('Puedes ejecutarlo manualmente:');
+            $this->line('  <fg=blue>docker compose exec app php artisan setup:all-database</>');
+            return 1;
+        }
+
         $this->newLine();
 
         return 0;

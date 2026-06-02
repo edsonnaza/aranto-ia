@@ -133,7 +133,10 @@ class LabSampleTypeSeeder extends Seeder
         ];
 
         foreach ($sampleTypes as $sampleType) {
-            LabSampleType::create($sampleType);
+            LabSampleType::firstOrCreate(
+                ['code' => $sampleType['code']],
+                $sampleType
+            );
         }
     }
 }

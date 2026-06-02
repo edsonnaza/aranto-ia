@@ -64,6 +64,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                 $this->phase('FASE 2', 'Datos Básicos de Aranto', function () {
                     $this->call(ServicesSeeder::class);
                     $this->call(CashRegisterUsersSeeder::class);
+                    $this->call(LabSampleTypeSeeder::class);
                 });
 
                 $this->command->info('✅ Seeding completado SIN datos de legacy');
@@ -100,6 +101,7 @@ class MasterLegacyMigrationSeeder extends Seeder
             $this->phase('FASE 2', 'Datos Básicos de Aranto', function () {
                 $this->call(ServicesSeeder::class);
                 $this->call(CashRegisterUsersSeeder::class);
+                $this->call(LabSampleTypeSeeder::class);
             });
 
             // FASE 3: Migraciones desde Legacy - Maestros

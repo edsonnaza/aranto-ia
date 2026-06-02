@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { useLabValidations } from '@/resources/js/hooks/useLabValidations';
+import { useLabValidations } from '@/hooks/useLabValidations';
 
 export default function ValidationForm({ validation = null, onSuccess }: { validation?: any, onSuccess?: () => void }) {
   const { create, update, loading, error } = useLabValidations();

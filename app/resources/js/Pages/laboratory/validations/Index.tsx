@@ -1,11 +1,11 @@
 
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import Modal from '@/resources/js/components/ui/Modal';
-import ConfirmDialog from '@/resources/js/components/ui/ConfirmDialog';
+import Modal from '../../../Components/ui/Modal';
+import ConfirmDialog from '../../../Components/ui/ConfirmDialog';
 import ValidationForm from './ValidationForm';
-import { useLabValidations } from '@/resources/js/hooks/useLabValidations';
-import { toast } from 'sooner';
+import { useLabValidations } from '../../../hooks/useLabValidations';
+import { toast } from 'sonner';
 
 
 export default function ValidationsIndex({ validations }: any) {

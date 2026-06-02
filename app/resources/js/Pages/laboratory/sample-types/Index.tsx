@@ -1,12 +1,12 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { AppLayout } from '@/resources/js/layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/resources/js/components/ui/card';
-import { Button } from '@/resources/js/components/ui/button';
-import { Badge } from '@/resources/js/components/ui/badge';
-import { Input } from '@/resources/js/components/ui/input';
+import AppLayout from '../../../layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
+import { Button } from '../../../Components/ui/button';
+import { Badge } from '../../../Components/ui/badge';
+import { Input } from '../../../Components/ui/input';
 import { Beaker, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { useSampleTypes } from '@/resources/js/hooks/useSampleTypes';
+import { useSampleTypes } from '../../../hooks/useSampleTypes';
 import { toast } from 'sonner';
 
 interface SampleType {

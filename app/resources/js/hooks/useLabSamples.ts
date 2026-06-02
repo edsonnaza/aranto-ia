@@ -15,6 +15,21 @@ interface LabSampleData {
   [key: string]: string | number | boolean | undefined | null | Date | File | Blob;
 }
 
+interface BulkLabSampleData {
+  patient_id: number;
+  priority: 'routine' | 'urgent' | 'stat';
+  notes?: string;
+  samples: Array<{
+    lab_sample_type_id: number;
+    lab_test_profile_id?: number;
+    professional_id?: number;
+    barcode?: string;
+    collected_at: string;
+    quantity: number;
+    notes?: string;
+  }>;
+}
+
 export function useLabSamples() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Errors | null>(null);
@@ -33,6 +48,21 @@ export function useLabSamples() {
     setLoading(true);
     setError(null);
     router.post('/medical/laboratory/samples', data as any, {
+      onSuccess: () => {
+        setLoading(false);
+        if (onSuccess) onSuccess();
+      },
+      onError: (err) => {
+        setError(err);
+        setLoading(false);
+      },
+    });
+  };
+
+  const bulkCreate = (data: BulkLabSampleData, onSuccess?: () => void) => {
+    setLoading(true);
+    setError(null);
+    router.post('/medical/laboratory/samples/bulk', data as any, {
       onSuccess: () => {
         setLoading(false);
         if (onSuccess) onSuccess();
@@ -74,5 +104,5 @@ export function useLabSamples() {
     });
   };
 
-  return { loading, error, refresh, create, update, destroy };
+  return { loading, error, refresh, create, bulkCreate, update, destroy };
 }

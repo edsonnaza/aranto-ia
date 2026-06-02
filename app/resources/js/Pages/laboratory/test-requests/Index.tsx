@@ -1,13 +1,13 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { AppLayout } from '@/resources/js/layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/resources/js/components/ui/card';
-import { Button } from '@/resources/js/components/ui/button';
-import { Badge } from '@/resources/js/components/ui/badge';
-import { Input } from '@/resources/js/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/resources/js/components/ui/select';
+import AppLayout from '../../../layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
+import { Button } from '../../../Components/ui/button';
+import { Badge } from '../../../Components/ui/badge';
+import { Input } from '../../../Components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../Components/ui/select';
 import { ClipboardList, Plus, Search, Eye, UserCheck, Play, CheckCircle, XCircle } from 'lucide-react';
 import { useState } from 'react';
-import { useTestRequests } from '@/resources/js/hooks/useTestRequests';
+import { useTestRequests } from '../../../hooks/useTestRequests';
 import { toast } from 'sonner';
 
 interface TestRequest {
