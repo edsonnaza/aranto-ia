@@ -17,7 +17,7 @@ class LabTestRequest extends Model
         'requested_by',
         'priority',
         'status',
-        'assigned_to',
+        'assigned_to_user_id',
         'started_at',
         'completed_at',
         'notes',
@@ -57,7 +57,7 @@ class LabTestRequest extends Model
      */
     public function assignedTo()
     {
-        return $this->belongsTo(User::class, 'assigned_to');
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
     /**

@@ -2,18 +2,24 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Laboratory\LabEquipment;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabTestRequest;
-use App\Models\Laboratory\LabTestParameter;
-use App\Models\Laboratory\LabEquipment;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class LabResultController extends Controller
 {
+    public function create(Request $request): Response
+    {
+        return $this->index($request);
+    }
+
     public function index(Request $request): Response
     {
         $query = LabResult::query();
@@ -34,32 +40,138 @@ class LabResultController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return Inertia::render('laboratory/results/Index', [
-            'results' => $results,
-            'filters' => $request->only(['search', 'status']),
-        ]);
-    }
-
-    public function create(Request $request): Response
-    {
-        $testRequests = LabTestRequest::where('status', 'in_process')
-            ->with(['sample.patient', 'testProfile'])
-            ->get();
-
-        $parameters = LabTestParameter::where('status', 'active')
-            ->orderBy('name')
+        $testRequests = LabTestRequest::query()
+            ->whereIn('status', ['pending', 'assigned', 'in_process'])
+            ->with([
+                'sample.patient',
+                'testProfile.parameters.referenceRanges',
+                'testProfile.parameters.equipmentParameterRanges',
+                'testProfile.profileEquipments.equipment',
+            ])
+            ->orderByDesc('id')
             ->get();
 
         $equipments = LabEquipment::where('status', 'active')
             ->orderBy('name')
             ->get();
 
-        return Inertia::render('laboratory/results/Create', [
+        return Inertia::render('laboratory/results/Index', [
+            'results' => $results,
             'testRequests' => $testRequests,
-            'parameters' => $parameters,
             'equipments' => $equipments,
-            'testRequestId' => $request->test_request_id,
+            'filters' => $request->only(['search', 'status']),
         ]);
+    }
+
+    public function storeBatch(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'lab_test_request_id' => 'required|exists:lab_test_requests,id',
+            'equipment_id' => 'nullable|exists:lab_equipments,id',
+            'status' => ['required', Rule::in(['draft', 'validated'])],
+            'results' => ['required', 'array', 'min:1'],
+            'results.*.lab_test_parameter_id' => ['required', 'exists:lab_test_parameters,id'],
+            'results.*.value' => ['nullable', 'string', 'max:255'],
+            'results.*.is_out_of_range' => ['nullable', 'boolean'],
+        ]);
+
+        $testRequest = LabTestRequest::query()
+            ->with('testProfile.parameters')
+            ->findOrFail((int) $validated['lab_test_request_id']);
+
+        $allowedParameterIds = $testRequest->testProfile
+            ? $testRequest->testProfile->parameters->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : [];
+
+        DB::transaction(function () use ($validated, $testRequest, $allowedParameterIds) {
+            $submittedValuesByParameter = [];
+
+            foreach ($validated['results'] as $row) {
+                $parameterId = (int) $row['lab_test_parameter_id'];
+
+                if (!in_array($parameterId, $allowedParameterIds, true)) {
+                    continue;
+                }
+
+                $value = array_key_exists('value', $row) ? trim((string) $row['value']) : '';
+                if ($value === '') {
+                    continue;
+                }
+
+                $submittedValuesByParameter[$parameterId] = $value;
+
+                LabResult::updateOrCreate(
+                    [
+                        'lab_sample_id' => $testRequest->lab_sample_id,
+                        'lab_test_request_id' => $testRequest->id,
+                        'lab_test_parameter_id' => $parameterId,
+                    ],
+                    [
+                        'equipment_id' => $validated['equipment_id'] ?? null,
+                        'value' => $value,
+                        'is_out_of_range' => (bool) ($row['is_out_of_range'] ?? false),
+                        'status' => $validated['status'],
+                        'entered_by' => auth()->id(),
+                    ]
+                );
+            }
+
+            $profile = $testRequest->testProfile;
+            if (
+                $profile
+                && $profile->validation_type === 'sum_100'
+                && $validated['status'] === 'validated'
+            ) {
+                $sumParameterIds = $profile->parameters
+                    ->where('include_in_sum_100', true)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->values();
+
+                if ($sumParameterIds->isNotEmpty()) {
+                    $storedValues = LabResult::query()
+                        ->where('lab_test_request_id', $testRequest->id)
+                        ->whereIn('lab_test_parameter_id', $sumParameterIds)
+                        ->pluck('value', 'lab_test_parameter_id');
+
+                    $total = 0.0;
+
+                    foreach ($sumParameterIds as $parameterId) {
+                        $rawValue = array_key_exists($parameterId, $submittedValuesByParameter)
+                            ? $submittedValuesByParameter[$parameterId]
+                            : ($storedValues[$parameterId] ?? null);
+
+                        if ($rawValue === null || $rawValue === '' || !is_numeric((string) $rawValue)) {
+                            throw ValidationException::withMessages([
+                                'results' => 'Los parámetros marcados para suma 100% deben tener valores numéricos antes de validar.',
+                            ]);
+                        }
+
+                        $total += (float) $rawValue;
+                    }
+
+                    $target = (float) ($profile->validation_target ?? 100);
+                    $tolerance = (float) ($profile->validation_tolerance ?? 0);
+
+                    if (abs($total - $target) > $tolerance) {
+                        throw ValidationException::withMessages([
+                            'results' => "La suma de parámetros porcentuales debe ser {$target}% (±{$tolerance}). Total actual: " . number_format($total, 2) . '%.',
+                        ]);
+                    }
+                }
+            }
+
+            if ($testRequest->status === 'pending' || $testRequest->status === 'assigned') {
+                $testRequest->update([
+                    'status' => 'in_process',
+                    'started_at' => $testRequest->started_at ?? now(),
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('medical.laboratory.results.index')
+            ->with('success', 'Resultados cargados exitosamente.');
     }
 
     public function store(Request $request): RedirectResponse
@@ -69,10 +181,10 @@ class LabResultController extends Controller
             'lab_test_request_id' => 'required|exists:lab_test_requests,id',
             'lab_test_parameter_id' => 'required|exists:lab_test_parameters,id',
             'equipment_id' => 'nullable|exists:lab_equipments,id',
-            'value' => 'required|string',
+            'value' => 'required|string|max:255',
             'calculated_percentage' => 'nullable|numeric',
             'is_out_of_range' => 'nullable|boolean',
-            'status' => ['required', Rule::in(['pending', 'validated', 'rejected'])],
+            'status' => ['required', Rule::in(['draft', 'validated'])],
         ]);
 
         $validated['entered_by'] = auth()->id();
@@ -80,7 +192,7 @@ class LabResultController extends Controller
         LabResult::create($validated);
 
         return redirect()
-            ->route('laboratory.results.index')
+            ->route('medical.laboratory.results.index')
             ->with('success', 'Resultado registrado exitosamente.');
     }
 
@@ -101,17 +213,12 @@ class LabResultController extends Controller
 
     public function edit(LabResult $result): Response
     {
-        $parameters = LabTestParameter::where('status', 'active')
-            ->orderBy('name')
-            ->get();
-
         $equipments = LabEquipment::where('status', 'active')
             ->orderBy('name')
             ->get();
 
         return Inertia::render('laboratory/results/Edit', [
             'result' => $result,
-            'parameters' => $parameters,
             'equipments' => $equipments,
         ]);
     }
@@ -121,16 +228,16 @@ class LabResultController extends Controller
         $validated = $request->validate([
             'lab_test_parameter_id' => 'required|exists:lab_test_parameters,id',
             'equipment_id' => 'nullable|exists:lab_equipments,id',
-            'value' => 'required|string',
+            'value' => 'required|string|max:255',
             'calculated_percentage' => 'nullable|numeric',
             'is_out_of_range' => 'nullable|boolean',
-            'status' => ['required', Rule::in(['pending', 'validated', 'rejected'])],
+            'status' => ['required', Rule::in(['draft', 'validated'])],
         ]);
 
         $result->update($validated);
 
         return redirect()
-            ->route('laboratory.results.index')
+            ->route('medical.laboratory.results.index')
             ->with('success', 'Resultado actualizado exitosamente.');
     }
 
@@ -145,7 +252,7 @@ class LabResultController extends Controller
         $result->delete();
 
         return redirect()
-            ->route('laboratory.results.index')
+            ->route('medical.laboratory.results.index')
             ->with('success', 'Resultado eliminado exitosamente.');
     }
 }

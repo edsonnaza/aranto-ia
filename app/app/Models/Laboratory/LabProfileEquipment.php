@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class LabProfileEquipment extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'lab_profile_equipments';
+
     protected $fillable = [
         'lab_test_profile_id', 'lab_equipment_id', 'is_default'
     ];

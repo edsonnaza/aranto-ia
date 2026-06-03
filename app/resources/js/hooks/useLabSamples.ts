@@ -104,5 +104,20 @@ export function useLabSamples() {
     });
   };
 
-  return { loading, error, refresh, create, bulkCreate, update, destroy };
+  const collect = (id: number, onSuccess?: () => void) => {
+    setLoading(true);
+    setError(null);
+    router.post(`/medical/laboratory/samples/${id}/collect`, {}, {
+      onSuccess: () => {
+        setLoading(false);
+        if (onSuccess) onSuccess();
+      },
+      onError: (err) => {
+        setError(err);
+        setLoading(false);
+      },
+    });
+  };
+
+  return { loading, error, refresh, create, bulkCreate, update, destroy, collect };
 }

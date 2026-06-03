@@ -1,12 +1,12 @@
 import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '../../../layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
-import { Button } from '../../../Components/ui/button';
-import { Badge } from '../../../Components/ui/badge';
-import { Input } from '../../../Components/ui/input';
+import AppLayout from '@/layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Beaker, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { useSampleTypes } from '../../../hooks/useSampleTypes';
+import { useSampleTypes } from '@/hooks/useSampleTypes';
 import { toast } from 'sonner';
 
 interface SampleType {
@@ -38,6 +38,12 @@ export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
   const [search, setSearch] = useState(filters.search || '');
   const { destroy } = useSampleTypes();
 
+  const breadcrumbs = [
+    { href: '/medical', title: 'Sistema Médico' },
+    { href: '/medical/laboratory', title: 'Laboratorio' },
+    { href: '/medical/laboratory/sample-types', title: 'Tipos de Muestra', current: true },
+  ];
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     router.get('/medical/laboratory/sample-types', { search }, { preserveState: true });
@@ -52,15 +58,15 @@ export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
   };
 
   return (
-    <AppLayout>
+    <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Tipos de Muestra - Laboratorio" />
 
       <div className="py-6 px-4 sm:px-6 lg:px-8">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Beaker className="h-8 w-8 text-primary" />
+         
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Tipos de Muestra</h1>
+              <h1 className="text-lg font-bold tracking-tight">Tipos de Muestra</h1>
               <p className="text-sm text-muted-foreground">Gestión de tipos de muestra de laboratorio</p>
             </div>
           </div>

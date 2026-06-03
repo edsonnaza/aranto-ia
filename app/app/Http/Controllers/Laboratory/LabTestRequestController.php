@@ -31,7 +31,7 @@ class LabTestRequestController extends Controller
         }
 
         if ($request->assigned_to) {
-            $query->where('assigned_to', $request->assigned_to);
+            $query->where('assigned_to_user_id', $request->assigned_to);
         }
 
         if ($request->search) {
@@ -134,7 +134,7 @@ class LabTestRequestController extends Controller
         ]);
 
         $testRequest->update([
-            'assigned_to' => $validated['assigned_to'],
+            'assigned_to_user_id' => $validated['assigned_to'],
             'status' => 'assigned',
         ]);
 

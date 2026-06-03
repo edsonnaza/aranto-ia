@@ -126,11 +126,14 @@ export default function LaboratoryReceptionCreate({
   const searchLabServices = useCallback(async (query: string) => {
     const q = query.trim().toLowerCase()
 
+    const toResult = (service: typeof flatServices[number]) => ({
+      id: service.value,
+      label: service.label,
+      subtitle: [service.category, service.code].filter(Boolean).join(' · '),
+    })
+
     if (!q) {
-      return flatServices.slice(0, 15).map((service) => ({
-        id: service.value,
-        label: service.label,
-      }))
+      return flatServices.slice(0, 20).map(toResult)
     }
 
     return flatServices
@@ -140,11 +143,8 @@ export default function LaboratoryReceptionCreate({
         const byCategory = (service.category || '').toLowerCase().includes(q)
         return byName || byCode || byCategory
       })
-      .slice(0, 15)
-      .map((service) => ({
-        id: service.value,
-        label: service.label,
-      }))
+      .slice(0, 20)
+      .map(toResult)
   }, [flatServices])
 
   const handleServiceSelect = (service: { value: number; base_price: number; label?: string; estimated_duration?: number }, serviceItemId: string) => {

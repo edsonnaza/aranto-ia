@@ -10,6 +10,14 @@ import {
   Settings,
   Users,
   Clock,
+  Inbox,
+  TestTubes,
+  ClipboardList,
+  CheckCircle,
+  FileText,
+  Microscope,
+  Shield,
+  Beaker,
 } from 'lucide-react'
 
 export type NavigationItem = {
@@ -73,42 +81,61 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         title: 'Citas',
         href: { url: '/medical/appointments', method: 'get' },
       },
+    ],
+  },
+  {
+    title: 'Laboratorio',
+    icon: BarChart3,
+    permission: MODULE_PERMISSIONS.LABORATORY,
+    items: [
       {
-        title: 'Laboratorio',
-        icon: BarChart3,
-        permission: MODULE_PERMISSIONS.LABORATORY,
+        title: 'Bandeja de Trabajo',
+        href: { url: '/medical/laboratory', method: 'get' },
+        icon: Inbox,
+      },
+      {
+        title: 'Recepción de Muestras',
+        href: { url: '/medical/laboratory/samples', method: 'get' },
+        icon: TestTubes,
+      },
+      {
+        title: 'Resultados',
+        href: { url: '/medical/laboratory/results', method: 'get' },
+        icon: ClipboardList,
+      },
+      {
+        title: 'Validaciones',
+        href: { url: '/medical/laboratory/validations', method: 'get' },
+        icon: CheckCircle,
+      },
+      {
+        title: 'Informes PDF',
+        href: { url: '/medical/laboratory/reports', method: 'get' },
+        icon: FileText,
+      },
+      {
+        title: 'Microbiología',
+        href: { url: '/medical/laboratory/microbiology', method: 'get' },
+        icon: Microscope,
+      },
+      {
+        title: 'Control de Calidad',
+        href: { url: '/medical/laboratory/qc', method: 'get' },
+        icon: Shield,
+      },
+      {
+        title: 'Parámetros',
+        icon: Settings,
         items: [
           {
-            title: 'Bandeja de Trabajo',
-            href: { url: '/medical/laboratory', method: 'get' },
+            title: 'Tipos de Muestra',
+            href: { url: '/medical/laboratory/sample-types', method: 'get' },
+            icon: TestTubes,
           },
           {
-            title: 'Recepción de Muestras',
-            href: { url: '/medical/laboratory/samples', method: 'get' },
-          },
-          {
-            title: 'Resultados',
-            href: { url: '/medical/laboratory/results', method: 'get' },
-          },
-          {
-            title: 'Validaciones',
-            href: { url: '/medical/laboratory/validations', method: 'get' },
-          },
-          {
-            title: 'Informes PDF',
-            href: { url: '/medical/laboratory/reports', method: 'get' },
-          },
-          {
-            title: 'Microbiología',
-            href: { url: '/medical/laboratory/microbiology', method: 'get' },
-          },
-          {
-            title: 'Control de Calidad',
-            href: { url: '/medical/laboratory/qc', method: 'get' },
-          },
-          {
-            title: 'Configuración',
-            href: { url: '/medical/laboratory/settings', method: 'get' },
+            title: 'Perfiles de Laboratorio',
+            href: { url: '/medical/laboratory/test-profiles', method: 'get' },
+            icon: Beaker,
           },
         ],
       },

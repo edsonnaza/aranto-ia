@@ -10,6 +10,7 @@ use App\Models\Laboratory\LabTestRequest;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabValidation;
 use App\Models\Laboratory\LabReport;
+use App\Models\Laboratory\LabSampleCollection;
 
 class LabSample extends Model
 {
@@ -22,6 +23,7 @@ class LabSample extends Model
         'barcode',
         'lab_sample_type_id',
         'collected_at',
+        'collected_by',
         'received_at',
         'received_by',
         'status',
@@ -65,6 +67,11 @@ class LabSample extends Model
         return $this->belongsTo(User::class, 'received_by');
     }
 
+    public function collectedBy()
+    {
+        return $this->belongsTo(User::class, 'collected_by');
+    }
+
     /**
      * Relación con solicitudes de pruebas
      */
@@ -95,5 +102,10 @@ class LabSample extends Model
     public function report()
     {
         return $this->hasOne(LabReport::class);
+    }
+
+    public function collections()
+    {
+        return $this->hasMany(LabSampleCollection::class);
     }
 }

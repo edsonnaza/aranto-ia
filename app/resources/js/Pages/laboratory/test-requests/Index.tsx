@@ -1,11 +1,11 @@
 import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '../../../layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
-import { Button } from '../../../Components/ui/button';
-import { Badge } from '../../../Components/ui/badge';
-import { Input } from '../../../Components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../Components/ui/select';
-import { ClipboardList, Plus, Search, Eye, UserCheck, Play, CheckCircle, XCircle } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Search, Eye, Play, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useTestRequests } from '../../../hooks/useTestRequests';
 import { toast } from 'sonner';
@@ -44,20 +44,14 @@ interface Props {
   };
 }
 
-export default function TestRequestsIndex({ testRequests, technicians, filters }: Props) {
+export default function TestRequestsIndex({ testRequests, filters }: Props) {
   const [search, setSearch] = useState(filters.search || '');
   const [status, setStatus] = useState(filters.status || '');
-  const [priority, setPriority] = useState(filters.priority || '');
-  const { assign, start, complete, destroy } = useTestRequests();
+  const priority = filters.priority || '';
+  const { start, complete } = useTestRequests();
 
   const handleSearch = () => {
     router.get('/medical/laboratory/test-requests', { search, status, priority }, { preserveState: true });
-  };
-
-  const handleAssign = (id: number, technicianId: number) => {
-    assign(id, technicianId, () => {
-      toast.success('Técnico asignado exitosamente');
-    });
   };
 
   const handleStart = (id: number) => {
@@ -73,9 +67,10 @@ export default function TestRequestsIndex({ testRequests, technicians, filters }
   };
 
   const getPriorityBadge = (priority: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'paid' | 'pending' | 'cancelled';
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       routine: { variant: 'default', label: 'Rutina' },
-      urgent: { variant: 'warning', label: 'Urgente' },
+      urgent: { variant: 'pending', label: 'Urgente' },
       stat: { variant: 'destructive', label: 'STAT' },
     };
     const config = variants[priority] || variants.routine;
@@ -83,11 +78,12 @@ export default function TestRequestsIndex({ testRequests, technicians, filters }
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'paid' | 'pending' | 'cancelled';
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       pending: { variant: 'secondary', label: 'Pendiente' },
       assigned: { variant: 'default', label: 'Asignada' },
-      in_process: { variant: 'warning', label: 'En Proceso' },
-      completed: { variant: 'success', label: 'Completada' },
+      in_process: { variant: 'pending', label: 'En Proceso' },
+      completed: { variant: 'paid', label: 'Completada' },
       cancelled: { variant: 'destructive', label: 'Cancelada' },
     };
     const config = variants[status] || variants.pending;
@@ -101,9 +97,9 @@ export default function TestRequestsIndex({ testRequests, technicians, filters }
       <div className="py-6 px-4 sm:px-6 lg:px-8">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <ClipboardList className="h-8 w-8 text-primary" />
+            
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Solicitudes de Pruebas</h1>
+              <h1 className="text-lg font-bold tracking-tight">Solicitudes de Pruebas</h1>
               <p className="text-sm text-muted-foreground">Gestión de solicitudes de análisis</p>
             </div>
           </div>

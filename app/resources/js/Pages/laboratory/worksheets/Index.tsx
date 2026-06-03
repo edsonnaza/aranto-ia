@@ -1,10 +1,10 @@
 import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '../../../layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
-import { Button } from '../../../Components/ui/button';
-import { Badge } from '../../../Components/ui/badge';
-import { Input } from '../../../Components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../Components/ui/select';
+import AppLayout from '@/layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Plus, Search, Eye, Play, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useWorksheets } from '../../../hooks/useWorksheets';
@@ -40,7 +40,7 @@ interface Props {
   };
 }
 
-export default function WorksheetsIndex({ worksheets, equipments, technicians, filters }: Props) {
+export default function WorksheetsIndex({ worksheets, filters }: Props) {
   const [search, setSearch] = useState(filters.search || '');
   const [status, setStatus] = useState(filters.status || '');
   const { start, complete } = useWorksheets();
@@ -64,10 +64,11 @@ export default function WorksheetsIndex({ worksheets, equipments, technicians, f
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'paid' | 'pending' | 'cancelled';
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       draft: { variant: 'secondary', label: 'Borrador' },
-      in_progress: { variant: 'warning', label: 'En Proceso' },
-      completed: { variant: 'success', label: 'Completada' },
+      in_progress: { variant: 'pending', label: 'En Proceso' },
+      completed: { variant: 'paid', label: 'Completada' },
       cancelled: { variant: 'destructive', label: 'Cancelada' },
     };
     const config = variants[status] || variants.draft;

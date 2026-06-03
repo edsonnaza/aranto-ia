@@ -26,9 +26,12 @@ interface Sample {
   sample_number: string
   barcode?: string
   status: string
-  collected_at: string
+  collected_at: string | null
   patient?: { first_name: string; last_name: string }
   sample_type?: { name: string }
+  service_request_detail?: {
+    medical_service?: { name?: string }
+  }
 }
 
 interface SampleType {
@@ -53,9 +56,15 @@ interface SamplesIndexProps {
 }
 
 const getStatusConfig = (status: string) => {
+  if (status === 'pending_collection' || status === 'pending') return { label: 'Pendiente Toma', className: 'bg-yellow-100 text-yellow-800' }
+  if (status === 'collected') return { label: 'Tomada', className: 'bg-indigo-100 text-indigo-800' }
   if (status === 'received') return { label: 'Recibida', className: 'bg-green-100 text-green-800' }
-  if (status === 'in_analysis') return { label: 'En análisis', className: 'bg-blue-100 text-blue-800' }
+  if (status === 'processing' || status === 'in_analysis') return { label: 'En análisis', className: 'bg-blue-100 text-blue-800' }
+  if (status === 'pending_validation') return { label: 'Pendiente Validación', className: 'bg-orange-100 text-orange-800' }
+  if (status === 'validated') return { label: 'Validada', className: 'bg-teal-100 text-teal-800' }
+  if (status === 'reported') return { label: 'Informada', className: 'bg-cyan-100 text-cyan-800' }
   if (status === 'completed') return { label: 'Completada', className: 'bg-emerald-100 text-emerald-800' }
+  if (status === 'cancelled') return { label: 'Cancelada', className: 'bg-slate-100 text-slate-700' }
   if (status === 'rejected') return { label: 'Rechazada', className: 'bg-red-100 text-red-800' }
   return { label: status, className: 'bg-gray-100 text-gray-800' }
 }
@@ -65,11 +74,15 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
   const [editSample, setEditSample] = useState<Sample | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteSample, setDeleteSample] = useState<Sample | null>(null)
+  const [rejectModalOpen, setRejectModalOpen] = useState(false)
+  const [rejectSample, setRejectSample] = useState<Sample | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectObservation, setRejectObservation] = useState('')
 
   const { destroy, loading } = useLabSamples()
 
   const handleCreate = () => {
-    router.visit('/medical/laboratory/create')
+    router.visit('/medical/reception')
   }
 
   const handleEdit = (sample: Sample) => {
@@ -87,6 +100,51 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
     setConfirmOpen(true)
   }
 
+  const handleReceive = (sample: Sample) => {
+    router.post(`/medical/laboratory/samples/${sample.id}/receive`, {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Muestra recibida correctamente')
+      },
+    })
+  }
+
+  const handleReject = (sample: Sample) => {
+    setRejectSample(sample)
+    setRejectReason('')
+    setRejectObservation('')
+    setRejectModalOpen(true)
+  }
+
+  const handleSubmitReject = () => {
+    if (!rejectSample || !rejectReason || !rejectObservation.trim()) {
+      toast.error('Seleccione un motivo y complete la observación')
+      return
+    }
+
+    const remarks = `${rejectReason}. ${rejectObservation.trim()}`
+
+    router.post(`/medical/laboratory/samples/${rejectSample.id}/reject`, {
+      remarks,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Muestra rechazada correctamente')
+        setRejectModalOpen(false)
+        setRejectSample(null)
+      },
+    })
+  }
+
+  const handleStartAnalysis = (sample: Sample) => {
+    router.post(`/medical/laboratory/samples/${sample.id}/start-analysis`, {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Análisis iniciado')
+      },
+    })
+  }
+
   const handleConfirmDelete = () => {
     if (deleteSample) {
       destroy(deleteSample.id, () => {
@@ -96,6 +154,18 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
 
     setDeleteSample(null)
     setConfirmOpen(false)
+  }
+
+  const formatCollectedAt = (collectedAt?: string | null) => {
+    if (!collectedAt) return '-'
+
+    const date = new Date(collectedAt)
+    if (Number.isNaN(date.getTime())) return '-'
+
+    return date.toLocaleString('es-ES', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    })
   }
 
   const columns: ColumnDef<Sample>[] = [
@@ -124,8 +194,15 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       },
     },
     {
+      accessorKey: 'requested_study',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estudio" />,
+      cell: ({ row }) => (
+        <span>{row.original.service_request_detail?.medical_service?.name || 'N/A'}</span>
+      ),
+    },
+    {
       accessorKey: 'sample_type',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de muestra" />,
       cell: ({ row }) => <span>{row.original.sample_type?.name || 'N/A'}</span>,
     },
     {
@@ -145,12 +222,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       accessorKey: 'collected_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Recolección" />,
       cell: ({ row }) => (
-        <span className="text-sm">
-          {new Date(row.original.collected_at).toLocaleString('es-ES', {
-            dateStyle: 'short',
-            timeStyle: 'short',
-          })}
-        </span>
+        <span className="text-sm">{formatCollectedAt(row.original.collected_at)}</span>
       ),
     },
     {
@@ -158,6 +230,44 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       header: 'Acciones',
       cell: ({ row }) => (
         <div className="text-right">
+          {row.original.status === 'pending_collection' && (
+            <Link
+              href={`/medical/laboratory/samples/${row.original.id}/collect`}
+              className="text-indigo-600 hover:underline mr-2"
+            >
+              Tomar Muestra
+            </Link>
+          )}
+          {row.original.status === 'collected' && (
+            <>
+              <Link
+                href={`/medical/laboratory/samples/${row.original.id}/collect`}
+                className="text-amber-600 hover:underline mr-2"
+              >
+                Editar Toma
+              </Link>
+              <button
+                onClick={() => handleReceive(row.original)}
+                className="text-emerald-600 hover:underline mr-2"
+              >
+                Recibir
+              </button>
+              <button
+                onClick={() => handleReject(row.original)}
+                className="text-red-600 hover:underline mr-2"
+              >
+                Rechazar
+              </button>
+            </>
+          )}
+          {row.original.status === 'received' && (
+            <button
+              onClick={() => handleStartAnalysis(row.original)}
+              className="text-blue-600 hover:underline mr-2"
+            >
+              Iniciar Análisis
+            </button>
+          )}
           <button
             onClick={() => handleEdit(row.original)}
             className="text-emerald-600 dark:text-emerald-400 hover:underline mr-2"
@@ -234,10 +344,17 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
               loading={loading}
               statusFilterable={true}
               statusOptions={[
+                { value: 'pending_collection', label: 'Pendiente Toma' },
+                { value: 'collected', label: 'Tomada' },
                 { value: 'received', label: 'Recibida' },
+                { value: 'processing', label: 'En análisis (legacy)' },
                 { value: 'in_analysis', label: 'En análisis' },
+                { value: 'pending_validation', label: 'Pendiente validación' },
+                { value: 'validated', label: 'Validada' },
+                { value: 'reported', label: 'Informada' },
                 { value: 'completed', label: 'Completada' },
                 { value: 'rejected', label: 'Rechazada' },
+                { value: 'cancelled', label: 'Cancelada' },
               ]}
               onStatusChange={(status) => {
                 const url = new URL(window.location.href)
@@ -253,7 +370,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
 
       <Modal open={modalOpen} onClose={handleClose}>
         <SampleForm
-          sample={editSample}
+          sample={editSample ? { ...editSample, collected_at: editSample.collected_at ?? '' } : null}
           sampleTypes={sampleTypes}
           onSuccess={() => {
             handleClose()
@@ -272,6 +389,67 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
         title="¿Eliminar muestra?"
         description={deleteSample ? `¿Seguro que deseas eliminar la muestra #${deleteSample.sample_number}?` : ''}
       />
+
+      <Modal
+        open={rejectModalOpen}
+        onClose={() => {
+          setRejectModalOpen(false)
+          setRejectSample(null)
+        }}
+      >
+        <div className="p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Rechazar Muestra</h3>
+          <p className="text-sm text-gray-500">
+            Complete motivo y observación para registrar el rechazo de la muestra {rejectSample?.sample_number}. Paciente: {rejectSample?.patient ? `${rejectSample.patient.first_name} ${rejectSample.patient.last_name}` : 'N/A'}. Estudio: {rejectSample?.service_request_detail?.medical_service?.name || 'N/A'}.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de rechazo *</label>
+            <select
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+            >
+              <option value="">Seleccionar motivo</option>
+              <option value="Muestra insuficiente">Muestra insuficiente</option>
+              <option value="Muestra hemolizada">Muestra hemolizada</option>
+              <option value="Tubo incorrecto">Tubo incorrecto</option>
+              <option value="Sin identificación">Sin identificación</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Observación *</label>
+            <textarea
+              value={rejectObservation}
+              onChange={(e) => setRejectObservation(e.target.value)}
+              rows={4}
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              placeholder="Detalle de la incidencia detectada..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRejectModalOpen(false)
+                setRejectSample(null)
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitReject}
+              className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+            >
+              Confirmar rechazo
+            </button>
+          </div>
+        </div>
+      </Modal>
     </AppLayout>
   )
 }

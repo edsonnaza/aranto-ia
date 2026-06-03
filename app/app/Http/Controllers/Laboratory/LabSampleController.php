@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InsuranceType;
 use App\Models\MedicalService;
 use App\Models\Laboratory\LabSample;
+use App\Models\Laboratory\LabSampleCollection;
 use App\Models\Laboratory\LabSampleType;
 use App\Models\Laboratory\LabTestProfile;
 use App\Models\Laboratory\LabTestRequest;
@@ -15,6 +16,7 @@ use App\Models\ServiceRequestDetail;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,7 +41,7 @@ class LabSampleController extends Controller
         }
 
         $samples = $query
-            ->with(['serviceRequestDetail', 'patient', 'sampleType', 'receivedBy'])
+            ->with(['serviceRequestDetail.medicalService', 'patient', 'sampleType', 'receivedBy'])
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -85,19 +87,16 @@ class LabSampleController extends Controller
             ->values()
             ->all();
 
-        $labServiceIds = LabTestProfile::query()
-            ->where('status', 'active')
-            ->whereNotNull('medical_service_id')
-            ->pluck('medical_service_id')
-            ->unique()
-            ->values();
+        // Obtener la categoría raíz "Laboratorio Clínico" para filtrar sub-categorías
+        $labRootId = ServiceCategory::where('name', 'Laboratorio Clínico')
+            ->whereNull('parent_id')
+            ->value('id');
 
         $medicalServices = ServiceCategory::query()
             ->where('status', 'active')
-            ->with(['medicalServices' => function ($query) use ($labServiceIds) {
-                $query->where('status', 'active')
-                    ->whereIn('medical_services.id', $labServiceIds)
-                    ->orderBy('name');
+            ->when($labRootId, fn ($q) => $q->where('parent_id', $labRootId))
+            ->with(['medicalServices' => function ($query) {
+                $query->where('status', 'active')->orderBy('name');
             }])
             ->orderBy('name')
             ->get()
@@ -143,7 +142,7 @@ class LabSampleController extends Controller
             'samples'    => 'required|array|min:1',
             'samples.*.lab_sample_type_id'  => 'required|exists:lab_sample_types,id',
             'samples.*.lab_test_profile_id' => 'nullable|exists:lab_test_profiles,id',
-            'samples.*.professional_id'     => 'nullable|exists:users,id',
+            'samples.*.assigned_to_user_id' => 'nullable|exists:users,id',
             'samples.*.barcode'             => 'nullable|string|max:100',
             'samples.*.collected_at'        => 'required|date',
             'samples.*.quantity'            => 'required|integer|min:1|max:20',
@@ -171,9 +170,9 @@ class LabSampleController extends Controller
                         'lab_sample_id'       => $sample->id,
                         'lab_test_profile_id' => $sampleData['lab_test_profile_id'],
                         'requested_by'        => auth()->id(),
-                        'assigned_to'         => !empty($sampleData['professional_id']) ? $sampleData['professional_id'] : null,
+                        'assigned_to_user_id' => !empty($sampleData['assigned_to_user_id']) ? (int) $sampleData['assigned_to_user_id'] : null,
                         'priority'            => $request->priority,
-                        'status'              => !empty($sampleData['professional_id']) ? 'assigned' : 'pending',
+                        'status'              => !empty($sampleData['assigned_to_user_id']) ? 'assigned' : 'pending',
                         'notes'               => $request->notes ?? null,
                     ]);
                 }
@@ -229,6 +228,206 @@ class LabSampleController extends Controller
         ]);
     }
 
+    public function showCollectForm(LabSample $sample): Response
+    {
+        $sample->load([
+            'patient',
+            'sampleType',
+            'serviceRequestDetail.medicalService',
+            'serviceRequestDetail.professional',
+            'serviceRequestDetail.serviceRequest.details.medicalService',
+        ]);
+
+        $serviceRequest = $sample->serviceRequestDetail?->serviceRequest;
+        $patient = $sample->patient;
+        $requestedStudy = $sample->serviceRequestDetail?->medicalService?->name;
+        $latestCollection = $sample->collections()
+            ->orderByDesc('collected_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $sampleTypes = LabSampleType::active()
+            ->orderBy('name')
+            ->get(['id', 'name', 'code', 'container_type'])
+            ->values();
+
+        $sampleTypeIdsByCode = $sampleTypes
+            ->pluck('id', 'code')
+            ->mapWithKeys(fn ($id, $code) => [(string) $code => (int) $id])
+            ->all();
+
+        $suggestedSampleTypeId = $this->inferSampleTypeIdFromStudyName($requestedStudy, $sampleTypeIdsByCode);
+        $effectiveSampleTypeId = $sample->lab_sample_type_id ?: $suggestedSampleTypeId;
+        $suggestedSampleTypeName = $sampleTypes->firstWhere('id', $effectiveSampleTypeId)?->name;
+
+        $studies = $serviceRequest
+            ? $serviceRequest->details->map(function (ServiceRequestDetail $detail) {
+                return [
+                    'id' => $detail->id,
+                    'name' => $detail->medicalService?->name,
+                ];
+            })->values()->all()
+            : [];
+
+        $patientAge = null;
+        if ($patient && $patient->date_of_birth) {
+            $patientAge = $patient->date_of_birth->age;
+        }
+
+        return Inertia::render('laboratory/samples/Collect', [
+            'sample' => [
+                'id' => $sample->id,
+                'sample_number' => $sample->sample_number,
+                'status' => $sample->status,
+                'patient' => $patient ? [
+                    'id' => $patient->id,
+                    'full_name' => $patient->full_name,
+                    'document' => $patient->document_number,
+                    'age' => $patientAge,
+                    'gender' => $patient->gender,
+                ] : null,
+                'request' => $serviceRequest ? [
+                    'id' => $serviceRequest->id,
+                    'request_number' => $serviceRequest->request_number,
+                    'priority' => $serviceRequest->priority,
+                ] : null,
+                'requesting_professional' => $sample->serviceRequestDetail?->professional?->full_name,
+                'requested_study' => $requestedStudy,
+                'studies' => $studies,
+                'current_sample_type' => $sample->sampleType?->name,
+                'current_sample_type_id' => $sample->lab_sample_type_id,
+                'suggested_sample_type_id' => $effectiveSampleTypeId,
+                'suggested_sample_type_name' => $suggestedSampleTypeName,
+                'barcode' => $sample->barcode,
+                'initial_collection' => $latestCollection ? [
+                    'collected_at' => $latestCollection->collected_at,
+                    'container_type' => $latestCollection->container_type,
+                    'volume' => $latestCollection->volume,
+                    'volume_unit' => $latestCollection->volume_unit,
+                    'sample_condition' => $latestCollection->sample_condition,
+                    'collection_site' => $latestCollection->collection_site,
+                    'collection_notes' => $latestCollection->collection_notes,
+                ] : null,
+            ],
+            'sampleTypes' => $sampleTypes,
+        ]);
+    }
+
+    private function inferSampleTypeIdFromStudyName(?string $studyName, array $sampleTypeIdsByCode): ?int
+    {
+        if (!$studyName) {
+            return null;
+        }
+
+        $name = Str::lower($studyName);
+
+        if (str_contains($name, 'orina')) {
+            return $sampleTypeIdsByCode['URINE'] ?? $sampleTypeIdsByCode['URINE24H'] ?? null;
+        }
+
+        if (str_contains($name, 'heces') || str_contains($name, 'copro')) {
+            return $sampleTypeIdsByCode['STOOL'] ?? null;
+        }
+
+        if (str_contains($name, 'esputo')) {
+            return $sampleTypeIdsByCode['SPUTUM'] ?? null;
+        }
+
+        if (str_contains($name, 'hisopado') && str_contains($name, 'nas')) {
+            return $sampleTypeIdsByCode['NASAL_SWAB'] ?? null;
+        }
+
+        if (str_contains($name, 'hisopado') || str_contains($name, 'farin')) {
+            return $sampleTypeIdsByCode['THROAT_SWAB'] ?? null;
+        }
+
+        if (str_contains($name, 'lcr') || str_contains($name, 'cefalorra')) {
+            return $sampleTypeIdsByCode['CSF'] ?? null;
+        }
+
+        if (str_contains($name, 'sinov')) {
+            return $sampleTypeIdsByCode['SYNOVIAL'] ?? null;
+        }
+
+        if (str_contains($name, 'biops')) {
+            return $sampleTypeIdsByCode['BIOPSY'] ?? null;
+        }
+
+        if (str_contains($name, 'coagul') || str_contains($name, 'plasma')) {
+            return $sampleTypeIdsByCode['PLASMA'] ?? null;
+        }
+
+        if (str_contains($name, 'suero')) {
+            return $sampleTypeIdsByCode['SERUM'] ?? null;
+        }
+
+        return $sampleTypeIdsByCode['BLOOD'] ?? null;
+    }
+
+    private function resolveTestProfileForService(?ServiceRequestDetail $detail): ?LabTestProfile
+    {
+        if (!$detail || !$detail->medical_service_id) {
+            return null;
+        }
+
+        $directProfile = LabTestProfile::query()
+            ->where('medical_service_id', $detail->medical_service_id)
+            ->where('status', 'active')
+            ->first();
+
+        if ($directProfile) {
+            return $directProfile;
+        }
+
+        $studyName = Str::lower((string) ($detail->medicalService?->name ?? ''));
+        if ($studyName === '') {
+            return null;
+        }
+
+        $candidateNames = [];
+
+        if (str_contains($studyName, 'hemograma')) {
+            $candidateNames[] = 'Hemograma Completo';
+        }
+
+        if (str_contains($studyName, 'gluc')) {
+            $candidateNames[] = 'Glucemia';
+        }
+
+        if (str_contains($studyName, 'lipid') || str_contains($studyName, 'colesterol') || str_contains($studyName, 'triglicer')) {
+            $candidateNames[] = 'Perfil Lipídico';
+        }
+
+        if (str_contains($studyName, 'coagul') || str_contains($studyName, 'inr') || str_contains($studyName, 'tppa')) {
+            $candidateNames[] = 'Coagulograma';
+        }
+
+        if (str_contains($studyName, 'orina') || str_contains($studyName, 'uroan')) {
+            $candidateNames[] = 'Orina Completa';
+        }
+
+        if (str_contains($studyName, 'hepat') || str_contains($studyName, 'tgo') || str_contains($studyName, 'tgp') || str_contains($studyName, 'ggt')) {
+            $candidateNames[] = 'Hepatograma';
+        }
+
+        if (str_contains($studyName, 'ren') || str_contains($studyName, 'creatin') || str_contains($studyName, 'urea')) {
+            $candidateNames[] = 'Función Renal';
+        }
+
+        foreach ($candidateNames as $candidateName) {
+            $profile = LabTestProfile::query()
+                ->where('status', 'active')
+                ->where('name', $candidateName)
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+        }
+
+        return null;
+    }
+
     public function edit(LabSample $sample): Response
     {
         $sampleTypes = LabSampleType::active()->orderBy('name')->get();
@@ -254,7 +453,20 @@ class LabSampleController extends Controller
             'barcode' => ['nullable', 'string', 'max:100', Rule::unique('lab_samples')->ignore($sample->id)],
             'collected_at' => 'required|date',
             'received_at' => 'nullable|date',
-            'status' => ['required', Rule::in(['received', 'processing', 'completed', 'rejected'])],
+            'status' => ['required', Rule::in([
+                'pending',
+                'pending_collection',
+                'collected',
+                'received',
+                'processing',
+                'in_analysis',
+                'pending_validation',
+                'validated',
+                'completed',
+                'reported',
+                'rejected',
+                'cancelled',
+            ])],
             'remarks' => 'nullable|string',
         ]);
 
@@ -263,6 +475,185 @@ class LabSampleController extends Controller
         return redirect()
             ->route('laboratory.samples.index')
             ->with('success', 'Muestra actualizada exitosamente.');
+    }
+
+    public function collect(Request $request, LabSample $sample): RedirectResponse
+    {
+        if (!in_array($sample->status, ['pending', 'pending_collection', 'collected'], true)) {
+            return redirect()
+                ->back()
+                ->with('error', 'Solo se puede registrar o editar la toma en estado pendiente o tomada.');
+        }
+
+        $validated = $request->validate([
+            'collected_at' => ['required', 'date'],
+            'lab_sample_type_id' => ['required', 'exists:lab_sample_types,id'],
+            'container_type' => ['nullable', 'string', 'max:100'],
+            'volume' => ['nullable', 'numeric', 'min:0'],
+            'volume_unit' => ['nullable', 'string', 'max:20'],
+            'sample_condition' => ['nullable', 'string', 'max:50'],
+            'collection_site' => ['nullable', 'string', 'max:100'],
+            'collection_notes' => ['nullable', 'string'],
+            'barcode' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $sampleType = LabSampleType::query()->find((int) $validated['lab_sample_type_id']);
+        $isEditingCollection = $sample->status === 'collected';
+
+        DB::transaction(function () use ($sample, $validated, $sampleType, $isEditingCollection) {
+            $payload = [
+                'collected_by' => auth()->id(),
+                'collected_at' => $validated['collected_at'],
+                'sample_type' => $sampleType?->name,
+                'container_type' => $validated['container_type'] ?? null,
+                'volume' => $validated['volume'] ?? null,
+                'volume_unit' => $validated['volume_unit'] ?? null,
+                'sample_condition' => $validated['sample_condition'] ?? null,
+                'collection_site' => $validated['collection_site'] ?? null,
+                'collection_notes' => $validated['collection_notes'] ?? null,
+            ];
+
+            if ($isEditingCollection) {
+                $latestCollection = $sample->collections()
+                    ->orderByDesc('collected_at')
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($latestCollection) {
+                    $latestCollection->update($payload);
+                } else {
+                    LabSampleCollection::create([
+                        'lab_sample_id' => $sample->id,
+                        ...$payload,
+                    ]);
+                }
+            } else {
+                LabSampleCollection::create([
+                    'lab_sample_id' => $sample->id,
+                    ...$payload,
+                ]);
+            }
+
+            $sample->update([
+                'status' => 'collected',
+                'lab_sample_type_id' => $validated['lab_sample_type_id'],
+                'collected_at' => $validated['collected_at'],
+                'collected_by' => auth()->id(),
+                'barcode' => $validated['barcode'] ?? $sample->barcode,
+            ]);
+        });
+
+        return redirect()
+            ->route('medical.laboratory.dashboard')
+            ->with('success', $isEditingCollection ? 'Toma de muestra actualizada correctamente.' : 'Muestra tomada correctamente.');
+    }
+
+    public function receive(LabSample $sample): RedirectResponse
+    {
+        if ($sample->status !== 'collected') {
+            return redirect()
+                ->back()
+                ->with('error', 'Solo se pueden recibir muestras en estado tomada.');
+        }
+
+        $sample->update([
+            'status' => 'received',
+            'received_at' => now(),
+            'received_by' => auth()->id(),
+        ]);
+
+        return redirect()
+            ->back()
+            ->with('success', 'Muestra recibida correctamente.');
+    }
+
+    public function reject(Request $request, LabSample $sample): RedirectResponse
+    {
+        if (!in_array($sample->status, ['collected', 'received'], true)) {
+            return redirect()
+                ->back()
+                ->with('error', 'Solo se pueden rechazar muestras tomadas o recibidas.');
+        }
+
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $sample->update([
+            'status' => 'rejected',
+            'remarks' => $validated['remarks'],
+        ]);
+
+        return redirect()
+            ->back()
+            ->with('success', 'Muestra rechazada correctamente.');
+    }
+
+    public function startAnalysis(LabSample $sample): RedirectResponse
+    {
+        if (!auth()->user()?->can('start-lab-analysis')) {
+            return redirect()
+                ->back()
+                ->with('error', 'No tiene permisos para iniciar análisis de laboratorio.');
+        }
+
+        if ($sample->status !== 'received') {
+            return redirect()
+                ->back()
+                ->with('error', 'Solo se puede iniciar análisis en muestras recibidas.');
+        }
+
+        $sample->load(['serviceRequestDetail.medicalService', 'testRequests']);
+
+        $testRequest = $sample->testRequests()
+            ->whereIn('status', ['pending', 'assigned', 'in_process'])
+            ->first();
+
+        if (!$testRequest) {
+            $detail = $sample->serviceRequestDetail;
+            if (!$detail || !$detail->medical_service_id) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'No hay solicitud de servicio asociada a esta muestra.');
+            }
+
+            $testProfile = $this->resolveTestProfileForService($detail);
+
+            if (!$testProfile) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'El servicio solicitado no tiene perfil configurado. Configure o edite perfiles en Laboratorio > Perfiles (/medical/laboratory/test-profiles).');
+            }
+
+            $testRequest = DB::transaction(function () use ($sample, $detail, $testProfile) {
+                $assignedToUserId = null;
+                
+                if ($detail->professional_id) {
+                    $professional = Professional::query()->find($detail->professional_id);
+                    $assignedToUserId = $professional?->user_id;
+                }
+
+                return LabTestRequest::create([
+                    'lab_sample_id' => $sample->id,
+                    'lab_test_profile_id' => $testProfile->id,
+                    'requested_by' => auth()->id(),
+                    'assigned_to_user_id' => $assignedToUserId,
+                    'status' => 'pending',
+                    'notes' => 'Auto-creada al iniciar análisis',
+                ]);
+            });
+        }
+
+        $sample->update(['status' => 'in_analysis']);
+
+        $testRequest->update([
+            'status' => 'in_process',
+            'started_at' => $testRequest->started_at ?? now(),
+        ]);
+
+        return redirect()
+            ->route('medical.laboratory.results.index', ['test_request_id' => $testRequest->id])
+            ->with('success', 'Análisis iniciado. Complete los parámetros del estudio.');
     }
 
     public function destroy(LabSample $sample): RedirectResponse

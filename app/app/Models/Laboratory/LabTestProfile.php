@@ -8,7 +8,19 @@ class LabTestProfile extends Model
 {
     use SoftDeletes;
     protected $fillable = [
-        'medical_service_id', 'name', 'code', 'description', 'status'
+        'medical_service_id',
+        'name',
+        'code',
+        'description',
+        'status',
+        'validation_type',
+        'validation_target',
+        'validation_tolerance',
+    ];
+
+    protected $casts = [
+        'validation_target' => 'decimal:2',
+        'validation_tolerance' => 'decimal:2',
     ];
 
     public function parameters() {

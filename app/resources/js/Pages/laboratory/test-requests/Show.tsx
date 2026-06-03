@@ -1,9 +1,9 @@
 import { Head, Link } from '@inertiajs/react';
-import AppLayout from '../../../layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../Components/ui/card';
-import { Button } from '../../../Components/ui/button';
-import { Badge } from '../../../Components/ui/badge';
-import { ArrowLeft, ClipboardList, User, Calendar, Clock, AlertCircle } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
 
 interface TestRequest {
   id: number;
@@ -50,9 +50,10 @@ interface Props {
 
 export default function TestRequestShow({ testRequest }: Props) {
   const getPriorityBadge = (priority: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'paid' | 'pending' | 'cancelled';
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       routine: { variant: 'default', label: 'Rutina' },
-      urgent: { variant: 'warning', label: 'Urgente' },
+      urgent: { variant: 'pending', label: 'Urgente' },
       stat: { variant: 'destructive', label: 'STAT' },
     };
     const config = variants[priority] || variants.routine;
@@ -60,12 +61,13 @@ export default function TestRequestShow({ testRequest }: Props) {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'paid' | 'pending' | 'cancelled';
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       pending: { variant: 'secondary', label: 'Pendiente' },
       assigned: { variant: 'default', label: 'Asignada' },
-      in_process: { variant: 'warning', label: 'En Proceso' },
-      completed: { variant: 'success', label: 'Completada' },
-      validated: { variant: 'success', label: 'Validada' },
+      in_process: { variant: 'pending', label: 'En Proceso' },
+      completed: { variant: 'paid', label: 'Completada' },
+      validated: { variant: 'paid', label: 'Validada' },
       cancelled: { variant: 'destructive', label: 'Cancelada' },
     };
     const config = variants[status] || variants.pending;
@@ -88,9 +90,9 @@ export default function TestRequestShow({ testRequest }: Props) {
 
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <ClipboardList className="h-8 w-8 text-primary" />
+         
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">
+              <h1 className="text-lg font-bold tracking-tight">
                 Solicitud #{testRequest.id}
               </h1>
               <p className="text-sm text-muted-foreground">

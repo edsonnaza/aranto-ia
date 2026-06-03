@@ -2,13 +2,26 @@ import type { NavItem } from '@/types';
 import type { NavigationItem } from '@/utils/navigation';
 // Helper para convertir NavigationItem[] a NavItem[]
 function navigationToNavItems(items: NavigationItem[]): NavItem[] {
-    return items.map((item) => ({
-        title: item.title,
-        href: typeof item.href === 'object' && item.href?.url ? item.href.url : item.href ?? '',
-        icon: item.icon ?? null,
-        isActive: item.isActive,
-        items: item.items ? navigationToNavItems(item.items) : undefined,
-    }))
+    return items.map((item) => {
+        let href: NavItem['href'] | undefined = undefined;
+        if (typeof item.href === 'object' && item.href?.url) {
+            href = item.href.url;
+        } else if (typeof item.href === 'string') {
+            href = item.href;
+        }
+        
+        // Si no tiene href pero tiene items (es un contenedor), asignar '#'
+        // Si tiene href, usar ese. Si no tiene nada, asignar '/dashboard'
+        const finalHref = href || (item.items && item.items.length > 0 ? '#' : '/dashboard');
+        
+        return {
+            title: item.title,
+            href: finalHref,
+            icon: item.icon ?? null,
+            isActive: item.isActive,
+            items: item.items ? navigationToNavItems(item.items) : undefined,
+        };
+    });
 }
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
