@@ -1,0 +1,120 @@
+# name: CI/CD Pipeline
+
+# on:
+#   push:
+#     branches: [main, develop]
+#   pull_request:
+#     branches: [main, develop]
+
+# env:
+#   APP_KEY: base64:YPkK196N8T6BUlyBfUUjNt+g30hMXIGb34Ia1I3ZsP0=
+#   DB_CONNECTION: mysql
+#   DB_HOST: 127.0.0.1
+#   DB_PORT: 3306
+#   DB_DATABASE: aranto_test
+#   DB_USERNAME: root
+#   DB_PASSWORD: root
+#   MYSQL_ROOT_PASSWORD: root
+
+# jobs:
+#   setup:
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#     - uses: actions/checkout@v3
+    
+#     - name: Setup PHP
+#       uses: shivammathur/setup-php@v2
+#       with:
+#         php-version: '8.4'
+#         extensions: mysql, pdo, pdo_mysql, zip, curl
+    
+#     - name: Get Composer cache directory
+#       id: composer-cache
+#       run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+    
+#     - name: Cache composer dependencies
+#       uses: actions/cache@v3
+#       with:
+#         path: ${{ steps.composer-cache.outputs.dir }}
+#         key: ${{ runner.os }}-composer-${{ hashFiles('app/composer.lock') }}
+#         restore-keys: ${{ runner.os }}-composer-
+    
+#     - name: Install dependencies
+#       run: |
+#         cd app
+#         composer install --no-interaction --prefer-dist
+    
+#     - name: Generate APP_KEY
+#       run: |
+#         cd app
+#         echo "APP_KEY=${{ env.APP_KEY }}" >> ../.env
+    
+#     - name: Start MySQL
+#       run: |
+#         sudo systemctl start mysql
+#         mysql -e "CREATE DATABASE aranto_test;" -uroot -proot
+    
+#     - name: Run migrations
+#       run: |
+#         cd app
+#         php artisan migrate --no-interaction
+    
+#     - name: Run tests
+#       run: |
+#         cd app
+#         php artisan test
+#       continue-on-error: true
+    
+#     - name: Check PHP Syntax
+#       run: |
+#         cd app
+#         find app tests -name "*.php" -exec php -l {} +
+    
+#     - name: Code style check (Laravel)
+#       run: |
+#         cd app
+#         composer require --dev laravel/pint
+#         php artisan pint --test
+#       continue-on-error: true
+
+#   deploy-dev:
+#     needs: setup
+#     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#     - uses: actions/checkout@v3
+    
+#     - name: Deploy to Railway (Development)
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#       run: |
+#         # Instalar Railway CLI
+#         npm install -g @railway/cli
+        
+#         # Link a proyecto de Railway
+#         railway link --token ${{ secrets.RAILWAY_TOKEN }} --project ${{ secrets.RAILWAY_DEV_PROJECT_ID }}
+        
+#         # Deploy
+#         railway up --detach
+        
+#         # Run migrations
+#         railway run php artisan migrate --force
+
+#   deploy-prod:
+#     needs: setup
+#     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#     - uses: actions/checkout@v3
+    
+#     - name: Deploy to Railway (Production)
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#       run: |
+#         npm install -g @railway/cli
+#         railway link --token ${{ secrets.RAILWAY_TOKEN }} --project ${{ secrets.RAILWAY_PROD_PROJECT_ID }}
+#         railway up --detach
+#         railway run php artisan migrate --force
