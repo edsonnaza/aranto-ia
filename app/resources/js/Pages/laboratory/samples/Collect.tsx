@@ -191,19 +191,18 @@ export default function CollectSample({ sample, sampleTypes }: CollectPageProps)
             <h2 className="text-base font-semibold text-gray-900 mb-4">Datos de Extracción</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y hora de extracción *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y hora de extracción</label>
                 <input
                   type="datetime-local"
                   value={data.collected_at}
                   onChange={(e) => setData('collected_at', e.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  required
                 />
                 {errors.collected_at && <p className="text-xs text-red-600 mt-1">{errors.collected_at}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de muestra *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de muestra</label>
                 <Popover open={sampleTypeOpen} onOpenChange={setSampleTypeOpen}>
                   <PopoverTrigger asChild>
                     <Button

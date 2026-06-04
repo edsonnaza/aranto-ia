@@ -33,6 +33,9 @@ Route::middleware(['auth', 'verified'])
         Route::post('samples/{sample}/collect', [LabSampleController::class, 'collect'])->name('samples.collect');
         Route::post('samples/{sample}/receive', [LabSampleController::class, 'receive'])->name('samples.receive');
         Route::post('samples/{sample}/reject', [LabSampleController::class, 'reject'])->name('samples.reject');
+        Route::get('samples/{sample}/start-analysis', [LabSampleController::class, 'showStartAnalysisForm'])
+            ->middleware('permission:start-lab-analysis')
+            ->name('samples.start-analysis-form');
         Route::post('samples/{sample}/start-analysis', [LabSampleController::class, 'startAnalysis'])
             ->middleware('permission:start-lab-analysis')
             ->name('samples.start-analysis');

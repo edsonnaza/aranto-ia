@@ -14,7 +14,20 @@ return new class extends Migration {
             $table->dateTime('collected_at')->nullable();
             $table->dateTime('received_at')->nullable();
             $table->foreignId('received_by')->nullable()->constrained('users');
-            $table->enum('status', ['pending', 'received', 'processing', 'completed', 'rejected']);
+            $table->enum('status', [
+                'pending',
+                'pending_collection',
+                'collected',
+                'received',
+                'processing',
+                'in_analysis',
+                'pending_validation',
+                'validated',
+                'completed',
+                'reported',
+                'rejected',
+                'cancelled',
+            ]);
             $table->text('remarks')->nullable();
             $table->timestamps();
             $table->softDeletes();

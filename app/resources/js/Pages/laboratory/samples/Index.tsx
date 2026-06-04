@@ -4,7 +4,26 @@ import { ColumnDef } from '@tanstack/react-table'
 import AppLayout from '@/layouts/app-layout'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { MoreHorizontal } from 'lucide-react'
 import { useLabSamples } from '@/hooks/useLabSamples'
 import SampleForm from './SampleForm'
 import { toast } from 'sonner'
@@ -27,6 +46,15 @@ interface Sample {
   barcode?: string
   status: string
   collected_at: string | null
+  latest_collection?: {
+    collected_at?: string | null
+    container_type?: string | null
+    volume?: string | number | null
+    volume_unit?: string | null
+    sample_condition?: string | null
+    collection_site?: string | null
+    collection_notes?: string | null
+  } | null
   patient?: { first_name: string; last_name: string }
   sample_type?: { name: string }
   service_request_detail?: {
@@ -69,6 +97,28 @@ const getStatusConfig = (status: string) => {
   return { label: status, className: 'bg-gray-100 text-gray-800' }
 }
 
+const getSampleConditionRisk = (sampleCondition?: string | null) => {
+  const value = (sampleCondition || '').trim().toLowerCase()
+
+  if (!value || value === 'adecuada') {
+    return null
+  }
+
+  if (['hemolizada', 'coagulada', 'insuficiente', 'contaminada'].includes(value)) {
+    return {
+      title: 'Condicion de muestra observada',
+      description: `La muestra fue registrada como "${sampleCondition}". Revise si corresponde confirmar la recepcion o rechazarla.`,
+      className: 'border-amber-300 bg-amber-50 text-amber-900',
+    }
+  }
+
+  return {
+    title: 'Revision recomendada',
+    description: `La condicion registrada es "${sampleCondition}". Verifique si la muestra puede continuar en el flujo.`,
+    className: 'border-slate-300 bg-slate-50 text-slate-800',
+  }
+}
+
 export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editSample, setEditSample] = useState<Sample | null>(null)
@@ -78,6 +128,13 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
   const [rejectSample, setRejectSample] = useState<Sample | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectObservation, setRejectObservation] = useState('')
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false)
+  const [receiveSample, setReceiveSample] = useState<Sample | null>(null)
+  const [receiveAlertOpen, setReceiveAlertOpen] = useState(false)
+  const [rejectAlertOpen, setRejectAlertOpen] = useState(false)
+  const [pendingRejectSample, setPendingRejectSample] = useState<Sample | null>(null)
+
+  const receiveConditionRisk = getSampleConditionRisk(receiveSample?.latest_collection?.sample_condition)
 
   const { destroy, loading } = useLabSamples()
 
@@ -101,15 +158,44 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
   }
 
   const handleReceive = (sample: Sample) => {
-    router.post(`/medical/laboratory/samples/${sample.id}/receive`, {}, {
+    setReceiveSample(sample)
+    setReceiveModalOpen(true)
+  }
+
+  const handleConfirmReceive = () => {
+    if (!receiveSample) return
+
+    router.post(`/medical/laboratory/samples/${receiveSample.id}/receive`, {}, {
       preserveScroll: true,
       onSuccess: () => {
         toast.success('Muestra recibida correctamente')
+        setReceiveModalOpen(false)
+        setReceiveSample(null)
       },
     })
   }
 
+  const handleRequestReceiveConfirmation = () => {
+    if (!receiveSample) return
+    setReceiveAlertOpen(true)
+  }
+
+  const handleRequestReject = (sample: Sample) => {
+    setPendingRejectSample(sample)
+    setRejectAlertOpen(true)
+  }
+
+  const handleConfirmRejectAlert = () => {
+    if (!pendingRejectSample) return
+
+    setRejectAlertOpen(false)
+    handleReject(pendingRejectSample)
+    setPendingRejectSample(null)
+  }
+
   const handleReject = (sample: Sample) => {
+    setReceiveModalOpen(false)
+    setReceiveSample(null)
     setRejectSample(sample)
     setRejectReason('')
     setRejectObservation('')
@@ -132,15 +218,6 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
         toast.success('Muestra rechazada correctamente')
         setRejectModalOpen(false)
         setRejectSample(null)
-      },
-    })
-  }
-
-  const handleStartAnalysis = (sample: Sample) => {
-    router.post(`/medical/laboratory/samples/${sample.id}/start-analysis`, {}, {
-      preserveScroll: true,
-      onSuccess: () => {
-        toast.success('Análisis iniciado')
       },
     })
   }
@@ -227,61 +304,97 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
     },
     {
       id: 'actions',
-      header: 'Acciones',
-      cell: ({ row }) => (
-        <div className="text-right">
-          {row.original.status === 'pending_collection' && (
-            <Link
-              href={`/medical/laboratory/samples/${row.original.id}/collect`}
-              className="text-indigo-600 hover:underline mr-2"
-            >
-              Tomar Muestra
-            </Link>
-          )}
-          {row.original.status === 'collected' && (
-            <>
+      header: () => <span className="sr-only">Acciones</span>,
+      cell: ({ row }) => {
+        const sample = row.original
+        const canEditSample = ['pending_collection', 'collected'].includes(sample.status)
+
+        const primaryAction = (() => {
+          if (sample.status === 'pending_collection') {
+            return (
               <Link
-                href={`/medical/laboratory/samples/${row.original.id}/collect`}
-                className="text-amber-600 hover:underline mr-2"
+                href={`/medical/laboratory/samples/${sample.id}/collect`}
+                className="cursor-pointer text-sm text-indigo-600 hover:underline"
               >
-                Editar Toma
+                Tomar muestra
               </Link>
+            )
+          }
+          if (sample.status === 'collected') {
+            return (
               <button
-                onClick={() => handleReceive(row.original)}
-                className="text-emerald-600 hover:underline mr-2"
+                onClick={() => handleReceive(sample)}
+                className="cursor-pointer text-sm text-emerald-600 hover:underline"
               >
                 Recibir
               </button>
-              <button
-                onClick={() => handleReject(row.original)}
-                className="text-red-600 hover:underline mr-2"
+            )
+          }
+          if (sample.status === 'received') {
+            return (
+              <Link
+                href={`/medical/laboratory/samples/${sample.id}/start-analysis`}
+                className="cursor-pointer text-sm text-blue-600 hover:underline"
               >
-                Rechazar
+                Iniciar análisis
+              </Link>
+            )
+          }
+          if (['in_analysis', 'pending_validation'].includes(sample.status)) {
+            return (
+              <button
+                onClick={() => router.post(`/medical/laboratory/samples/${sample.id}/start-analysis`)}
+                className="cursor-pointer text-sm text-blue-600 hover:underline"
+              >
+                Continuar análisis
               </button>
-            </>
-          )}
-          {row.original.status === 'received' && (
-            <button
-              onClick={() => handleStartAnalysis(row.original)}
-              className="text-blue-600 hover:underline mr-2"
-            >
-              Iniciar Análisis
-            </button>
-          )}
-          <button
-            onClick={() => handleEdit(row.original)}
-            className="text-emerald-600 dark:text-emerald-400 hover:underline mr-2"
-          >
-            Editar
-          </button>
-          <button
-            onClick={() => handleDelete(row.original)}
-            className="text-red-600 dark:text-red-400 hover:underline"
-          >
-            Eliminar
-          </button>
-        </div>
-      ),
+            )
+          }
+          return null
+        })()
+
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {primaryAction}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <span className="sr-only">Abrir menú</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {sample.status === 'collected' && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/medical/laboratory/samples/${sample.id}/collect`}>Editar muestra</Link>
+                  </DropdownMenuItem>
+                )}
+                {canEditSample && sample.status !== 'collected' && (
+                  <DropdownMenuItem onClick={() => handleEdit(sample)}>Editar muestra</DropdownMenuItem>
+                )}
+                {sample.status === 'collected' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleReject(sample)}
+                      className="text-amber-600 focus:text-amber-600"
+                    >
+                      Rechazar
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handleDelete(sample)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  Eliminar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )
+      },
     },
   ]
 
@@ -391,6 +504,82 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       />
 
       <Modal
+        open={receiveModalOpen}
+        onClose={() => {
+          setReceiveModalOpen(false)
+          setReceiveSample(null)
+        }}
+        contentClassName="max-w-3xl p-0"
+      >
+        <div className="p-7 space-y-5 sm:p-8">
+          <h3 className="pr-8 text-lg font-semibold text-gray-900">Confirmar recepción de muestra</h3>
+          <p className="max-w-2xl text-sm text-gray-500">
+            Revise los datos de extracción antes de marcar la muestra como recibida en laboratorio.
+          </p>
+
+          {receiveConditionRisk && (
+            <div className={`rounded-lg border px-4 py-3 ${receiveConditionRisk.className}`}>
+              <p className="text-sm font-semibold">{receiveConditionRisk.title}</p>
+              <p className="mt-1 text-sm">{receiveConditionRisk.description}</p>
+            </div>
+          )}
+
+          <div className="grid gap-3 rounded-xl border bg-slate-50 p-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
+            <div><span className="text-gray-500">Muestra:</span> <span className="font-medium">{receiveSample?.sample_number || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Paciente:</span> <span className="font-medium">{receiveSample?.patient ? `${receiveSample.patient.first_name} ${receiveSample.patient.last_name}` : 'N/A'}</span></div>
+            <div><span className="text-gray-500">Estudio:</span> <span className="font-medium">{receiveSample?.service_request_detail?.medical_service?.name || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Fecha y hora de extracción:</span> <span className="font-medium">{formatCollectedAt(receiveSample?.latest_collection?.collected_at || receiveSample?.collected_at)}</span></div>
+            <div><span className="text-gray-500">Tipo de muestra:</span> <span className="font-medium">{receiveSample?.sample_type?.name || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Contenedor utilizado:</span> <span className="font-medium">{receiveSample?.latest_collection?.container_type || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Volumen:</span> <span className="font-medium">{receiveSample?.latest_collection?.volume != null ? `${receiveSample.latest_collection.volume} ${receiveSample.latest_collection.volume_unit || ''}`.trim() : 'N/A'}</span></div>
+            <div><span className="text-gray-500">Estado de la muestra:</span> <span className="font-medium">{receiveSample?.latest_collection?.sample_condition || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Sitio de colección:</span> <span className="font-medium">{receiveSample?.latest_collection?.collection_site || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Código de barras:</span> <span className="font-medium">{receiveSample?.barcode || 'N/A'}</span></div>
+            <div><span className="text-gray-500">Observaciones:</span> <span className="font-medium">{receiveSample?.latest_collection?.collection_notes || 'Sin observaciones'}</span></div>
+          </div>
+
+          <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 lg:flex-row lg:items-center lg:justify-between">
+            <p className="max-w-xl text-xs leading-5 text-slate-500">
+              Confirmar recepción continúa el flujo. Rechazar abre el registro formal de rechazo.
+            </p>
+
+            <div className="flex flex-1 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setReceiveModalOpen(false)
+                  setReceiveSample(null)
+                }}
+                className="min-w-[140px] flex-1 sm:flex-none"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => receiveSample && handleRequestReject(receiveSample)}
+                className={`min-w-[180px] flex-1 sm:flex-none ${
+                  receiveConditionRisk
+                    ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
+                    : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+                }`}
+              >
+                {receiveConditionRisk ? 'Sugerido: rechazar muestra' : 'Rechazar muestra'}
+              </Button>
+              <Button
+                type="button"
+                onClick={handleRequestReceiveConfirmation}
+                className="min-w-[180px] flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
+              >
+                Confirmar recepción
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={rejectModalOpen}
         onClose={() => {
           setRejectModalOpen(false)
@@ -450,6 +639,47 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
           </div>
         </div>
       </Modal>
+
+      <AlertDialog open={rejectAlertOpen} onOpenChange={(open) => {
+        setRejectAlertOpen(open)
+        if (!open) setPendingRejectSample(null)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar cambio a rechazo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRejectSample
+                ? `La muestra ${pendingRejectSample.sample_number} saldrá del flujo de recepción y pasará al formulario de rechazo para registrar motivo y observación.`
+                : 'Se abrirá el formulario de rechazo para completar la incidencia.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRejectAlert}>
+              Sí, continuar con rechazo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={receiveAlertOpen} onOpenChange={setReceiveAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar recepción?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {receiveSample
+                ? `La muestra ${receiveSample.sample_number} se marcará como recibida en laboratorio y podrá continuar al análisis.`
+                : 'Se confirmará la recepción de la muestra.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReceive}>
+              Sí, confirmar recepción
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   )
 }

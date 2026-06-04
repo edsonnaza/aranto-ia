@@ -44,6 +44,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                 $this->phase('FASE 1', 'Configuración Base y Estructuras', function () {
                     $this->call(NavigationPermissionsSeeder::class);
                     $this->call(CashRegisterPermissionsSeeder::class);
+                    $this->call(LaboratoryRolesSeeder::class);
                     
                     // Crear permiso de auditoría
                     $auditPerm = Permission::firstOrCreate([
@@ -63,8 +64,13 @@ class MasterLegacyMigrationSeeder extends Seeder
                 // FASE 2: Datos Básicos de Aranto (sin legacy)
                 $this->phase('FASE 2', 'Datos Básicos de Aranto', function () {
                     $this->call(ServicesSeeder::class);
+                    $this->call(LaboratoryServicesSeeder::class);
                     $this->call(CashRegisterUsersSeeder::class);
                     $this->call(LabSampleTypeSeeder::class);
+                    $this->call(LabEquipmentSeeder::class);
+                    $this->call(LabTestProfileSeeder::class);
+                    $this->call(LabProfilesCoverageSeeder::class);
+                    $this->call(LabReferenceRangeSeeder::class);
                 });
 
                 $this->command->info('✅ Seeding completado SIN datos de legacy');
@@ -80,6 +86,7 @@ class MasterLegacyMigrationSeeder extends Seeder
             $this->phase('FASE 1', 'Configuración Base y Estructuras', function () {
                 $this->call(NavigationPermissionsSeeder::class);
                 $this->call(CashRegisterPermissionsSeeder::class);
+                $this->call(LaboratoryRolesSeeder::class);
                 
                 // Crear permiso de auditoría
                 $auditPerm = Permission::firstOrCreate([
@@ -100,8 +107,13 @@ class MasterLegacyMigrationSeeder extends Seeder
             // FASE 2: Datos Básicos de Aranto (sin legacy)
             $this->phase('FASE 2', 'Datos Básicos de Aranto', function () {
                 $this->call(ServicesSeeder::class);
+                $this->call(LaboratoryServicesSeeder::class);
                 $this->call(CashRegisterUsersSeeder::class);
                 $this->call(LabSampleTypeSeeder::class);
+                $this->call(LabEquipmentSeeder::class);
+                $this->call(LabTestProfileSeeder::class);
+                $this->call(LabProfilesCoverageSeeder::class);
+                $this->call(LabReferenceRangeSeeder::class);
             });
 
             // FASE 3: Migraciones desde Legacy - Maestros

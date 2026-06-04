@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Laboratory;
 use App\Http\Controllers\Controller;
 use App\Models\Laboratory\LabEquipment;
 use App\Models\Laboratory\LabResult;
+use App\Models\Laboratory\LabSample;
 use App\Models\Laboratory\LabTestRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,39 @@ class LabResultController extends Controller
 {
     public function create(Request $request): Response
     {
-        return $this->index($request);
+        $testRequests = LabTestRequest::query()
+            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
+            ->with([
+                'sample.patient',
+                'testProfile.parameters.referenceRanges',
+                'testProfile.parameters.equipmentParameterRanges',
+                'testProfile.profileEquipments.equipment',
+            ])
+            ->orderByDesc('id')
+            ->get();
+
+        $equipments = LabEquipment::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        $initialTestRequestId = $request->integer('test_request_id') ?: null;
+
+        $existingResults = [];
+        if ($initialTestRequestId) {
+            $existingResults = LabResult::where('lab_test_request_id', $initialTestRequestId)
+                ->where('status', 'draft')
+                ->get(['lab_test_parameter_id', 'value', 'equipment_id'])
+                ->keyBy('lab_test_parameter_id')
+                ->map(fn ($r) => ['value' => $r->value, 'equipment_id' => $r->equipment_id])
+                ->all();
+        }
+
+        return Inertia::render('laboratory/results/Create', [
+            'testRequests' => $testRequests,
+            'equipments' => $equipments,
+            'initialTestRequestId' => $initialTestRequestId,
+            'existingResults' => $existingResults,
+        ]);
     }
 
     public function index(Request $request): Response
@@ -57,9 +90,8 @@ class LabResultController extends Controller
 
         return Inertia::render('laboratory/results/Index', [
             'results' => $results,
-            'testRequests' => $testRequests,
-            'equipments' => $equipments,
             'filters' => $request->only(['search', 'status']),
+            'canValidate' => auth()->user()?->hasPermissionTo('validate-lab-results') ?? false,
         ]);
     }
 

@@ -2,6 +2,7 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabValidation;
 use App\Models\Laboratory\LabTestRequest;
 use Illuminate\Http\Request;
@@ -64,13 +65,18 @@ class LabValidationController extends Controller
 
         LabValidation::create($validated);
 
-        // Update test request status
-        LabTestRequest::find($validated['lab_test_request_id'])
+        // Mark results for this request as validated and close the request.
+        LabResult::query()
+            ->where('lab_test_request_id', $validated['lab_test_request_id'])
             ->update(['status' => 'validated']);
 
+        $testRequest = LabTestRequest::query()->find($validated['lab_test_request_id']);
+        $testRequest?->update(['status' => 'completed']);
+        $testRequest?->sample?->update(['status' => 'validated']);
+
         return redirect()
-            ->route('laboratory.validations.index')
-            ->with('success', 'Validación registrada exitosamente.');
+            ->route('medical.laboratory.results.index')
+            ->with('success', 'Resultados validados con éxito.');
     }
 
     public function show(LabValidation $validation): Response
@@ -106,19 +112,23 @@ class LabValidationController extends Controller
         $validation->update($validated);
 
         return redirect()
-            ->route('laboratory.validations.index')
+            ->route('medical.laboratory.validations.index')
             ->with('success', 'Validación actualizada exitosamente.');
     }
 
     public function destroy(LabValidation $validation): RedirectResponse
     {
-        // Revert test request status
-        $validation->testRequest->update(['status' => 'completed']);
+        // Revert validation state back to pending validation.
+        $validation->testRequest->update(['status' => 'in_process']);
+        $validation->sample?->update(['status' => 'pending_validation']);
+        LabResult::query()
+            ->where('lab_test_request_id', $validation->lab_test_request_id)
+            ->update(['status' => 'draft']);
 
         $validation->delete();
 
         return redirect()
-            ->route('laboratory.validations.index')
+            ->route('medical.laboratory.validations.index')
             ->with('success', 'Validación eliminada exitosamente.');
     }
 }

@@ -1,445 +1,285 @@
-import React from 'react'
-import { Head, Link, router } from '@inertiajs/react'
-import { BarChart3, FileText, CheckCircle2, Clock, Beaker } from 'lucide-react'
+import { Head, Link } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
-import Modal from '@/components/ui/Modal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { type BreadcrumbItem } from '@/types'
-import HeadingSmall from '@/components/heading-small'
-import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table'
-import { type ColumnDef } from '@tanstack/react-table'
+import { BarChart3, Beaker, CheckCircle2, Clock, FlaskConical, PieChart } from 'lucide-react'
+
+interface StatData {
+  total_samples: number
+  in_analysis_samples: number
+  pending_validation_samples: number
+  validated_today: number
+  total_results: number
+  total_validations: number
+}
+
+interface StatusDistributionRow {
+  status: string
+  label: string
+  total: number
+}
+
+interface TopServiceRow {
+  service_name: string
+  total: number
+}
+
+interface DailyTrendRow {
+  date: string
+  label: string
+  total: number
+}
+
+interface LatestRequestRow {
+  id: number
+  sample_number: string
+  status: string
+  created_at: string | null
+  patient_name: string | null
+  service_name: string | null
+}
 
 interface LabDashboardProps {
-  stats: {
-    total_samples: number
-    pending_samples: number
-    total_results: number
-    pending_validations: number
-  }
-  samples: {
-    data: Array<{
-      id: number
-      sample_number: string
-      barcode?: string | null
-      status: string
-      collected_at: string | null
-      patient?: { first_name?: string; last_name?: string } | null
-      sample_type?: { name?: string } | null
-      service_request_detail?: {
-        medical_service?: { name?: string } | null
-      } | null
-    }>
-    current_page: number
-    per_page: number
-    total: number
-    last_page: number
-    from: number
-    to: number
-    links: Array<{ url: string | null; label: string; active: boolean }>
-  }
+  stats: StatData
+  statusDistribution: StatusDistributionRow[]
+  topServices: TopServiceRow[]
+  dailyTrend: DailyTrendRow[]
+  latestRequests: LatestRequestRow[]
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-  {
-    label: 'Laboratorio',
-    href: { url: '/medical/laboratory', method: 'get' },
-  },
-  {
-    label: 'Bandeja de Trabajo',
-    active: true,
-  },
-]
-
-const statCards = [
-  {
-    title: 'Total de Muestras',
-    value: '0',
-    icon: Beaker,
-    color: 'bg-blue-500',
-    href: '/medical/laboratory/samples',
-  },
-  {
-    title: 'Muestras Pendientes',
-    value: '0',
-    icon: Clock,
-    color: 'bg-yellow-500',
-    href: '/medical/laboratory/samples',
-  },
-  {
-    title: 'Resultados Registrados',
-    value: '0',
-    icon: CheckCircle2,
-    color: 'bg-green-500',
-    href: '/medical/laboratory/results',
-  },
-  {
-    title: 'Validaciones Pendientes',
-    value: '0',
-    icon: FileText,
-    color: 'bg-orange-500',
-    href: '/medical/laboratory/validations',
-  },
-]
-
-const getStatusConfig = (status: string) => {
-  if (status === 'pending_collection' || status === 'pending') {
-    return { label: 'Pendiente Toma', className: 'bg-yellow-100 text-yellow-800' }
-  }
-  if (status === 'collected') {
-    return { label: 'Tomada', className: 'bg-indigo-100 text-indigo-800' }
-  }
-  if (status === 'received') return { label: 'Recibida', className: 'bg-green-100 text-green-800' }
-  if (status === 'processing' || status === 'in_analysis') return { label: 'En análisis', className: 'bg-blue-100 text-blue-800' }
-  if (status === 'pending_validation') return { label: 'Pendiente Validación', className: 'bg-orange-100 text-orange-800' }
-  if (status === 'validated') return { label: 'Validada', className: 'bg-teal-100 text-teal-800' }
-  if (status === 'reported') return { label: 'Informada', className: 'bg-cyan-100 text-cyan-800' }
-  if (status === 'completed') return { label: 'Completada', className: 'bg-emerald-100 text-emerald-800' }
-  if (status === 'cancelled') return { label: 'Cancelada', className: 'bg-slate-100 text-slate-700' }
-  if (status === 'rejected') return { label: 'Rechazada', className: 'bg-red-100 text-red-800' }
-  return { label: status, className: 'bg-gray-100 text-gray-800' }
+const getStatusLabel = (status: string) => {
+  if (status === 'pending') return 'Pendiente'
+  if (status === 'pending_collection') return 'Pendiente toma'
+  if (status === 'collected') return 'Tomada'
+  if (status === 'received') return 'Recibida'
+  if (status === 'processing') return 'Procesando'
+  if (status === 'in_analysis') return 'En análisis'
+  if (status === 'pending_validation') return 'Pendiente validación'
+  if (status === 'validated') return 'Validada'
+  if (status === 'reported') return 'Informada'
+  if (status === 'completed') return 'Completada'
+  if (status === 'rejected') return 'Rechazada'
+  if (status === 'cancelled') return 'Cancelada'
+  return status
 }
 
-export default function LabDashboard({ stats, samples }: LabDashboardProps) {
-  const [rejectModalOpen, setRejectModalOpen] = React.useState(false)
-  const [rejectSampleId, setRejectSampleId] = React.useState<number | null>(null)
-  const [rejectSampleNumber, setRejectSampleNumber] = React.useState('')
-  const [rejectSamplePatient, setRejectSamplePatient] = React.useState('')
-  const [rejectSampleStudy, setRejectSampleStudy] = React.useState('')
-  const [rejectReason, setRejectReason] = React.useState('')
-  const [rejectObservation, setRejectObservation] = React.useState('')
+const PIE_COLORS = ['#0ea5e9', '#14b8a6', '#22c55e', '#eab308', '#f97316', '#8b5cf6', '#ef4444', '#06b6d4']
 
-  const handleReceive = (sampleId: number) => {
-    router.post(`/medical/laboratory/samples/${sampleId}/receive`, {}, {
-      preserveScroll: true,
-    })
-  }
+const formatDateTime = (value: string | null) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+}
 
-  const handleReject = (sampleId: number) => {
-    const sample = samples.data.find((item) => item.id === sampleId)
-    setRejectSampleId(sampleId)
-    setRejectSampleNumber(sample?.sample_number || '')
-    setRejectSamplePatient(sample?.patient ? `${sample.patient.first_name || ''} ${sample.patient.last_name || ''}`.trim() : '')
-    setRejectSampleStudy(sample?.service_request_detail?.medical_service?.name || '')
-    setRejectReason('')
-    setRejectObservation('')
-    setRejectModalOpen(true)
-  }
-
-  const handleSubmitReject = () => {
-    if (!rejectSampleId || !rejectReason || !rejectObservation.trim()) {
-      return
-    }
-
-    const remarks = `${rejectReason}. ${rejectObservation.trim()}`
-
-    router.post(`/medical/laboratory/samples/${rejectSampleId}/reject`, {
-      remarks,
-    }, {
-      preserveScroll: true,
-      onSuccess: () => {
-        setRejectModalOpen(false)
-        setRejectSampleId(null)
-      },
-    })
-  }
-
-  const formatCollectedAt = (collectedAt?: string | null) => {
-    if (!collectedAt) return '-'
-
-    const date = new Date(collectedAt)
-    if (Number.isNaN(date.getTime())) return '-'
-
-    return date.toLocaleString('es-ES', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    })
-  }
-
-  const columns: ColumnDef<LabDashboardProps['samples']['data'][number]>[] = [
-    {
-      accessorKey: 'sample_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
-      cell: ({ row }) => (
-        <Link
-          href={`/medical/laboratory/samples/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:text-blue-800"
-        >
-          {row.getValue('sample_number') as string}
-        </Link>
-      ),
-    },
-    {
-      accessorKey: 'patient_name',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Paciente" />,
-      cell: ({ row }) => {
-        const patient = row.original.patient
-        const fullName = [patient?.first_name, patient?.last_name].filter(Boolean).join(' ').trim()
-        return <span className="font-medium">{fullName || 'N/A'}</span>
-      },
-    },
-    {
-      accessorKey: 'requested_study',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estudio" />,
-      cell: ({ row }) => <span>{row.original.service_request_detail?.medical_service?.name || 'N/A'}</span>,
-    },
-    {
-      accessorKey: 'sample_type',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de muestra" />,
-      cell: ({ row }) => <span>{row.original.sample_type?.name || 'N/A'}</span>,
-    },
-    {
-      accessorKey: 'barcode',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Barcode" />,
-      cell: ({ row }) => <span className="font-mono text-xs">{row.original.barcode || '-'}</span>,
-    },
-    {
-      accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const config = getStatusConfig(row.original.status)
-        return <span className={`inline-flex px-2 py-1 rounded text-xs ${config.className}`}>{config.label}</span>
-      },
-    },
-    {
-      accessorKey: 'collected_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Recolección" />,
-      cell: ({ row }) => (
-        <span className="text-sm">{formatCollectedAt(row.original.collected_at)}</span>
-      ),
-    },
-    {
-      id: 'actions',
-      header: 'Acciones',
-      cell: ({ row }) => (
-        <div className="text-right">
-          {row.original.status === 'pending_collection' && (
-            <Link
-              href={`/medical/laboratory/samples/${row.original.id}/collect`}
-              className="text-indigo-600 hover:underline mr-2"
-            >
-              Tomar Muestra
-            </Link>
-          )}
-          {row.original.status === 'collected' && (
-            <>
-              <Link
-                href={`/medical/laboratory/samples/${row.original.id}/collect`}
-                className="text-amber-600 hover:underline mr-2"
-              >
-                Editar Toma
-              </Link>
-              <button
-                onClick={() => handleReceive(row.original.id)}
-                className="text-emerald-600 hover:underline mr-2"
-              >
-                Recibir
-              </button>
-              <button
-                onClick={() => handleReject(row.original.id)}
-                className="text-red-600 hover:underline mr-2"
-              >
-                Rechazar
-              </button>
-            </>
-          )}
-          <Link
-            href={`/medical/laboratory/samples/${row.original.id}`}
-            className="text-indigo-600 hover:underline mr-2"
-          >
-            Ver
-          </Link>
-          <Link
-            href="/medical/laboratory/samples"
-            className="text-emerald-600 hover:underline"
-          >
-            Gestionar
-          </Link>
-        </div>
-      ),
-    },
+export default function LabDashboard({ stats, statusDistribution, topServices, dailyTrend, latestRequests }: LabDashboardProps) {
+  const breadcrumbs = [
+    { href: '/medical', title: 'Sistema Médico' },
+    { href: '/medical/laboratory', title: 'Laboratorio', current: true },
   ]
+
+  const maxTrend = Math.max(...dailyTrend.map((row) => row.total), 1)
+  const maxTopService = Math.max(...topServices.map((row) => row.total), 1)
+  const totalStatus = statusDistribution.reduce((acc, row) => acc + row.total, 0)
+
+  let cumulative = 0
+  const pieSlices = statusDistribution.map((row, index) => {
+    const percentage = totalStatus > 0 ? (row.total / totalStatus) * 100 : 0
+    const from = cumulative
+    const to = cumulative + percentage
+    cumulative = to
+    const color = PIE_COLORS[index % PIE_COLORS.length]
+    return `${color} ${from}% ${to}%`
+  })
+
+  const pieBackground = pieSlices.length > 0
+    ? `conic-gradient(${pieSlices.join(', ')})`
+    : 'conic-gradient(#e5e7eb 0% 100%)'
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Laboratorio - Bandeja de Trabajo" />
+      <Head title="Laboratorio - Dashboard" />
 
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-6">
         <div className="flex items-center justify-between">
-          <HeadingSmall
-            title="Bandeja de Trabajo"
-            description="Gestión integral del módulo de laboratorio"
-            icon={<BarChart3 className="h-6 w-6" />}
-          />
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {statCards.map((card, index) => {
-            const Icon = card.icon
-            const value = Object.values(stats)[index] || 0
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className="group"
-              >
-                <Card className="cursor-pointer transition-all hover:shadow-lg hover:scale-105">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      {card.title}
-                    </CardTitle>
-                    <div className={`${card.color} p-2 rounded-lg text-white`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{value}</div>
-                  </CardContent>
-                </Card>
-              </Link>
-            )
-          })}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Link href="/medical/laboratory/samples">
-            <Button variant="outline" className="w-full justify-start">
-              <Beaker className="mr-2 h-4 w-4" />
-              Recepción de Muestras
-            </Button>
-          </Link>
-          <Link href="/medical/laboratory/results">
-            <Button variant="outline" className="w-full justify-start">
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Registrar Resultados
-            </Button>
-          </Link>
-          <Link href="/medical/laboratory/validations">
-            <Button variant="outline" className="w-full justify-start">
-              <FileText className="mr-2 h-4 w-4" />
-              Validar Resultados
-            </Button>
-          </Link>
-          <Link href="/medical/laboratory/reports">
-            <Button variant="outline" className="w-full justify-start">
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Informes
-            </Button>
-          </Link>
-        </div>
-
-        <div className="rounded-xl border bg-white dark:bg-emerald-950 border-slate-200 dark:border-emerald-900/60 shadow-sm">
-          <div className="px-6 pt-6 pb-2 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-lg leading-6 font-semibold text-black dark:text-white">
-                Muestras Registradas
-              </h3>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                Búsqueda, filtros y paginación de muestras de laboratorio
-              </p>
-            </div>
-            <Link href="/medical/reception">
-              <Button>Nueva Solicitud (Recepción)</Button>
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Dashboard de Laboratorio</h1>
+            <p className="mt-1 text-sm text-gray-500">Vista operativa y analítica del día para el área de laboratorio.</p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/medical/laboratory/samples">
+              <Button variant="outline">
+                <Beaker className="mr-2 h-4 w-4" />
+                Muestras
+              </Button>
+            </Link>
+            <Link href="/medical/laboratory/results/create">
+              <Button>
+                <FlaskConical className="mr-2 h-4 w-4" />
+                Cargar resultados
+              </Button>
             </Link>
           </div>
-          <div className="px-6 pb-6">
-            <DataTable
-              columns={columns}
-              data={samples}
-              searchable={true}
-              searchPlaceholder="Buscar por número de muestra o barcode..."
-              emptyMessage="No hay muestras registradas."
-              statusFilterable={true}
-              statusOptions={[
-                { value: 'pending_collection', label: 'Pendiente Toma' },
-                { value: 'collected', label: 'Tomada' },
-                { value: 'received', label: 'Recibida' },
-                { value: 'processing', label: 'En análisis (legacy)' },
-                { value: 'in_analysis', label: 'En análisis' },
-                { value: 'pending_validation', label: 'Pendiente validación' },
-                { value: 'validated', label: 'Validada' },
-                { value: 'reported', label: 'Informada' },
-                { value: 'completed', label: 'Completada' },
-                { value: 'rejected', label: 'Rechazada' },
-                { value: 'cancelled', label: 'Cancelada' },
-              ]}
-              onStatusChange={(status) => {
-                const url = new URL(window.location.href)
-                if (status !== 'all') url.searchParams.set('status', status)
-                else url.searchParams.delete('status')
-                url.searchParams.set('page', '1')
-                router.visit(url.toString(), { preserveState: true })
-              }}
-            />
-          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-gray-500">Total de muestras</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold">{stats.total_samples}</p>
+                <Beaker className="h-5 w-5 text-sky-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-gray-500">En análisis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold">{stats.in_analysis_samples}</p>
+                <Clock className="h-5 w-5 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-gray-500">Pendiente validación</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold">{stats.pending_validation_samples}</p>
+                <BarChart3 className="h-5 w-5 text-amber-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-gray-500">Validadas hoy</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold">{stats.validated_today}</p>
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-3">
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle>Tendencia de muestras (7 días)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-2 items-end h-40">
+                {dailyTrend.map((point) => (
+                  <div key={point.date} className="flex flex-col items-center gap-1">
+                    <div
+                      className="w-full max-w-[34px] rounded-t bg-sky-500"
+                      style={{ height: `${Math.max((point.total / maxTrend) * 120, 6)}px` }}
+                      title={`${point.label}: ${point.total}`}
+                    />
+                    <p className="text-[11px] text-gray-500">{point.label}</p>
+                    <p className="text-[11px] font-medium">{point.total}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PieChart className="h-4 w-4" />
+                Distribución por estado
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="mx-auto h-36 w-36 rounded-full border" style={{ background: pieBackground }} />
+              <div className="space-y-2">
+                {statusDistribution.map((row, index) => (
+                  <div key={row.status} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                      />
+                      <span>{row.label}</span>
+                    </div>
+                    <span className="font-semibold">{row.total}</span>
+                  </div>
+                ))}
+                {statusDistribution.length === 0 && (
+                  <p className="text-sm text-gray-500">Sin datos para graficar.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top servicios solicitados</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {topServices.map((service) => (
+                <div key={service.service_name} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="truncate pr-2">{service.service_name}</span>
+                    <span className="font-semibold">{service.total}</span>
+                  </div>
+                  <div className="h-2 rounded bg-slate-100">
+                    <div
+                      className="h-2 rounded bg-emerald-500"
+                      style={{ width: `${(service.total / maxTopService) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              {topServices.length === 0 && (
+                <p className="text-sm text-gray-500">Aún no hay servicios para mostrar.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Últimos pedidos de laboratorio</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {latestRequests.map((row) => (
+                  <Link
+                    key={row.id}
+                    href={`/medical/laboratory/samples/${row.id}`}
+                    className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold">{row.sample_number}</span>
+                      <span className="text-xs text-slate-500">{getStatusLabel(row.status)}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 truncate">{row.service_name || 'Sin estudio'}</p>
+                    <p className="text-xs text-slate-500">
+                      {row.patient_name || 'Paciente N/A'} - {formatDateTime(row.created_at)}
+                    </p>
+                  </Link>
+                ))}
+                {latestRequests.length === 0 && (
+                  <p className="text-sm text-gray-500">No hay pedidos recientes.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      <Modal
-        open={rejectModalOpen}
-        onClose={() => {
-          setRejectModalOpen(false)
-          setRejectSampleId(null)
-        }}
-      >
-        <div className="p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">Rechazar Muestra</h3>
-          <p className="text-sm text-gray-500">
-            Complete motivo y observación para registrar el rechazo de la muestra {rejectSampleNumber}. Paciente: {rejectSamplePatient || 'N/A'}. Estudio: {rejectSampleStudy || 'N/A'}.
-          </p>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de rechazo *</label>
-            <select
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-            >
-              <option value="">Seleccionar motivo</option>
-              <option value="Muestra insuficiente">Muestra insuficiente</option>
-              <option value="Muestra hemolizada">Muestra hemolizada</option>
-              <option value="Tubo incorrecto">Tubo incorrecto</option>
-              <option value="Sin identificación">Sin identificación</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observación *</label>
-            <textarea
-              value={rejectObservation}
-              onChange={(e) => setRejectObservation(e.target.value)}
-              rows={4}
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              placeholder="Detalle de la incidencia detectada..."
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setRejectModalOpen(false)
-                setRejectSampleId(null)
-                setRejectSamplePatient('')
-                setRejectSampleStudy('')
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmitReject}
-              className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-              disabled={!rejectReason || !rejectObservation.trim()}
-            >
-              Confirmar rechazo
-            </button>
-          </div>
-        </div>
-      </Modal>
     </AppLayout>
   )
 }

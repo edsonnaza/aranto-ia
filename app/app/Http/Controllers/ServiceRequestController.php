@@ -11,6 +11,9 @@ use App\Models\Professional;
 use App\Models\InsuranceType;
 use App\Models\ScheduleAppointment;
 use App\Models\ServiceRequestDetail;
+use App\Models\ServiceCategory;
+use App\Models\Laboratory\LabSample;
+use App\Models\Laboratory\LabSampleType;
 use App\Models\Transaction;
 use App\Models\AuditLog;
 use App\Notifications\CashPendingServiceNotification;
@@ -20,6 +23,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -207,6 +211,26 @@ class ServiceRequestController extends Controller
         $shouldAutoConfirmFromAppointment = $appointment !== null;
 
         $serviceRequest = DB::transaction(function () use ($appointment, $shouldAutoConfirmFromAppointment, $validated) {
+            $requestedServiceIds = collect($validated['services'])
+                ->pluck('medical_service_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            $laboratoryServiceIds = $this->resolveLaboratoryServiceIds($requestedServiceIds);
+            $medicalServiceNames = MedicalService::query()
+                ->whereIn('id', $requestedServiceIds)
+                ->pluck('name', 'id')
+                ->mapWithKeys(fn ($name, $id) => [(int) $id => (string) $name])
+                ->all();
+
+            $sampleTypeIdsByCode = LabSampleType::query()
+                ->where('status', 'active')
+                ->pluck('id', 'code')
+                ->mapWithKeys(fn ($id, $code) => [(string) $code => (int) $id])
+                ->all();
+
             $serviceRequest = ServiceRequest::create([
                 'patient_id' => $validated['patient_id'],
                 'created_by' => auth()->id(),
@@ -235,7 +259,7 @@ class ServiceRequestController extends Controller
                     'source' => 'professional_commission_settings',
                 ]);
 
-                $serviceRequest->details()->create([
+                $detail = $serviceRequest->details()->create([
                     'medical_service_id' => $serviceData['medical_service_id'],
                     'professional_id' => $serviceData['professional_id'],
                     'professional_commission_percentage' => $commissionPercentage,
@@ -251,6 +275,23 @@ class ServiceRequestController extends Controller
                     'notes' => $serviceData['notes'] ?? null,
                     'status' => ServiceRequestDetail::STATUS_PENDING,
                 ]);
+
+                if (in_array((int) $serviceData['medical_service_id'], $laboratoryServiceIds, true)) {
+                    $serviceName = $medicalServiceNames[(int) $serviceData['medical_service_id']] ?? null;
+
+                    LabSample::create([
+                        'service_request_detail_id' => $detail->id,
+                        'patient_id' => $serviceRequest->patient_id,
+                        'sample_number' => $this->generateLabSampleNumber(),
+                        'barcode' => null,
+                        'lab_sample_type_id' => $this->inferSampleTypeIdFromServiceName($serviceName, $sampleTypeIdsByCode),
+                        'collected_at' => null,
+                        'received_at' => null,
+                        'received_by' => null,
+                        'status' => 'pending_collection',
+                        'remarks' => 'Generado automáticamente desde recepción.',
+                    ]);
+                }
             }
 
             if ($appointment) {
@@ -280,6 +321,97 @@ class ServiceRequestController extends Controller
         return redirect()
             ->route('medical.service-requests.show', $serviceRequest)
             ->with('message', 'Solicitud de servicio creada exitosamente.');
+    }
+
+    private function resolveLaboratoryServiceIds(array $requestedServiceIds): array
+    {
+        if (empty($requestedServiceIds)) {
+            return [];
+        }
+
+        $labRootId = ServiceCategory::query()
+            ->where('name', 'Laboratorio Clínico')
+            ->whereNull('parent_id')
+            ->value('id');
+
+        return MedicalService::query()
+            ->whereIn('id', $requestedServiceIds)
+            ->whereHas('category', function ($query) use ($labRootId) {
+                $query->where(function ($subQuery) use ($labRootId) {
+                    if ($labRootId) {
+                        $subQuery->where('parent_id', $labRootId);
+                    }
+
+                    $subQuery->orWhereIn('name', [
+                        'servicios de Analisis',
+                        'Análisis Microbiología',
+                    ]);
+                });
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function generateLabSampleNumber(): string
+    {
+        do {
+            $sampleNumber = 'LAB-' . now()->format('YmdHis') . '-' . Str::upper(Str::random(4));
+        } while (LabSample::query()->where('sample_number', $sampleNumber)->exists());
+
+        return $sampleNumber;
+    }
+
+    private function inferSampleTypeIdFromServiceName(?string $serviceName, array $sampleTypeIdsByCode): ?int
+    {
+        if (!$serviceName) {
+            return null;
+        }
+
+        $name = Str::lower($serviceName);
+
+        if (str_contains($name, 'orina')) {
+            return $sampleTypeIdsByCode['URINE'] ?? $sampleTypeIdsByCode['URINE24H'] ?? null;
+        }
+
+        if (str_contains($name, 'heces') || str_contains($name, 'copro')) {
+            return $sampleTypeIdsByCode['STOOL'] ?? null;
+        }
+
+        if (str_contains($name, 'esputo')) {
+            return $sampleTypeIdsByCode['SPUTUM'] ?? null;
+        }
+
+        if (str_contains($name, 'hisopado') && str_contains($name, 'nas')) {
+            return $sampleTypeIdsByCode['NASAL_SWAB'] ?? null;
+        }
+
+        if (str_contains($name, 'hisopado') || str_contains($name, 'farin')) {
+            return $sampleTypeIdsByCode['THROAT_SWAB'] ?? null;
+        }
+
+        if (str_contains($name, 'lcr') || str_contains($name, 'cefalorra')) {
+            return $sampleTypeIdsByCode['CSF'] ?? null;
+        }
+
+        if (str_contains($name, 'sinov')) {
+            return $sampleTypeIdsByCode['SYNOVIAL'] ?? null;
+        }
+
+        if (str_contains($name, 'biops')) {
+            return $sampleTypeIdsByCode['BIOPSY'] ?? null;
+        }
+
+        if (str_contains($name, 'coagul') || str_contains($name, 'plasma')) {
+            return $sampleTypeIdsByCode['PLASMA'] ?? null;
+        }
+
+        if (str_contains($name, 'suero')) {
+            return $sampleTypeIdsByCode['SERUM'] ?? null;
+        }
+
+        return $sampleTypeIdsByCode['BLOOD'] ?? null;
     }
 
     /**

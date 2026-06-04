@@ -1,5 +1,7 @@
 import { Head, useForm } from '@inertiajs/react'
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
+import { X } from 'lucide-react'
+import { useNumberFormatter } from '@/hooks/useNumberFormatter'
 import { useLabResults } from '../../../hooks/useLabResults'
 
 interface ReferenceRange {
@@ -75,11 +77,17 @@ interface Result {
   status?: string
 }
 
+interface ExistingResultEntry {
+  value: string
+  equipment_id?: number | null
+}
+
 interface ResultFormProps {
   result?: Result | null
   testRequests?: TestRequest[]
   equipments?: Equipment[]
   initialTestRequestId?: number | null
+  existingResults?: Record<string, ExistingResultEntry>
   onSuccess?: () => void
 }
 
@@ -88,10 +96,57 @@ export default function ResultForm({
   testRequests = [],
   equipments = [],
   initialTestRequestId = null,
+  existingResults = {},
   onSuccess,
 }: ResultFormProps) {
   const { createBatch, update, loading, error } = useLabResults()
+  const { parse: parseDecimal, format: formatDecimal, config: numberConfig } = useNumberFormatter()
   const isEditMode = Boolean(result?.id)
+  const isPreselectedRequest = Boolean(initialTestRequestId)
+  const [excludedParams, setExcludedParams] = useState<Set<number>>(new Set())
+
+  const formatNumberDisplay = (value: number | string): string => {
+    return formatDecimal(value)
+  }
+
+  const sanitizeNumericInput = (rawValue: string): string => {
+    let value = rawValue.replace(/\./g, numberConfig.thousandsSeparator)
+    value = value.replace(/[^0-9,\.\-]/g, '')
+
+    // Keep only one decimal separator (comma) and remove dot if user pasted decimal dot.
+    value = value.replace(/\./g, ',')
+    const firstComma = value.indexOf(',')
+    if (firstComma !== -1) {
+      value = value.slice(0, firstComma + 1) + value.slice(firstComma + 1).replace(/,/g, '')
+    }
+
+    return value
+  }
+
+  const normalizeNumericInput = (rawValue: string): string => {
+    const trimmed = rawValue.trim()
+    if (!trimmed) return ''
+    const parsed = parseDecimal(trimmed)
+    if (Number.isNaN(parsed)) return rawValue
+    return formatNumberDisplay(parsed)
+  }
+
+  const normalizeNumericForSubmit = (rawValue: string): string => {
+    const trimmed = rawValue.trim()
+    if (!trimmed) return ''
+    const parsed = parseDecimal(trimmed)
+    if (Number.isNaN(parsed)) return ''
+    return String(parsed)
+  }
+
+  const toggleExclude = (parameterId: number) => {
+    setExcludedParams((prev) => {
+      const next = new Set(prev)
+      if (next.has(parameterId)) next.delete(parameterId)
+      else next.add(parameterId)
+      return next
+    })
+  }
 
   const { data, setData, processing, errors } = useForm({
     lab_sample_id: result?.lab_sample_id || 0,
@@ -108,12 +163,25 @@ export default function ResultForm({
       const request = testRequests.find((item) => item.id === initialTestRequestId)
       if (request) {
         const defaultEquipment = request.test_profile?.profile_equipments?.find((item) => item.is_default)
+        const preloadedValues: Record<string, string> = {}
+        let resolvedEquipmentId = defaultEquipment?.lab_equipment_id || 0
+
+        if (existingResults && Object.keys(existingResults).length > 0) {
+          for (const [paramId, entry] of Object.entries(existingResults)) {
+            preloadedValues[paramId] = entry.value
+            if (entry.equipment_id && !resolvedEquipmentId) {
+              resolvedEquipmentId = entry.equipment_id
+            }
+          }
+        }
+
         setData('lab_test_request_id', initialTestRequestId)
         setData('lab_sample_id', request.lab_sample_id || 0)
-        setData('equipment_id', defaultEquipment?.lab_equipment_id || 0)
+        setData('equipment_id', resolvedEquipmentId)
+        setData('values_by_parameter', preloadedValues)
       }
     }
-  }, [initialTestRequestId, isEditMode, testRequests, setData])
+  }, [initialTestRequestId, isEditMode, testRequests, existingResults, setData])
 
   const selectedRequest = useMemo(
     () => testRequests.find((request) => request.id === Number(data.lab_test_request_id)),
@@ -155,18 +223,38 @@ export default function ResultForm({
   const runningSum100Total = useMemo(() => {
     return sum100Parameters.reduce((total, parameter) => {
       const rawValue = data.values_by_parameter[String(parameter.id)]
-      if (rawValue == null || rawValue === '' || Number.isNaN(Number(rawValue))) {
+      if (rawValue == null || rawValue === '') {
         return total
       }
 
-      return total + Number(rawValue)
-    }, 0)
-  }, [sum100Parameters, data.values_by_parameter])
+      const parsed = parseDecimal(String(rawValue))
+      if (Number.isNaN(parsed)) {
+        return total
+      }
 
-  const handleChangeValue = (parameterId: number, value: string) => {
+      return total + parsed
+    }, 0)
+  }, [sum100Parameters, data.values_by_parameter, parseDecimal])
+
+  const handleChangeValue = (parameter: Parameter, value: string) => {
+    const normalizedValue = parameter.parameter_type === 'numeric'
+      ? sanitizeNumericInput(value)
+      : value
+
     setData('values_by_parameter', {
       ...data.values_by_parameter,
-      [String(parameterId)]: value,
+      [String(parameter.id)]: normalizedValue,
+    })
+  }
+
+  const handleBlurValue = (parameter: Parameter) => {
+    if (parameter.parameter_type !== 'numeric') return
+    const currentValue = data.values_by_parameter[String(parameter.id)] || ''
+    const normalized = normalizeNumericInput(currentValue)
+
+    setData('values_by_parameter', {
+      ...data.values_by_parameter,
+      [String(parameter.id)]: normalized,
     })
   }
 
@@ -185,15 +273,18 @@ export default function ResultForm({
         lab_test_parameter_id: Number(data.lab_test_parameter_id),
         equipment_id: Number(data.equipment_id) || undefined,
         value: data.value,
-        status: data.status,
+        status: 'draft',
       }, onSuccess)
       return
     }
 
     const resultRows = visibleParameters
+      .filter((parameter) => !excludedParams.has(parameter.id))
       .map((parameter) => ({
         lab_test_parameter_id: parameter.id,
-        value: data.values_by_parameter[String(parameter.id)] || '',
+        value: parameter.parameter_type === 'numeric'
+          ? normalizeNumericForSubmit(data.values_by_parameter[String(parameter.id)] || '')
+          : (data.values_by_parameter[String(parameter.id)] || ''),
       }))
       .filter((row) => row.value.trim().length > 0)
 
@@ -204,7 +295,7 @@ export default function ResultForm({
     createBatch({
       lab_test_request_id: Number(data.lab_test_request_id),
       equipment_id: Number(data.equipment_id) || undefined,
-      status: data.status,
+      status: 'draft',
       results: resultRows,
     }, onSuccess)
   }
@@ -220,7 +311,9 @@ export default function ResultForm({
     }
 
     if (reference.min_value != null || reference.max_value != null) {
-      return `${reference.min_value ?? ''} - ${reference.max_value ?? ''}`.trim()
+      const minValue = reference.min_value != null ? formatNumberDisplay(String(reference.min_value)) : ''
+      const maxValue = reference.max_value != null ? formatNumberDisplay(String(reference.max_value)) : ''
+      return `${minValue} - ${maxValue}`.trim()
     }
 
     return 'Sin rango configurado'
@@ -271,15 +364,16 @@ export default function ResultForm({
   return (
     <>
       <Head title="Carga dinámica de resultados" />
-      <form onSubmit={handleSubmit} className="bg-white dark:bg-[#0f1a1e] rounded-2xl shadow p-6 max-w-4xl mx-auto space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-[#0f1a1e] rounded-2xl shadow p-4 md:p-5 max-w-4xl mx-auto space-y-3">
         <h2 className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mb-2">Carga dinámica de resultados</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Solicitud de estudio</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-200">Solicitud de estudio</label>
             <select
-              className="mt-1 block w-full rounded-xl border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+              className="mt-1 block h-9 w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm"
               value={data.lab_test_request_id}
+              disabled={isPreselectedRequest}
               onChange={(e) => {
                 const requestId = Number(e.target.value) || 0
                 const request = testRequests.find((item) => item.id === requestId)
@@ -301,9 +395,9 @@ export default function ResultForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Equipo</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-200">Equipo</label>
             <select
-              className="mt-1 block w-full rounded-xl border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+              className="mt-1 block h-9 w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm"
               value={data.equipment_id}
               onChange={(e) => setData('equipment_id', Number(e.target.value) || 0)}
             >
@@ -312,29 +406,21 @@ export default function ResultForm({
                 <option key={equipment.id} value={equipment.id}>{equipment.name}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Estado</label>
-            <select
-              className="mt-1 block w-full rounded-xl border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-              value={data.status}
-              onChange={(e) => setData('status', e.target.value)}
-            >
-              <option value="draft">Borrador</option>
-              <option value="validated">Validado</option>
-            </select>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Seleccione equipo solo si el perfil del estudio tiene más de un equipo disponible.
+            </p>
           </div>
         </div>
 
         {selectedRequest && (
-          <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 space-y-1">
+          <div className="rounded-lg border border-gray-200 p-3 bg-gray-50 space-y-0.5">
             <p className="text-sm text-gray-700">
               Paciente: <span className="font-medium">{selectedRequest.sample?.patient ? `${selectedRequest.sample.patient.first_name || ''} ${selectedRequest.sample.patient.last_name || ''}`.trim() : 'N/A'}</span>
             </p>
             <p className="text-sm text-gray-700">
               Estudio: <span className="font-medium">{selectedRequest.test_profile?.name || 'N/A'}</span>
             </p>
+            <p className="text-xs text-gray-500">Estado de carga: Borrador</p>
             {selectedRequest.test_profile?.validation_type === 'sum_100' && (
               <p className="text-sm text-amber-700">
                 Regla de validación activa: suma porcentual = {selectedRequest.test_profile.validation_target ?? 100}%
@@ -345,45 +431,78 @@ export default function ResultForm({
         )}
 
         {visibleParameters.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h3 className="text-sm font-semibold text-gray-700">Parámetros del estudio</h3>
             {selectedRequest?.test_profile?.validation_type === 'sum_100' && (
               <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 Suma actual de parámetros porcentuales: {runningSum100Total.toFixed(2)}%
               </div>
             )}
-            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-              {visibleParameters.map((parameter) => (
-                <div key={parameter.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3">
-                  <div className="md:col-span-1">
-                    <p className="text-sm font-medium text-gray-900">{parameter.name}</p>
-                    <p className="text-xs text-gray-500">Tipo: {parameter.parameter_type}</p>
+            <div className="max-h-[390px] overflow-y-auto pr-1">
+              <div className="hidden md:grid md:grid-cols-12 gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                <div className="md:col-span-3">Parámetro</div>
+                <div className="md:col-span-3">Valor</div>
+                <div className="md:col-span-2">Unidad</div>
+                <div className="md:col-span-3">Referencia</div>
+                <div className="md:col-span-1"></div>
+              </div>
+              <div className="space-y-1.5">
+              {visibleParameters.map((parameter) => {
+                const isExcluded = excludedParams.has(parameter.id)
+                return (
+                <div
+                  key={parameter.id}
+                  className={`grid grid-cols-1 md:grid-cols-12 gap-2 items-center border rounded-md px-2 py-1.5 transition-opacity ${
+                    isExcluded ? 'opacity-40 bg-slate-50' : ''
+                  }`}
+                >
+                  <div className="md:col-span-3 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 leading-tight truncate">{parameter.name}</p>
+                    <p className="text-[11px] text-gray-500 leading-tight">{parameter.parameter_type}</p>
                   </div>
-                  <div className="md:col-span-1">
-                    <label className="block text-xs text-gray-600 mb-1">Valor</label>
+                  <div className="md:col-span-3">
+                    <label className="block text-[11px] text-gray-600 mb-1 md:sr-only">Valor</label>
                     <input
-                      type={parameter.parameter_type === 'numeric' ? 'number' : 'text'}
-                      step={parameter.parameter_type === 'numeric' ? '0.01' : undefined}
+                      type="text"
+                      inputMode={parameter.parameter_type === 'numeric' ? 'decimal' : 'text'}
                       value={data.values_by_parameter[String(parameter.id)] || ''}
-                      onChange={(e) => handleChangeValue(parameter.id, e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5"
-                      required={Boolean(parameter.is_required)}
+                      onChange={(e) => handleChangeValue(parameter, e.target.value)}
+                      onBlur={() => handleBlurValue(parameter)}
+                      disabled={isExcluded}
+                      className="h-8 w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:cursor-not-allowed"
+                      required={Boolean(parameter.is_required) && !isExcluded}
                     />
                   </div>
-                  <div className="md:col-span-1">
-                    <label className="block text-xs text-gray-600 mb-1">Unidad</label>
-                    <div className="text-sm text-gray-800 px-2 py-1.5 rounded-md border bg-white min-h-[34px]">
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] text-gray-600 mb-1 md:sr-only">Unidad</label>
+                    <div className="text-sm text-gray-800 px-2 py-1 rounded-md border bg-white min-h-[32px] leading-tight">
                       {parameter.unit || '-'}
                     </div>
                   </div>
-                  <div className="md:col-span-1">
-                    <label className="block text-xs text-gray-600 mb-1">Referencia</label>
-                    <div className="text-sm text-gray-800 px-2 py-1.5 rounded-md border bg-white min-h-[34px]">
+                  <div className="md:col-span-3">
+                    <label className="block text-[11px] text-gray-600 mb-1 md:sr-only">Referencia</label>
+                    <div className="text-sm text-gray-800 px-2 py-1 rounded-md border bg-white min-h-[32px] leading-tight">
                       {renderReference(parameter)}
                     </div>
                   </div>
+                  <div className="md:col-span-1 flex justify-center">
+                    <button
+                      type="button"
+                      title={isExcluded ? 'Incluir parámetro' : 'Excluir del informe'}
+                      onClick={() => toggleExclude(parameter.id)}
+                      className={`h-6 w-6 rounded-full flex items-center justify-center transition-colors ${
+                        isExcluded
+                          ? 'bg-slate-200 text-slate-500 hover:bg-slate-300'
+                          : 'text-slate-400 hover:bg-red-100 hover:text-red-600'
+                      }`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-              ))}
+                )
+              })}
+              </div>
             </div>
           </div>
         )}
@@ -396,13 +515,15 @@ export default function ResultForm({
 
         {batchValidationMessage && <div className="text-red-600 text-xs">{batchValidationMessage}</div>}
 
-        <button
-          type="submit"
-          disabled={loading || processing || !selectedRequest}
-          className="w-full py-2 px-4 rounded-xl bg-emerald-600 dark:bg-emerald-700 text-white font-semibold hover:bg-emerald-700 dark:hover:bg-emerald-800 transition disabled:opacity-50"
-        >
-          {loading || processing ? 'Guardando...' : 'Guardar resultados'}
-        </button>
+        <div className="flex justify-end pt-1">
+          <button
+            type="submit"
+            disabled={loading || processing || !selectedRequest}
+            className="h-9 px-4 rounded-lg bg-emerald-600 dark:bg-emerald-700 text-white text-sm font-semibold hover:bg-emerald-700 dark:hover:bg-emerald-800 transition disabled:opacity-50"
+          >
+            {loading || processing ? 'Guardando...' : 'Guardar resultados'}
+          </button>
+        </div>
       </form>
     </>
   )

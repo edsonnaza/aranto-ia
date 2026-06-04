@@ -41,7 +41,7 @@ class LabSampleController extends Controller
         }
 
         $samples = $query
-            ->with(['serviceRequestDetail.medicalService', 'patient', 'sampleType', 'receivedBy'])
+            ->with(['serviceRequestDetail.medicalService', 'patient', 'sampleType', 'receivedBy', 'latestCollection'])
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -313,6 +313,79 @@ class LabSampleController extends Controller
         ]);
     }
 
+    public function showStartAnalysisForm(LabSample $sample): Response
+    {
+        $sample->load([
+            'patient',
+            'sampleType',
+            'serviceRequestDetail.medicalService',
+            'testRequests.testProfile',
+        ]);
+
+        $testRequest = $sample->testRequests()
+            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
+            ->with('testProfile')
+            ->first();
+
+        $latestTestRequest = $sample->testRequests()
+            ->with('testProfile')
+            ->latest('id')
+            ->first();
+
+        $suggestedProfile = null;
+        if (!$testRequest) {
+            $suggestedProfile = $this->resolveTestProfileForService($sample->serviceRequestDetail);
+        }
+
+        $isValidated = in_array($sample->status, ['validated', 'reported', 'completed'], true)
+            || ($latestTestRequest && $latestTestRequest->status === 'validated');
+
+        $canStart = true;
+        $blockingReason = null;
+
+        if (!auth()->user()?->can('start-lab-analysis')) {
+            $canStart = false;
+            $blockingReason = 'No tiene permisos para iniciar análisis de laboratorio.';
+        } elseif ($isValidated) {
+            $canStart = false;
+            $blockingReason = 'El análisis ya fue validado por bioquímica. No se permite edición posterior.';
+        } elseif (!in_array($sample->status, ['received', 'in_analysis', 'pending_validation'], true)) {
+            $canStart = false;
+            $blockingReason = 'Solo se puede iniciar o editar análisis en muestras recibidas, en análisis o pendientes de validación.';
+        } elseif (!$testRequest && !$suggestedProfile) {
+            $canStart = false;
+            $blockingReason = 'El servicio solicitado no tiene perfil configurado. Configure o edite perfiles en Laboratorio > Perfiles.';
+        }
+
+        return Inertia::render('laboratory/samples/StartAnalysis', [
+            'sample' => [
+                'id' => $sample->id,
+                'sample_number' => $sample->sample_number,
+                'status' => $sample->status,
+                'patient_name' => $sample->patient?->full_name,
+                'sample_type' => $sample->sampleType?->name,
+                'requested_study' => $sample->serviceRequestDetail?->medicalService?->name,
+            ],
+            'testRequest' => $testRequest ? [
+                'id' => $testRequest->id,
+                'status' => $testRequest->status,
+                'profile_name' => $testRequest->testProfile?->name,
+            ] : null,
+            'latestTestRequest' => $latestTestRequest ? [
+                'id' => $latestTestRequest->id,
+                'status' => $latestTestRequest->status,
+                'profile_name' => $latestTestRequest->testProfile?->name,
+            ] : null,
+            'suggestedProfile' => $suggestedProfile ? [
+                'id' => $suggestedProfile->id,
+                'name' => $suggestedProfile->name,
+                'code' => $suggestedProfile->code,
+            ] : null,
+            'canStart' => $canStart,
+            'blockingReason' => $blockingReason,
+        ]);
+    }
+
     private function inferSampleTypeIdFromStudyName(?string $studyName, array $sampleTypeIdsByCode): ?int
     {
         if (!$studyName) {
@@ -486,8 +559,8 @@ class LabSampleController extends Controller
         }
 
         $validated = $request->validate([
-            'collected_at' => ['required', 'date'],
-            'lab_sample_type_id' => ['required', 'exists:lab_sample_types,id'],
+            'collected_at' => ['nullable', 'date'],
+            'lab_sample_type_id' => ['nullable', 'exists:lab_sample_types,id'],
             'container_type' => ['nullable', 'string', 'max:100'],
             'volume' => ['nullable', 'numeric', 'min:0'],
             'volume_unit' => ['nullable', 'string', 'max:20'],
@@ -497,13 +570,16 @@ class LabSampleController extends Controller
             'barcode' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $sampleType = LabSampleType::query()->find((int) $validated['lab_sample_type_id']);
+        $sampleTypeId = isset($validated['lab_sample_type_id']) && $validated['lab_sample_type_id'] !== null
+            ? (int) $validated['lab_sample_type_id']
+            : null;
+        $sampleType = $sampleTypeId ? LabSampleType::query()->find($sampleTypeId) : null;
         $isEditingCollection = $sample->status === 'collected';
 
-        DB::transaction(function () use ($sample, $validated, $sampleType, $isEditingCollection) {
+        DB::transaction(function () use ($sample, $validated, $sampleType, $sampleTypeId, $isEditingCollection) {
             $payload = [
                 'collected_by' => auth()->id(),
-                'collected_at' => $validated['collected_at'],
+                'collected_at' => $validated['collected_at'] ?? $sample->collected_at,
                 'sample_type' => $sampleType?->name,
                 'container_type' => $validated['container_type'] ?? null,
                 'volume' => $validated['volume'] ?? null,
@@ -536,8 +612,8 @@ class LabSampleController extends Controller
 
             $sample->update([
                 'status' => 'collected',
-                'lab_sample_type_id' => $validated['lab_sample_type_id'],
-                'collected_at' => $validated['collected_at'],
+                'lab_sample_type_id' => $sampleTypeId ?? $sample->lab_sample_type_id,
+                'collected_at' => $validated['collected_at'] ?? $sample->collected_at,
                 'collected_by' => auth()->id(),
                 'barcode' => $validated['barcode'] ?? $sample->barcode,
             ]);
@@ -597,19 +673,41 @@ class LabSampleController extends Controller
                 ->with('error', 'No tiene permisos para iniciar análisis de laboratorio.');
         }
 
-        if ($sample->status !== 'received') {
+        if (in_array($sample->status, ['validated', 'reported', 'completed'], true)) {
             return redirect()
                 ->back()
-                ->with('error', 'Solo se puede iniciar análisis en muestras recibidas.');
+                ->with('error', 'El análisis ya fue validado por bioquímica. No se permite edición posterior.');
+        }
+
+        if (!in_array($sample->status, ['received', 'in_analysis', 'pending_validation'], true)) {
+            return redirect()
+                ->back()
+                ->with('error', 'Solo se puede iniciar o editar análisis en muestras recibidas, en análisis o pendientes de validación.');
         }
 
         $sample->load(['serviceRequestDetail.medicalService', 'testRequests']);
 
+        $latestRequest = $sample->testRequests()
+            ->latest('id')
+            ->first();
+
+        if ($latestRequest && $latestRequest->status === 'validated') {
+            return redirect()
+                ->back()
+                ->with('error', 'La solicitud ya fue validada por bioquímica. No se permite edición posterior.');
+        }
+
         $testRequest = $sample->testRequests()
-            ->whereIn('status', ['pending', 'assigned', 'in_process'])
+            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
             ->first();
 
         if (!$testRequest) {
+            if ($sample->status !== 'received') {
+                return redirect()
+                    ->back()
+                    ->with('error', 'No existe una solicitud activa para continuar este análisis.');
+            }
+
             $detail = $sample->serviceRequestDetail;
             if (!$detail || !$detail->medical_service_id) {
                 return redirect()
@@ -644,15 +742,19 @@ class LabSampleController extends Controller
             });
         }
 
-        $sample->update(['status' => 'in_analysis']);
+        if ($sample->status === 'received') {
+            $sample->update(['status' => 'in_analysis']);
+        }
 
-        $testRequest->update([
-            'status' => 'in_process',
-            'started_at' => $testRequest->started_at ?? now(),
-        ]);
+        if (in_array($testRequest->status, ['pending', 'assigned'], true)) {
+            $testRequest->update([
+                'status' => 'in_process',
+                'started_at' => $testRequest->started_at ?? now(),
+            ]);
+        }
 
         return redirect()
-            ->route('medical.laboratory.results.index', ['test_request_id' => $testRequest->id])
+            ->route('medical.laboratory.results.create', ['test_request_id' => $testRequest->id])
             ->with('success', 'Análisis iniciado. Complete los parámetros del estudio.');
     }
 

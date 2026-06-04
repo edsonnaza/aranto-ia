@@ -108,4 +108,9 @@ class LabSample extends Model
     {
         return $this->hasMany(LabSampleCollection::class);
     }
+
+    public function latestCollection()
+    {
+        return $this->hasOne(LabSampleCollection::class)->latestOfMany('collected_at');
+    }
 }
