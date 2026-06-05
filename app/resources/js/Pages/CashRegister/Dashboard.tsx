@@ -1,3 +1,3 @@
-import Dashboard from '@/pages/cash-register/dashboard'
+import Dashboard from '../cash-register/dashboard'
 
 export default Dashboard

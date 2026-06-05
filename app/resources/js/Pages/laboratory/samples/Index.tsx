@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { MoreHorizontal } from 'lucide-react'
 import { useLabSamples } from '@/hooks/useLabSamples'
 import SampleForm from './SampleForm'
@@ -84,17 +85,37 @@ interface SamplesIndexProps {
 }
 
 const getStatusConfig = (status: string) => {
-  if (status === 'pending_collection' || status === 'pending') return { label: 'Pendiente Toma', className: 'bg-yellow-100 text-yellow-800' }
-  if (status === 'collected') return { label: 'Tomada', className: 'bg-indigo-100 text-indigo-800' }
-  if (status === 'received') return { label: 'Recibida', className: 'bg-green-100 text-green-800' }
-  if (status === 'processing' || status === 'in_analysis') return { label: 'En análisis', className: 'bg-blue-100 text-blue-800' }
-  if (status === 'pending_validation') return { label: 'Pendiente Validación', className: 'bg-orange-100 text-orange-800' }
-  if (status === 'validated') return { label: 'Validada', className: 'bg-teal-100 text-teal-800' }
-  if (status === 'reported') return { label: 'Informada', className: 'bg-cyan-100 text-cyan-800' }
-  if (status === 'completed') return { label: 'Completada', className: 'bg-emerald-100 text-emerald-800' }
-  if (status === 'cancelled') return { label: 'Cancelada', className: 'bg-slate-100 text-slate-700' }
-  if (status === 'rejected') return { label: 'Rechazada', className: 'bg-red-100 text-red-800' }
-  return { label: status, className: 'bg-gray-100 text-gray-800' }
+  if (status === 'pending_collection' || status === 'pending') {
+    return { label: 'Pendiente Toma', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300' }
+  }
+  if (status === 'collected') {
+    return { label: 'Tomada', className: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300' }
+  }
+  if (status === 'received') {
+    return { label: 'Recibida', className: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' }
+  }
+  if (status === 'processing' || status === 'in_analysis') {
+    return { label: 'En análisis', className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' }
+  }
+  if (status === 'pending_validation') {
+    return { label: 'Pendiente Validación', className: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300' }
+  }
+  if (status === 'validated') {
+    return { label: 'Validada', className: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300' }
+  }
+  if (status === 'reported') {
+    return { label: 'Informada', className: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300' }
+  }
+  if (status === 'completed') {
+    return { label: 'Completada', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' }
+  }
+  if (status === 'cancelled') {
+    return { label: 'Cancelada', className: 'bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300' }
+  }
+  if (status === 'rejected') {
+    return { label: 'Rechazada', className: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300' }
+  }
+  return { label: status, className: 'bg-gray-50 text-gray-700 dark:bg-gray-900 dark:text-gray-300' }
 }
 
 const getSampleConditionRisk = (sampleCondition?: string | null) => {
@@ -142,10 +163,10 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
     router.visit('/medical/reception')
   }
 
-  const handleEdit = (sample: Sample) => {
-    setEditSample(sample)
-    setModalOpen(true)
-  }
+  // const handleEdit = (sample: Sample) => {
+  //   setEditSample(sample)
+  //   setModalOpen(true)
+  // }
 
   const handleClose = () => {
     setModalOpen(false)
@@ -292,7 +313,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const config = getStatusConfig(row.original.status)
-        return <span className={`inline-flex px-2 py-1 rounded text-xs ${config.className}`}>{config.label}</span>
+        return <Badge className={config.className}>{config.label}</Badge>
       },
     },
     {
@@ -307,47 +328,51 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
       header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => {
         const sample = row.original
-        const canEditSample = ['pending_collection', 'collected'].includes(sample.status)
+       // const canEditSample = ['pending_collection', 'collected'].includes(sample.status)
 
         const primaryAction = (() => {
           if (sample.status === 'pending_collection') {
             return (
-              <Link
-                href={`/medical/laboratory/samples/${sample.id}/collect`}
-                className="cursor-pointer text-sm text-indigo-600 hover:underline"
-              >
-                Tomar muestra
-              </Link>
+              <Button asChild size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+                <Link href={`/medical/laboratory/samples/${sample.id}/collect`}>
+                  Tomar muestra
+                </Link>
+              </Button>
             )
           }
           if (sample.status === 'collected') {
             return (
-              <button
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
                 onClick={() => handleReceive(sample)}
-                className="cursor-pointer text-sm text-emerald-600 hover:underline"
+                className="h-8 border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
               >
                 Recibir
-              </button>
+              </Button>
             )
           }
           if (sample.status === 'received') {
             return (
-              <Link
-                href={`/medical/laboratory/samples/${sample.id}/start-analysis`}
-                className="cursor-pointer text-sm text-blue-600 hover:underline"
-              >
-                Iniciar análisis
-              </Link>
+              <Button asChild size="sm" variant="outline" className="h-8 border-emerald-500 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-200 dark:hover:bg-emerald-900/40">
+                <Link href={`/medical/laboratory/samples/${sample.id}/start-analysis`}>
+                  Iniciar análisis
+                </Link>
+              </Button>
             )
           }
           if (['in_analysis', 'pending_validation'].includes(sample.status)) {
             return (
-              <button
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
                 onClick={() => router.post(`/medical/laboratory/samples/${sample.id}/start-analysis`)}
-                className="cursor-pointer text-sm text-blue-600 hover:underline"
+                className="h-8 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:hover:bg-emerald-800/40"
               >
                 Continuar análisis
-              </button>
+              </Button>
             )
           }
           return null
@@ -369,9 +394,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
                     <Link href={`/medical/laboratory/samples/${sample.id}/collect`}>Editar muestra</Link>
                   </DropdownMenuItem>
                 )}
-                {canEditSample && sample.status !== 'collected' && (
-                  <DropdownMenuItem onClick={() => handleEdit(sample)}>Editar muestra</DropdownMenuItem>
-                )}
+               
                 {sample.status === 'collected' && (
                   <>
                     <DropdownMenuSeparator />
@@ -509,10 +532,10 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
           setReceiveModalOpen(false)
           setReceiveSample(null)
         }}
-        contentClassName="max-w-3xl p-0"
+        contentClassName="w-[96vw] max-w-4xl p-0"
       >
-        <div className="p-7 space-y-5 sm:p-8">
-          <h3 className="pr-8 text-lg font-semibold text-gray-900">Confirmar recepción de muestra</h3>
+        <div className="p-6 space-y-5 sm:p-8">
+          <h3 className="pr-8 text-lg font-semibold text-gray-900 dark:text-white">Confirmar recepción de muestra</h3>
           <p className="max-w-2xl text-sm text-gray-500">
             Revise los datos de extracción antes de marcar la muestra como recibida en laboratorio.
           </p>
@@ -524,18 +547,62 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
             </div>
           )}
 
-          <div className="grid gap-3 rounded-xl border bg-slate-50 p-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
-            <div><span className="text-gray-500">Muestra:</span> <span className="font-medium">{receiveSample?.sample_number || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Paciente:</span> <span className="font-medium">{receiveSample?.patient ? `${receiveSample.patient.first_name} ${receiveSample.patient.last_name}` : 'N/A'}</span></div>
-            <div><span className="text-gray-500">Estudio:</span> <span className="font-medium">{receiveSample?.service_request_detail?.medical_service?.name || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Fecha y hora de extracción:</span> <span className="font-medium">{formatCollectedAt(receiveSample?.latest_collection?.collected_at || receiveSample?.collected_at)}</span></div>
-            <div><span className="text-gray-500">Tipo de muestra:</span> <span className="font-medium">{receiveSample?.sample_type?.name || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Contenedor utilizado:</span> <span className="font-medium">{receiveSample?.latest_collection?.container_type || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Volumen:</span> <span className="font-medium">{receiveSample?.latest_collection?.volume != null ? `${receiveSample.latest_collection.volume} ${receiveSample.latest_collection.volume_unit || ''}`.trim() : 'N/A'}</span></div>
-            <div><span className="text-gray-500">Estado de la muestra:</span> <span className="font-medium">{receiveSample?.latest_collection?.sample_condition || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Sitio de colección:</span> <span className="font-medium">{receiveSample?.latest_collection?.collection_site || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Código de barras:</span> <span className="font-medium">{receiveSample?.barcode || 'N/A'}</span></div>
-            <div><span className="text-gray-500">Observaciones:</span> <span className="font-medium">{receiveSample?.latest_collection?.collection_notes || 'Sin observaciones'}</span></div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos del paciente</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Muestra</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_number || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Código de barras</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.barcode || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Paciente</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.patient ? `${receiveSample.patient.first_name} ${receiveSample.patient.last_name}` : 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Estudio</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.service_request_detail?.medical_service?.name || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Tipo de muestra</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_type?.name || 'N/A'}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos de extracción</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Fecha y hora de extracción</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatCollectedAt(receiveSample?.latest_collection?.collected_at || receiveSample?.collected_at)}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Contenedor utilizado</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.container_type || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Volumen</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.volume != null ? `${receiveSample.latest_collection.volume} ${receiveSample.latest_collection.volume_unit || ''}`.trim() : 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Estado de la muestra</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.sample_condition || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Sitio de colección</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_site || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                  <p className="text-xs text-gray-500">Observaciones</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_notes || 'Sin observaciones'}</p>
+                </div>
+              </div>
+            </section>
           </div>
 
           <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 lg:flex-row lg:items-center lg:justify-between">
@@ -551,7 +618,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
                   setReceiveModalOpen(false)
                   setReceiveSample(null)
                 }}
-                className="min-w-[140px] flex-1 sm:flex-none"
+                className="min-w-35 flex-1 sm:flex-none"
               >
                 Cancelar
               </Button>
@@ -559,7 +626,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
                 type="button"
                 variant="outline"
                 onClick={() => receiveSample && handleRequestReject(receiveSample)}
-                className={`min-w-[180px] flex-1 sm:flex-none ${
+                className={`min-w-45 flex-1 sm:flex-none ${
                   receiveConditionRisk
                     ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
                     : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
@@ -570,7 +637,7 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
               <Button
                 type="button"
                 onClick={handleRequestReceiveConfirmation}
-                className="min-w-[180px] flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
+                className="min-w-45 flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
               >
                 Confirmar recepción
               </Button>

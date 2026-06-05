@@ -57,7 +57,21 @@ class LabSampleController extends Controller
 
     public function create(Request $request): Response
     {
-        $professionals = Professional::where('status', 'active')
+        return Inertia::render('laboratory/create/Create', [
+            'patients' => [],
+            'medicalServices' => $this->mapMedicalServices(),
+            'professionals' => $this->mapProfessionals(),
+            'insuranceTypes' => $this->mapInsuranceTypes(),
+        ]);
+    }
+
+    /**
+     * Map active professionals for dropdown selection.
+     * @return array
+     */
+    private function mapProfessionals(): array
+    {
+        return Professional::where('status', 'active')
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get()
@@ -70,8 +84,15 @@ class LabSampleController extends Controller
             })
             ->values()
             ->all();
+    }
 
-        $insuranceTypes = InsuranceType::where('status', 'active')
+    /**
+     * Map active insurance types for dropdown selection.
+     * @return array
+     */
+    private function mapInsuranceTypes(): array
+    {
+        return InsuranceType::where('status', 'active')
             ->orderBy('name')
             ->get()
             ->map(function ($insurance) {
@@ -86,13 +107,19 @@ class LabSampleController extends Controller
             })
             ->values()
             ->all();
+    }
 
-        // Obtener la categoría raíz "Laboratorio Clínico" para filtrar sub-categorías
+    /**
+     * Map medical services grouped by category for hierarchical selection.
+     * @return array
+     */
+    private function mapMedicalServices(): array
+    {
         $labRootId = ServiceCategory::where('name', 'Laboratorio Clínico')
             ->whereNull('parent_id')
             ->value('id');
 
-        $medicalServices = ServiceCategory::query()
+        return ServiceCategory::query()
             ->where('status', 'active')
             ->when($labRootId, fn ($q) => $q->where('parent_id', $labRootId))
             ->with(['medicalServices' => function ($query) {
@@ -120,13 +147,6 @@ class LabSampleController extends Controller
             ->filter(fn ($category) => !empty($category['services']))
             ->values()
             ->all();
-
-        return Inertia::render('laboratory/create/Create', [
-            'patients' => [],
-            'medicalServices' => $medicalServices,
-            'professionals' => $professionals,
-            'insuranceTypes' => $insuranceTypes,
-        ]);
     }
 
     /**
@@ -238,7 +258,9 @@ class LabSampleController extends Controller
             'serviceRequestDetail.serviceRequest.details.medicalService',
         ]);
 
+        /** @var \App\Models\ServiceRequest|null $serviceRequest */
         $serviceRequest = $sample->serviceRequestDetail?->serviceRequest;
+        /** @var \App\Models\Patient|null $patient */
         $patient = $sample->patient;
         $requestedStudy = $sample->serviceRequestDetail?->medicalService?->name;
         $latestCollection = $sample->collections()
@@ -270,8 +292,8 @@ class LabSampleController extends Controller
             : [];
 
         $patientAge = null;
-        if ($patient && $patient->date_of_birth) {
-            $patientAge = $patient->date_of_birth->age;
+        if ($patient && $patient->birth_date) {
+            $patientAge = $patient->birth_date->age;
         }
 
         return Inertia::render('laboratory/samples/Collect', [
@@ -620,7 +642,7 @@ class LabSampleController extends Controller
         });
 
         return redirect()
-            ->route('medical.laboratory.dashboard')
+            ->route('medical.laboratory.samples.index')
             ->with('success', $isEditingCollection ? 'Toma de muestra actualizada correctamente.' : 'Muestra tomada correctamente.');
     }
 
