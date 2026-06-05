@@ -61,6 +61,12 @@ COPY --from=node_build /app/public/build /var/www/html/public/build
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Crea directorios de storage necesarios (ignorados en .gitignore)
+RUN mkdir -p storage/framework/views && \
+    mkdir -p storage/framework/cache && \
+    mkdir -p storage/logs && \
+    mkdir -p bootstrap/cache
+
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache

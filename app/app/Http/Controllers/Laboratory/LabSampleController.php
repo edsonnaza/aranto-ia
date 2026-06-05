@@ -260,7 +260,7 @@ class LabSampleController extends Controller
 
         /** @var \App\Models\ServiceRequest|null $serviceRequest */
         $serviceRequest = $sample->serviceRequestDetail?->serviceRequest;
-        /** @var \App\Models\Patient|null $patient */
+        /** @var Patient|null $patient */
         $patient = $sample->patient;
         $requestedStudy = $sample->serviceRequestDetail?->medicalService?->name;
         $latestCollection = $sample->collections()
