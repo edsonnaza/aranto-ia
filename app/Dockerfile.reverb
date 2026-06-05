@@ -38,7 +38,7 @@ RUN mkdir -p storage/framework/views && \
     mkdir -p bootstrap/cache
 
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod +x /var/www/html/start.reverb.sh
 
 RUN php artisan config:clear || true

@@ -68,8 +68,14 @@ WORKDIR /var/www/html
 COPY --from=composer_build /app /var/www/html
 COPY --from=node_build /app/public/build /var/www/html/public/build
 
+# Crea directorios de storage necesarios (ignorados en .gitignore)
+RUN mkdir -p storage/framework/views && \
+    mkdir -p storage/framework/cache && \
+    mkdir -p storage/logs && \
+    mkdir -p bootstrap/cache
+
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod +x /var/www/html/start.web.sh
 
 RUN php artisan config:clear || true \
