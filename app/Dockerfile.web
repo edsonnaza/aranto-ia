@@ -13,7 +13,10 @@ COPY . .
 RUN rm -f bootstrap/cache/*.php
 
 # Crea directorios de storage necesarios (ignorados en .gitignore)
-RUN mkdir -p storage/framework/views storage/framework/cache storage/logs bootstrap/cache
+RUN mkdir -p storage/framework/views && \
+    mkdir -p storage/framework/cache && \
+    mkdir -p storage/logs && \
+    mkdir -p bootstrap/cache
 
 # Instala dependencias optimizadas
 RUN composer install \
