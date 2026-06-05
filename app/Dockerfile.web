@@ -47,7 +47,7 @@ COPY --from=composer_build /app/resources/js/wayfinder ./resources/js/wayfinder
 RUN rm -rf dist .vite node_modules/.vite
 
 RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
-    && npm run build
+    && npm run build -- --force
 
 
 # =========================
