@@ -38,3 +38,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 require __DIR__.'/cashregister.php';
 require __DIR__.'/medical.php';
+require __DIR__.'/laboratory.php';

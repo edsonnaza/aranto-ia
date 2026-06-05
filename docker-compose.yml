@@ -7,6 +7,7 @@ services:
       - "${APP_PORT:-8000}:8000"
       - "${VITE_PORT:-5173}:5173"
     environment:
+      - APP_KEY=${APP_KEY}
       - APP_ENV=${APP_ENV:-local}
       - APP_DEBUG=${APP_DEBUG:-true}
       - DB_HOST=${DB_HOST:-mysql}
@@ -31,8 +32,7 @@ services:
         condition: service_started
       reverb:
         condition: service_healthy
-    command: >
-      sh -c "php artisan serve --host=0.0.0.0 --port=8000"
+    command: php artisan serve --host=0.0.0.0 --port=8000
 
   reverb:
     build:
@@ -41,6 +41,7 @@ services:
     ports:
       - "8585:8080"
     environment:
+      - APP_KEY=${APP_KEY}
       - APP_ENV=${APP_ENV:-local}
       - APP_DEBUG=${APP_DEBUG:-true}
       - DB_HOST=${DB_HOST:-mysql}
@@ -68,8 +69,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    command: >
-      sh -c "php artisan reverb:start --host=0.0.0.0 --port=8080"
+    entrypoint: /sbin/tini
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
 
   mysql:
     image: mysql:8.0
@@ -82,7 +83,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database/init:/docker-entrypoint-initdb.d
+      - ./infra-docker-database/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-password}"]
       timeout: 20s
@@ -96,8 +97,7 @@ services:
       - PMA_HOST=${PMA_HOST:-mysql}
       - PMA_PORT=${PMA_PORT:-3306}
       - PMA_USER=${PMA_USER:-root}
-      - PMA_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}
+      - PMA_PASSWORD=${PMA_PASSWORD:-password}
       - PMA_ARBITRARY=1
     depends_on:
       mysql:

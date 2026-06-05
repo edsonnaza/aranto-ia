@@ -29,13 +29,13 @@ cd app
 cp .env.example .env
 cd ..
 docker compose up -d
-docker compose exec app composer install
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate
-docker compose exec app php artisan db:seed
-docker compose exec app npm install
-docker compose exec app npm run build
 ```
+
+**Eso es todo!** El Docker ejecuta automáticamente:
+- ✅ `php artisan migrate`
+- ✅ `php artisan db:seed`
+- ✅ Frontend build con Vite
+- ✅ Limpieza de cachés
 
 ### Accesos locales
 
@@ -98,6 +98,66 @@ Si necesitas importar una base legacy completa y preparar entorno desde cero:
 ```bash
 bash ./scripts/setup-complete.sh /ruta/al/archivo.sql
 ```
+
+## Validación de Cambios y Pull Requests
+
+**Ver checklist completo en:** [`PREMERGE_VALIDATION.md`](PREMERGE_VALIDATION.md)
+
+Antes de hacer merge de una PR, asegúrate de:
+
+### En tu PC (Dev)
+
+```bash
+# 1. Verifica que Docker compila sin errores
+docker compose down -v
+docker compose build
+
+# 2. Levanta todo limpio
+docker compose up -d
+
+# 3. Verifica logs sin errores
+docker compose logs app | grep -i "error\|exception"
+docker compose logs mysql | grep -i "error"
+
+# 4. Si hay cambios en migraciones, verifica que se ejecutaron
+docker compose logs app | grep "Running migrations"
+
+# 5. Accede a la app
+curl http://localhost:8000/
+```
+
+### Validación automática (CI/CD)
+
+Antes de mergear:
+- ✅ TypeScript compila sin errores (`npm run build`)
+- ✅ PHP no tiene sintaxis errors
+- ✅ Migraciones ejecutan correctamente
+- ✅ Base de datos inicializa sin errores
+- ✅ Tests pasan (si existen)
+
+### Cambios críticos que necesitan validación extra
+
+| Cambio | Validar | Comando |
+|--------|---------|---------|
+| Nueva migración | Ejecuta en BD limpia | `docker compose exec app php artisan migrate:fresh` |
+| Cambio en .env | Funciona en PC1, PC2 y Railway | Verificar variables en todos los `docker-compose.yml` |
+| Script Docker | Ejecuta sin errores | `docker compose build --no-cache` |
+| Credenciales | No hardcodeadas, usan .env | `grep -r "password\|key" app/ \| grep -v ".env"` |
+
+## Infraestructura Multi-Ambiente
+
+### PC 1 / PC 2 (Local)
+- Lee: `.env` (raíz) + `app/.env`
+- Docker: `docker-compose.yml`
+- Base: MySQL local (volumen Docker)
+- Inicialización: Automática en `docker-entrypoint.sh`
+
+### Production (Railway)
+- Lee: Variables de entorno de Railway
+- Base: MySQL externa configurada en Railway
+- Inicialización: `php artisan migrate --force` en el procfile
+
+**Importante:** Si cambias credenciales o estructura, actualiza `.env.example` para que el siguiente clone funcione igual.
 
 ## Consultorio (Lista de espera)
 

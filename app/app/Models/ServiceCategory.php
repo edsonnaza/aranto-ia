@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
+ * @property int|null $parent_id
  * @property string $name
  * @property string|null $description
  * @property string $status
@@ -26,6 +28,7 @@ class ServiceCategory extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'parent_id',
         'name',
         'description',
         'status',
@@ -40,6 +43,21 @@ class ServiceCategory extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(ServiceCategory::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(ServiceCategory::class, 'parent_id');
+    }
+
+    public function scopeRoots($query)
+    {
+        return $query->whereNull('parent_id');
+    }
 
     /**
      * Get all medical services in this category.

@@ -24,6 +24,7 @@ class NavigationPermissionsSeeder extends Seeder
             'access-catalogs' => 'Acceso a Catálogos',
             'access-user-management' => 'Acceso a la gestión de usuarios',
             'access-audit-logs' => 'Acceso a los registros de auditoría',
+            'access-laboratory' => 'Acceso al módulo de Laboratorio',
         ];
 
         foreach ($navigationPermissions as $name => $description) {
@@ -43,6 +44,7 @@ class NavigationPermissionsSeeder extends Seeder
                     'access-commissions',
                     'access-financial',
                     'access-medical-system',
+                    'access-laboratory',
                     'access-reports',
                     'access-settings',
                     'access-catalogs',
@@ -58,6 +60,7 @@ class NavigationPermissionsSeeder extends Seeder
                     'access-commissions',
                     'access-financial',
                     'access-medical-system',
+                    'access-laboratory',
                     'access-reports',
                     'access-settings',
                     'access-catalogs',
@@ -102,6 +105,14 @@ class NavigationPermissionsSeeder extends Seeder
                     'access-reports',
                     'access-audit-logs',
                 ],
+            ],
+        ];
+        // Rol especial para laboratorio
+        $navigationRoles['laboratory'] = [
+            'display_name' => 'Laboratorio',
+            'description' => 'Acceso al módulo de Laboratorio',
+            'permissions' => [
+                'access-laboratory',
             ],
         ];
 

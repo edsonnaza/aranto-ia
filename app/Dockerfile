@@ -48,7 +48,7 @@ FROM php:8.4-fpm-alpine3.21
 WORKDIR /var/www/html
 
 # Runtime deps + extensiones PHP minimizando paquetes persistentes
-RUN apk add --no-cache icu-libs libzip tini \
+RUN apk add --no-cache icu-libs libzip tini netcat-openbsd \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libzip-dev \
     && docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl \
     && apk del .build-deps
@@ -56,6 +56,10 @@ RUN apk add --no-cache icu-libs libzip tini \
 # Copy backend and frontend build
 COPY --from=composer_build /app /var/www/html
 COPY --from=node_build /app/public/build /var/www/html/public/build
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
@@ -70,5 +74,5 @@ USER www-data
 
 EXPOSE 8080
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8080"]

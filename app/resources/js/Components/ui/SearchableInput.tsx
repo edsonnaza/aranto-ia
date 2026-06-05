@@ -69,9 +69,7 @@ export default function SearchableInput({
 
       try {
         setIsLoading(true)
-        console.log(`Searching professionals with query: "${q}"`, { minSearchLength })
         const searchResults = await onSearch(q)
-        console.log('Search results:', searchResults)
         setResults(searchResults.slice(0, maxResults))
         setShowDropdown(true)
       } catch (error) {
