@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+# Create required storage directories if they don't exist
+echo "Creating storage directories..."
+mkdir -p storage/framework/{views,cache,sessions}
+mkdir -p storage/logs
+mkdir -p bootstrap/cache
+
+# Ensure correct permissions
+chown -R www-data:www-data storage bootstrap/cache || true
+chmod -R 775 storage bootstrap/cache || true
+
 # Wait for database to be ready
 echo "Waiting for MySQL..."
 for i in $(seq 1 30); do
