@@ -4,6 +4,29 @@ import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
 import path from 'path';
+import { execSync } from 'child_process';
+
+// Get the wayfinder command with fallback to docker
+const getWayfinderCommand = () => {
+    // Try local PHP first
+    try {
+        execSync('php artisan --version', { stdio: 'ignore', cwd: __dirname });
+        return 'php artisan wayfinder:generate';
+    } catch {
+        // Fallback to docker
+        try {
+            execSync('docker compose exec -T app php artisan --version 2>/dev/null', { stdio: 'ignore' });
+            return 'docker compose exec -T app php artisan wayfinder:generate';
+        } catch {
+            // If both fail, disable wayfinder
+            console.warn('⚠️  Could not execute wayfinder - PHP not available. Disabling wayfinder plugin.');
+            return null;
+        }
+    }
+};
+
+const wayfinderCommand = getWayfinderCommand();
+
 export default defineConfig({
     server: {
         host: 'localhost',
@@ -25,10 +48,12 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-            command: process.env.WAYFINDER_COMMAND || 'php artisan wayfinder:generate',
-        }),
+        ...(wayfinderCommand ? [
+            wayfinder({
+                formVariants: true,
+                command: wayfinderCommand,
+            }),
+        ] : []),
     ],
     esbuild: {
         jsx: 'automatic',
