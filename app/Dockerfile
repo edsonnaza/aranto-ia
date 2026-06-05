@@ -18,6 +18,13 @@ RUN composer install \
 
 COPY . .
 RUN composer dump-autoload --no-dev --optimize --no-interaction
+
+# Crea directorios de storage necesarios antes de ejecutar artisan
+RUN mkdir -p storage/framework/views && \
+    mkdir -p storage/framework/cache && \
+    mkdir -p storage/logs && \
+    mkdir -p bootstrap/cache
+
 RUN php artisan wayfinder:generate --with-form
 
 
