@@ -1,0 +1,490 @@
+import { Head } from '@inertiajs/react';
+import { useState } from 'react';
+
+import HeadingSmall from '@/components/heading-small';
+import { OpenCashModal } from '@/components/cash-register/open-cash-modal';
+import TransactionModal from '@/components/cash-register/transaction-modal';
+import CloseCashModal from '@/components/cash-register/CloseCashModal';
+import TreasuryActionDropdown from '@/components/cash-register/treasury-action-dropdown';
+import { ExpenseModal } from '@/components/cash-register/expense-modal';
+import { CommissionPaymentModal } from '@/components/cash-register/commission-payment-modal';
+import { TransactionDetailModal } from '@/components/cash-register/transaction-detail-modal';
+import { useCurrencyFormatter } from '@/stores/currency';
+import { type BreadcrumbItem } from '@/types';
+import { type CashRegisterSession, type Transaction, type CashRegisterBalance } from '@/types/cash-register';
+import { type CommissionLiquidation } from '@/types/commission';
+import { INCOME_ACTIONS, EXPENSE_ACTIONS, type TreasuryAction } from '@/config/treasury-actions';
+
+import AppLayout from '@/layouts/app-layout';
+
+const breadcrumbs: BreadcrumbItem[] = [
+    {
+        title: 'Dashboard',
+        href: '/dashboard',
+    },
+    {
+        title: 'Tesorería',
+        href: '/cash-register',
+    },
+];
+
+interface CashRegisterDashboardProps {
+    activeSession?: CashRegisterSession;
+    todayTransactions: Transaction[];
+    balance: CashRegisterBalance;
+    approvedCommissionLiquidations?: CommissionLiquidation[];
+    suggestedInitialAmount?: number;
+}
+
+export default function CashRegisterDashboard({
+    activeSession,
+    todayTransactions = [],
+    balance,
+    approvedCommissionLiquidations = [],
+    suggestedInitialAmount = 0,
+}: CashRegisterDashboardProps) {
+    const [isOpenModalVisible, setIsOpenModalVisible] = useState(false);
+    const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
+    const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
+    const [isExpenseDirectModalVisible, setIsExpenseDirectModalVisible] = useState(false);
+    const [isCommissionPaymentModalVisible, setIsCommissionPaymentModalVisible] = useState(false);
+    const [isCloseModalVisible, setIsCloseModalVisible] = useState(false);
+    const [isTransactionDetailModalVisible, setIsTransactionDetailModalVisible] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+    const [selectedAction, setSelectedAction] = useState<TreasuryAction | null>(null);
+
+    // Use Paraguay Guaraní formatter
+    const { format: formatCurrency } = useCurrencyFormatter();
+
+    console.log('Dashboard rendered, activeSession:', activeSession);
+    console.log('isOpenModalVisible:', isOpenModalVisible);
+    console.log('isCloseModalVisible:', isCloseModalVisible);
+
+    const handleTransactionClick = (transaction: Transaction) => {
+        setSelectedTransaction(transaction);
+        setIsTransactionDetailModalVisible(true);
+    };
+
+    const handleOpenModal = () => {
+        console.log('Button clicked, opening modal...');
+        setIsOpenModalVisible(true);
+    };
+
+    const handleIncomeAction = (action: TreasuryAction) => {
+        console.log('Income action selected:', action);
+        setSelectedAction(action);
+        
+        switch (action.category) {
+            case 'SERVICE_PAYMENT':
+                // Navigate to service payment page
+                window.location.href = '/cash-register/pending-services';
+                break;
+            case 'OTHER_INCOME':
+                // Open generic income modal
+                setIsIncomeModalVisible(true);
+                break;
+            default:
+                // For now, open generic modal for other income types
+                setIsIncomeModalVisible(true);
+                break;
+        }
+    };
+
+    const handleExpenseAction = (action: TreasuryAction) => {
+        console.log('Expense action selected:', action);
+        setSelectedAction(action);
+        
+        switch (action.category) {
+            case 'COMMISSION_LIQUIDATION':
+                // Open commission payment modal
+                setIsCommissionPaymentModalVisible(true);
+                break;
+            case 'OTHER_EXPENSE':
+                // Open generic expense modal
+                setIsExpenseModalVisible(true);
+                break;
+            default:
+                // For now, open generic modal for other expense types
+                setIsExpenseModalVisible(true);
+                break;
+        }
+    };
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Tesorería - Dashboard" />
+
+            <div className="space-y-6">
+                <HeadingSmall
+                    title="Tesorería - Caja Registradora"
+                    description="Gestión de caja registradora y transacciones diarias"
+                />
+
+                <div className="grid gap-4 md:grid-cols-5">
+                    {/* Session Status Card */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Estado de Caja</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-muted-foreground"
+                            >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold">
+                            {activeSession ? 'ABIERTA' : 'CERRADA'}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {activeSession 
+                                ? `Abierta desde: ${new Date(activeSession.opening_date).toLocaleTimeString()}`
+                                : 'Caja cerrada'
+                            }
+                        </p>
+                    </div>
+
+                    {/* Balance Apertura */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Balance Apertura</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-muted-foreground"
+                            >
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold">
+                            {formatCurrency(Number(balance?.opening) || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Balance inicial del día
+                        </p>
+                    </div>
+
+                    {/* Ingresos */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Ingresos</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-green-600"
+                            >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold text-green-600">
+                            {formatCurrency(Number(balance?.income) || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Total de ingresos del día
+                        </p>
+                    </div>
+
+                    {/* Egresos */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Egresos</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-red-600"
+                            >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold text-red-600">
+                            {formatCurrency(Number(balance?.expense) || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Total de egresos del día
+                        </p>
+                    </div>
+
+                    {/* Balance Actual */}
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+                        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <h3 className="tracking-tight text-sm font-medium">Balance Actual</h3>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                className="h-4 w-4 text-muted-foreground"
+                            >
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                            </svg>
+                        </div>
+                        <div className="text-2xl font-bold">
+                            {formatCurrency(Number(balance?.current) || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Balance total disponible
+                        </p>
+                    </div>
+                </div>
+
+                {/* Actions Section */}
+                <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-col space-y-1.5 p-6">
+                        <h3 className="text-2xl font-semibold leading-none tracking-tight">Acciones Rápidas</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Gestiona las operaciones de caja registradora
+                        </p>
+                    </div>
+                    <div className="p-6 pt-0">
+                        <div className="flex gap-4">
+                            {!activeSession ? (
+                                <button 
+                                    onClick={handleOpenModal}
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                                >
+                                    <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                                        <path d="M9 12l2 2 4-4" />
+                                        <path d="M21 12c.552 0 1-.449 1-1s-.448-1-1-1" />
+                                    </svg>
+                                    Abrir Caja
+                                </button>
+                            ) : (
+                                <>
+                                    <TreasuryActionDropdown
+                                        title="Registrar Ingreso"
+                                        actions={INCOME_ACTIONS}
+                                        onActionClick={handleIncomeAction}
+                                        variant="income"
+                                    />
+                                    <TreasuryActionDropdown
+                                        title="Registrar Egreso"
+                                        actions={EXPENSE_ACTIONS}
+                                        onActionClick={handleExpenseAction}
+                                        variant="expense"
+                                    />
+                                    <button 
+                                        onClick={() => setIsExpenseDirectModalVisible(true)}
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-orange-600 text-primary-foreground hover:bg-orange-700 h-10 px-4 py-2"
+                                    >
+                                        <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <polyline points="14,2 14,8 20,8" />
+                                            <line x1="16" y1="13" x2="8" y2="13" />
+                                            <line x1="16" y1="17" x2="8" y2="17" />
+                                            <polyline points="10,9 9,9 8,9" />
+                                        </svg>
+                                        Registrar Egreso Directo
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            console.log('Cerrar Caja button clicked!');
+                                            console.log('Setting isCloseModalVisible to true');
+                                            setIsCloseModalVisible(true);
+                                        }}
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-primary-foreground hover:bg-red-700 h-10 px-4 py-2"
+                                    >
+                                        <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                                            <path d="M18 6L6 18M6 6l12 12" />
+                                        </svg>
+                                        Cerrar Caja
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Recent Transactions Table */}
+                <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-col space-y-1.5 p-6">
+                        <h3 className="text-2xl font-semibold leading-none tracking-tight">Transacciones Recientes</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Últimas transacciones del día
+                        </p>
+                    </div>
+                    <div className="p-6 pt-0">
+                        <div className="relative w-full overflow-auto">
+                            <table className="w-full caption-bottom text-sm">
+                                <thead className="[&_tr]:border-b">
+                                    <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
+                                            Hora
+                                        </th>
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
+                                            Tipo
+                                        </th>
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
+                                            Descripción
+                                        </th>
+                                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">
+                                            Monto
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="[&_tr:last-child]:border-0">
+                                    {todayTransactions.length > 0 ? (
+                                        todayTransactions.map((transaction: Transaction, index: number) => (
+                                            <tr 
+                                                key={index} 
+                                                className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted cursor-pointer"
+                                                onClick={() => handleTransactionClick(transaction)}
+                                            >
+                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
+                                                    {new Date(transaction.created_at).toLocaleTimeString()}
+                                                </td>
+                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
+                                                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                                        transaction.type === 'INCOME' 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : transaction.category === 'SERVICE_REFUND'
+                                                            ? 'bg-yellow-100 text-yellow-800'
+                                                            : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                        {transaction.type === 'INCOME' 
+                                                            ? 'Ingreso' 
+                                                            : transaction.category === 'SERVICE_REFUND' 
+                                                            ? 'Devolución' 
+                                                            : 'Egreso'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
+                                                    {transaction.description || (() => {
+                                                        const categories: Record<string, string> = {
+                                                            SERVICE_PAYMENT: 'Pago de servicio médico',
+                                                            SERVICE_REFUND: 'Devolución de pago',
+                                                            COMMISSION_LIQUIDATION: 'Pago de comisión profesional',
+                                                            CASH_ADJUSTMENT: 'Ajuste de caja',
+                                                            GENERAL_EXPENSE: 'Gasto general',
+                                                            OPENING_BALANCE: 'Apertura de caja',
+                                                        };
+                                                        return transaction.category && categories[transaction.category]
+                                                            ? categories[transaction.category]
+                                                            : 'Transacción';
+                                                    })()}
+                                                </td>
+                                                <td className="p-4 align-middle text-right [&:has([role=checkbox])]:pr-0">
+                                                    <span className={`font-semibold ${
+                                                        transaction.type === 'INCOME' ? 'text-green-600' : 'text-red-600'
+                                                    }`}>
+                                                        {transaction.type === 'INCOME' ? '+' : '-'}{formatCurrency(Number(transaction.amount))}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={4} className="p-4 align-middle text-center text-muted-foreground">
+                                                No hay transacciones registradas hoy
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Modal for opening cash register */}
+            <OpenCashModal 
+                isOpen={isOpenModalVisible}
+                onClose={() => setIsOpenModalVisible(false)}
+                suggestedInitialAmount={suggestedInitialAmount}
+            />
+
+            {/* Modal for income transactions */}
+            <TransactionModal 
+                isOpen={isIncomeModalVisible}
+                onClose={() => {
+                    setIsIncomeModalVisible(false);
+                    setSelectedAction(null);
+                }}
+                type="INCOME"
+                category={selectedAction?.category}
+                services={[]} // We'll need to pass services from props later
+            />
+
+            {/* Modal for expense transactions */}
+            <TransactionModal 
+                isOpen={isExpenseModalVisible}
+                onClose={() => {
+                    setIsExpenseModalVisible(false);
+                    setSelectedAction(null);
+                }}
+                type="EXPENSE"
+                category={selectedAction?.category}
+            />
+
+            {/* Modal for close cash register */}
+            <CloseCashModal 
+                isOpen={isCloseModalVisible}
+                onClose={() => setIsCloseModalVisible(false)}
+                balance={balance}
+                transactions={todayTransactions}
+            />
+
+            {/* Modal for commission payments */}
+            <CommissionPaymentModal
+                isOpen={isCommissionPaymentModalVisible}
+                onClose={() => {
+                    setIsCommissionPaymentModalVisible(false);
+                    setSelectedAction(null);
+                }}
+                onPaymentProcessed={() => {
+                    // Refresh page to update balances and liquidations list
+                    window.location.reload();
+                }}
+                approvedLiquidations={approvedCommissionLiquidations}
+            />
+
+            {/* Modal for expenses */}
+            <ExpenseModal
+                isOpen={isExpenseDirectModalVisible}
+                onClose={() => setIsExpenseDirectModalVisible(false)}
+                onExpenseProcessed={() => {
+                    // Refrescar los datos del dashboard
+                    window.location.reload();
+                }}
+            />
+
+            {/* Modal for transaction details */}
+            <TransactionDetailModal
+                isOpen={isTransactionDetailModalVisible}
+                onClose={() => {
+                    setIsTransactionDetailModalVisible(false);
+                    setSelectedTransaction(null);
+                }}
+                transaction={selectedTransaction}
+            />
+        </AppLayout>
+    );
+}
