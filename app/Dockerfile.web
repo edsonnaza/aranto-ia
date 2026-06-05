@@ -12,6 +12,9 @@ COPY . .
 # Limpia cualquier caché PHP que haya entrado por error
 RUN rm -f bootstrap/cache/*.php
 
+# Crea directorios de storage requeridos por Laravel (gitignored, no existen en el repo)
+RUN mkdir -p storage/framework/{cache,views,sessions} storage/logs bootstrap/cache
+
 # Instala dependencias optimizadas
 RUN composer install \
     --no-dev \
