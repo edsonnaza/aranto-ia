@@ -39,6 +39,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
+# Invalidate Docker layer cache to ensure latest source files are used
+RUN date
+
 COPY . .
 COPY --from=composer_build /app/resources/js/actions ./resources/js/actions
 COPY --from=composer_build /app/resources/js/routes ./resources/js/routes
@@ -47,7 +50,7 @@ COPY --from=composer_build /app/resources/js/wayfinder ./resources/js/wayfinder
 RUN rm -rf dist .vite node_modules/.vite
 
 RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
-    && npm run build -- --force
+    && npm run build
 
 
 # =========================
