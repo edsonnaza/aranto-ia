@@ -4,6 +4,20 @@ import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
 import path from 'path';
+import { execSync } from 'child_process';
+
+// Check if PHP is available
+const isPhpAvailable = () => {
+    try {
+        execSync('which php', { stdio: 'ignore' });
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const phpAvailable = isPhpAvailable();
+
 export default defineConfig({
     server: {
         host: 'localhost',
@@ -25,10 +39,12 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-            command: process.env.WAYFINDER_COMMAND || 'php artisan wayfinder:generate',
-        }),
+        ...(phpAvailable ? [
+            wayfinder({
+                formVariants: true,
+                command: process.env.WAYFINDER_COMMAND || 'php artisan wayfinder:generate',
+            }),
+        ] : []),
     ],
     esbuild: {
         jsx: 'automatic',
