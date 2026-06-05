@@ -12,6 +12,9 @@ COPY . .
 # Limpia cualquier caché PHP que haya entrado por error
 RUN rm -f bootstrap/cache/*.php
 
+# Crea directorios de storage necesarios (ignorados en .gitignore)
+RUN mkdir -p storage/framework/views storage/framework/cache storage/logs
+
 # Instala dependencias optimizadas
 RUN composer install \
     --no-dev \
