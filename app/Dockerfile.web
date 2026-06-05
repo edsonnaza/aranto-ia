@@ -44,7 +44,11 @@ COPY --from=composer_build /app/resources/js/actions ./resources/js/actions
 COPY --from=composer_build /app/resources/js/routes ./resources/js/routes
 COPY --from=composer_build /app/resources/js/wayfinder ./resources/js/wayfinder
 
-RUN rm -rf dist .vite node_modules/.vite
+# BUILD_ID busts the Docker layer cache so that npm run build always runs
+# with the latest source files (e.g. vite.config.ts) instead of a stale
+# cached layer. Pass --build-arg BUILD_ID=$(date +%s) or any unique value.
+ARG BUILD_ID
+RUN echo "Build ID: ${BUILD_ID}" && rm -rf dist .vite node_modules/.vite
 
 RUN export WAYFINDER_COMMAND="sh -c 'exit 0' sh" \
     && npm run build
