@@ -6,17 +6,26 @@ import { defineConfig } from 'vite';
 import path from 'path';
 import { execSync } from 'child_process';
 
-// Check if PHP is available
-const isPhpAvailable = () => {
+// Get the wayfinder command with fallback to docker
+const getWayfinderCommand = () => {
+    // Try local PHP first
     try {
-        execSync('which php', { stdio: 'ignore' });
-        return true;
+        execSync('php artisan --version', { stdio: 'ignore', cwd: __dirname });
+        return 'php artisan wayfinder:generate';
     } catch {
-        return false;
+        // Fallback to docker
+        try {
+            execSync('docker compose exec -T app php artisan --version 2>/dev/null', { stdio: 'ignore' });
+            return 'docker compose exec -T app php artisan wayfinder:generate';
+        } catch {
+            // If both fail, disable wayfinder
+            console.warn('⚠️  Could not execute wayfinder - PHP not available. Disabling wayfinder plugin.');
+            return null;
+        }
     }
 };
 
-const phpAvailable = isPhpAvailable();
+const wayfinderCommand = getWayfinderCommand();
 
 export default defineConfig({
     server: {
@@ -39,10 +48,10 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        ...(phpAvailable ? [
+        ...(wayfinderCommand ? [
             wayfinder({
                 formVariants: true,
-                command: process.env.WAYFINDER_COMMAND || 'php artisan wayfinder:generate',
+                command: wayfinderCommand,
             }),
         ] : []),
     ],
