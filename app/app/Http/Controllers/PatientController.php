@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Patient;
 use App\Models\InsuranceType;
 use App\Models\VitalSign;
+use App\Models\Laboratory\LabReport;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -197,6 +198,21 @@ class PatientController extends Controller
             'insuranceValid' => $patient->hasValidInsurance(),
             'totalInsurances' => $patient->insurances->count(),
             'medicalRecords' => $patient->medicalRecords()->with(['doctor','prescriptions','files','amendments.createdBy'])->get(),
+            'labReports' => LabReport::whereHas('sample', fn ($q) => $q->where('patient_id', $patient->id))
+                ->with(['sample.testRequests.testProfile'])
+                ->latest('generated_at')
+                ->get()
+                ->map(fn ($report) => [
+                    'id' => $report->id,
+                    'report_number' => $report->report_number,
+                    'generated_at' => optional($report->generated_at)?->toDateTimeString(),
+                    'sample_number' => $report->sample?->sample_number,
+                    'profiles' => $report->sample?->testRequests
+                        ->map(fn ($tr) => $tr->testProfile?->name)
+                        ->filter()
+                        ->unique()
+                        ->values(),
+                ]),
         ]);
     }
 

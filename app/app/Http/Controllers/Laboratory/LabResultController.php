@@ -68,7 +68,7 @@ class LabResultController extends Controller
         }
 
         $results = $query
-            ->with(['sample.patient', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
+            ->with(['sample.patient', 'sample.report', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
             ->latest()
             ->paginate(20)
             ->withQueryString();

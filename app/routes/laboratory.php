@@ -8,6 +8,7 @@ use App\Http\Controllers\Laboratory\LabTestRequestController;
 use App\Http\Controllers\Laboratory\LabWorksheetController;
 use App\Http\Controllers\Laboratory\LabResultController;
 use App\Http\Controllers\Laboratory\LabValidationController;
+use App\Http\Controllers\Laboratory\LabReportController;
 
 Route::middleware(['auth', 'verified'])
     ->prefix('medical/laboratory')
@@ -60,5 +61,9 @@ Route::middleware(['auth', 'verified'])
         
         // Validations
         Route::resource('validations', LabValidationController::class);
+
+        // Reports (published study PDFs)
+        Route::post('samples/{sample}/report', [LabReportController::class, 'publish'])->name('reports.publish');
+        Route::get('reports/{report}/download', [LabReportController::class, 'download'])->name('reports.download');
     });
 
