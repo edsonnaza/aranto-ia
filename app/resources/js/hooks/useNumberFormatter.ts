@@ -26,6 +26,11 @@ const parseNumber = (value: string | number, config: NumberFormatConfig): number
     normalized = normalized
       .split(config.thousandsSeparator).join('')
       .replace(config.decimalSeparator, '.')
+  } else {
+    // No decimal separator present: dots followed by exactly 3 digits
+    // are thousands separators (e.g. '120.000' → 120000), while dots
+    // followed by fewer digits are decimals (e.g. '0.5' → 0.5).
+    normalized = normalized.replace(/\.(?=\d{3}(?!\d))/g, '')
   }
 
   normalized = normalized.replace(/[^0-9.-]/g, '')
