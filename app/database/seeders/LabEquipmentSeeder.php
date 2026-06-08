@@ -76,7 +76,7 @@ class LabEquipmentSeeder extends Seeder
         ];
 
         foreach ($equipment as $item) {
-            LabEquipment::create($item);
+            LabEquipment::firstOrCreate(['code' => $item['code']], $item);
         }
     }
 }

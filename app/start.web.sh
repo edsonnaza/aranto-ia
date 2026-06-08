@@ -12,11 +12,9 @@ php artisan view:cache || true
 # DO NOT fail deploy if no migrations are pending.
 php artisan migrate --force || true
 
-# Sembrar roles y permisos (idempotente, seguro en cada despliegue).
-php artisan db:seed --class=AccessControlSeeder --force || true
-
-# Sembrar catálogo de servicios de laboratorio (idempotente).
-php artisan db:seed --class=LaboratoryCatalogSeeder --force || true
+# Seeder principal de despliegue: RBAC + catálogos + laboratorio
+# (idempotente y sin legacy; seguro en cada despliegue).
+php artisan db:seed --class=DeploySeeder --force || true
 
 echo "==> Starting Laravel on ${PORT:-8080}..."
 

@@ -112,33 +112,41 @@ class LabTestProfileSeeder extends Seeder
                 continue;
             }
 
-            $profile = LabTestProfile::create([
-                'medical_service_id' => $service->id,
-                'name' => $profileData['profile_name'],
-                'code' => strtoupper(str_replace(' ', '_', $profileData['profile_name'])),
-                'status' => 'active',
-            ]);
+            $profile = LabTestProfile::firstOrCreate(
+                ['medical_service_id' => $service->id],
+                [
+                    'name' => $profileData['profile_name'],
+                    'code' => strtoupper(str_replace(' ', '_', $profileData['profile_name'])),
+                    'status' => 'active',
+                ]
+            );
 
             foreach ($profileData['parameters'] as $index => $paramData) {
-                LabTestParameter::create([
-                    'lab_test_profile_id' => $profile->id,
-                    'name' => $paramData['name'],
-                    'code' => $paramData['code'],
-                    'parameter_type' => $paramData['type'],
-                    'unit' => $paramData['unit'],
-                    'display_order' => $index + 1,
-                    'is_required' => true,
-                ]);
+                LabTestParameter::firstOrCreate(
+                    [
+                        'lab_test_profile_id' => $profile->id,
+                        'code' => $paramData['code'],
+                    ],
+                    [
+                        'name' => $paramData['name'],
+                        'parameter_type' => $paramData['type'],
+                        'unit' => $paramData['unit'],
+                        'display_order' => $index + 1,
+                        'is_required' => true,
+                    ]
+                );
             }
 
             foreach ($profileData['equipment'] as $equipmentCode) {
                 $equipment = LabEquipment::where('code', $equipmentCode)->first();
                 if ($equipment) {
-                    LabProfileEquipment::create([
-                        'lab_test_profile_id' => $profile->id,
-                        'lab_equipment_id' => $equipment->id,
-                        'is_default' => $equipmentCode === $profileData['equipment'][0],
-                    ]);
+                    LabProfileEquipment::firstOrCreate(
+                        [
+                            'lab_test_profile_id' => $profile->id,
+                            'lab_equipment_id' => $equipment->id,
+                        ],
+                        ['is_default' => $equipmentCode === $profileData['equipment'][0]]
+                    );
                 }
             }
 
