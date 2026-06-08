@@ -38,7 +38,8 @@ class LabReportController extends Controller
             $report->save();
         }
 
-        $this->render($report)->save(Storage::disk('public')->path($report->pdf_path));
+        // The PDF is rendered on demand from the validated data (Railway's
+        // filesystem is ephemeral), so publishing only records the report.
 
         return back()->with('success', 'Estudio publicado. El PDF está disponible para descargar.');
     }
