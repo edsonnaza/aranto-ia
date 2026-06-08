@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNumberFormatter } from '@/hooks/useNumberFormatter'
-import { Beaker, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { Beaker, ChevronDown, ChevronRight, CheckCircle2, FileText, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Parameter {
@@ -25,6 +25,11 @@ interface Parameter {
   parameter_type?: 'numeric' | 'text' | 'option' | 'calculated'
 }
 
+interface LabReportRef {
+  id: number
+  report_number?: string
+}
+
 interface Sample {
   id: number
   sample_number: string
@@ -32,6 +37,7 @@ interface Sample {
     first_name?: string
     last_name?: string
   }
+  report?: LabReportRef | null
 }
 
 interface ResultTestRequest {
@@ -79,6 +85,7 @@ interface ResultGroup {
   status: string
   hasValues: boolean
   items: Result[]
+  report?: LabReportRef | null
 }
 
 export default function ResultsIndex({ results, canValidate }: ResultsIndexProps) {
@@ -86,6 +93,7 @@ export default function ResultsIndex({ results, canValidate }: ResultsIndexProps
   const [openGroups, setOpenGroups] = useState<Set<number>>(new Set())
   const [search, setSearch] = useState('')
   const [validatingIds, setValidatingIds] = useState<Set<number>>(new Set())
+  const [publishingIds, setPublishingIds] = useState<Set<number>>(new Set())
   const [groupToValidate, setGroupToValidate] = useState<ResultGroup | null>(null)
 
   const formatNumberDisplay = (value: number | string): string => {
@@ -117,6 +125,7 @@ export default function ResultsIndex({ results, canValidate }: ResultsIndexProps
           status: result.status ?? 'draft',
           hasValues: false,
           items: [],
+          report: result.sample?.report ?? null,
         })
       }
       const group = map.get(trId)!
@@ -162,6 +171,24 @@ export default function ResultsIndex({ results, canValidate }: ResultsIndexProps
           setValidatingIds((prev) => {
             const next = new Set(prev)
             next.delete(group.testRequestId)
+            return next
+          }),
+      },
+    )
+  }
+
+  const handlePublish = (group: ResultGroup) => {
+    setPublishingIds((prev) => new Set(prev).add(group.sampleId))
+    router.post(
+      `/medical/laboratory/samples/${group.sampleId}/report`,
+      {},
+      {
+        onSuccess: () => toast.success(`Estudio ${group.sampleNumber} publicado`),
+        onError: () => toast.error('No se pudo publicar el estudio.'),
+        onFinish: () =>
+          setPublishingIds((prev) => {
+            const next = new Set(prev)
+            next.delete(group.sampleId)
             return next
           }),
       },
@@ -265,6 +292,28 @@ export default function ResultsIndex({ results, canValidate }: ResultsIndexProps
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                         {isValidating ? 'Validando…' : 'Validar'}
                       </Button>
+                    )}
+                    {isClosed && (
+                      group.report ? (
+                        <a
+                          href={`/medical/laboratory/reports/${group.report.id}/download`}
+                          className="inline-flex items-center h-7 px-2 text-xs font-medium text-sky-700 border border-sky-300 rounded-md hover:bg-sky-50"
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                          Descargar PDF
+                        </a>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                          disabled={publishingIds.has(group.sampleId)}
+                          onClick={() => handlePublish(group)}
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1" />
+                          {publishingIds.has(group.sampleId) ? 'Publicando…' : 'Publicar PDF'}
+                        </Button>
+                      )
                     )}
                   </div>
                 </div>
