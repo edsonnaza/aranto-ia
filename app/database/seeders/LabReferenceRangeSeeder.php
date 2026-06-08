@@ -69,15 +69,19 @@ class LabReferenceRangeSeeder extends Seeder
                     $gender = 'female';
                 }
 
-                LabReferenceRange::create([
-                    'lab_test_parameter_id' => $parameter->id,
-                    'gender' => $gender,
-                    'age_min' => $rangeData['age_min'] ?? null,
-                    'age_max' => $rangeData['age_max'] ?? null,
-                    'min_value' => $rangeData['min_value'] ?? null,
-                    'max_value' => $rangeData['max_value'] ?? null,
-                    'reference_text' => $rangeData['reference_text'] ?? null,
-                ]);
+                LabReferenceRange::firstOrCreate(
+                    [
+                        'lab_test_parameter_id' => $parameter->id,
+                        'gender' => $gender,
+                        'age_min' => $rangeData['age_min'] ?? null,
+                        'age_max' => $rangeData['age_max'] ?? null,
+                    ],
+                    [
+                        'min_value' => $rangeData['min_value'] ?? null,
+                        'max_value' => $rangeData['max_value'] ?? null,
+                        'reference_text' => $rangeData['reference_text'] ?? null,
+                    ]
+                );
             }
 
             echo "✅ Rangos para {$paramCode} creados\n";
