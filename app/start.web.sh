@@ -15,6 +15,9 @@ php artisan migrate --force || true
 # Sembrar roles y permisos (idempotente, seguro en cada despliegue).
 php artisan db:seed --class=AccessControlSeeder --force || true
 
+# Sembrar catálogo de servicios de laboratorio (idempotente).
+php artisan db:seed --class=LaboratoryCatalogSeeder --force || true
+
 echo "==> Starting Laravel on ${PORT:-8080}..."
 
 exec php artisan serve \
