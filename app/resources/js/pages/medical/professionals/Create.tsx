@@ -450,7 +450,7 @@ export default function Create({ services = [], specialties = [], users = [], ca
                       fileName={signatureFileName}
                       hasExistingFile={Boolean(signaturePreview)}
                       placeholder="Subir firma del profesional"
-                      hint="Ideal: PNG transparente, recortado y sin fondo extra."
+                      hint="Ideal: PNG transparente, recortado y sin fondo extra. Máximo 2 MB."
                       note={transparencyWarning(signatureFileName)}
                       error={errors.signature}
                     />
@@ -480,7 +480,7 @@ export default function Create({ services = [], specialties = [], users = [], ca
                       fileName={stampFileName}
                       hasExistingFile={Boolean(stampPreview)}
                       placeholder="Subir sello profesional"
-                      hint="Opcional, pero recomendado para el informe."
+                      hint="Opcional, pero recomendado para el informe. Máximo 2 MB."
                       note={transparencyWarning(stampFileName)}
                       error={errors.stamp}
                     />

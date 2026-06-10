@@ -9,6 +9,7 @@ import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FileUploadField } from '@/components/ui/file-upload-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type BreadcrumbItem, type CompanySetting, type SharedData } from '@/types';
@@ -45,6 +46,7 @@ function getInitialCompany(company: CompanySetting | null): CompanyFormData {
 export default function CompanySettings() {
     const { company } = usePage<SharedData>().props;
     const [logoPreview, setLogoPreview] = useState<string | null>(company?.logo_data_url ?? null);
+    const [logoFileName, setLogoFileName] = useState<string | null>(null);
 
     const { data, setData, post, processing, errors, recentlySuccessful } = useForm<CompanyFormData>(getInitialCompany(company));
 
@@ -52,10 +54,9 @@ export default function CompanySettings() {
         setLogoPreview(company?.logo_data_url ?? null);
     }, [company?.logo_data_url]);
 
-    const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0] ?? null;
-
+    const handleLogoChange = (file: File | null) => {
         setData('logo', file);
+        setLogoFileName(file?.name ?? null);
 
         if (!file) {
             setLogoPreview(company?.logo_data_url ?? null);
@@ -213,12 +214,15 @@ export default function CompanySettings() {
                                                 </div>
                                             </div>
 
-                                            <Input
+                                            <FileUploadField
                                                 id="logo"
-                                                type="file"
-                                                accept="image/*"
+                                                accept="image/png,image/jpeg,image/webp"
                                                 onChange={handleLogoChange}
-                                                className="cursor-pointer"
+                                                fileName={logoFileName}
+                                                hasExistingFile={Boolean(logoPreview)}
+                                                placeholder="Subir logo de la empresa"
+                                                hint="PNG, JPG o WEBP. Ideal para cabecera de PDF. Máximo 2 MB."
+                                                note="Preferí un logo limpio, bien recortado y con buen contraste para impresión."
                                             />
 
                                             <InputError className="mt-1" message={errors.logo} />
@@ -236,6 +240,7 @@ export default function CompanySettings() {
                                             onClick={() => {
                                                 setData(getInitialCompany(company));
                                                 setLogoPreview(company?.logo_data_url ?? null);
+                                                setLogoFileName(null);
                                             }}
                                         >
                                             <Camera className="mr-2 h-4 w-4" />

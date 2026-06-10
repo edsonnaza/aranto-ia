@@ -16,6 +16,24 @@ class CompanySettingController extends Controller
     public function edit(Request $request): Response
     {
         $company = CompanySetting::current();
+        $logoDataUrl = null;
+
+        if ($company?->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+            $extension = strtolower(pathinfo($company->logo_path, PATHINFO_EXTENSION));
+            $mimeType = match ($extension) {
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif',
+                'svg' => 'image/svg+xml',
+                default => 'image/jpeg',
+            };
+
+            $logoDataUrl = sprintf(
+                'data:%s;base64,%s',
+                $mimeType,
+                base64_encode(Storage::disk('public')->get($company->logo_path)),
+            );
+        }
 
         return Inertia::render('settings/company', [
             'company' => $company ? [
@@ -24,6 +42,7 @@ class CompanySettingController extends Controller
                 'ruc' => $company->ruc,
                 'logo_path' => $company->logo_path,
                 'logo_url' => $company->logo_url,
+                'logo_data_url' => $logoDataUrl,
                 'legal_representative' => $company->legal_representative,
                 'phone' => $company->phone,
                 'email' => $company->email,

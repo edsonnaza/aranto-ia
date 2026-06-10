@@ -511,7 +511,7 @@ export default function Edit({ professional, services, specialties, users, can_m
                       fileName={signatureFileName}
                       hasExistingFile={Boolean(signaturePreview)}
                       placeholder="Subir firma del profesional"
-                      hint="Ideal: PNG transparente, recortado y sin fondo extra."
+                      hint="Ideal: PNG transparente, recortado y sin fondo extra. Máximo 2 MB."
                       note={transparencyWarning(signatureFileName)}
                       error={errors.signature}
                     />
@@ -541,7 +541,7 @@ export default function Edit({ professional, services, specialties, users, can_m
                       fileName={stampFileName}
                       hasExistingFile={Boolean(stampPreview)}
                       placeholder="Subir sello profesional"
-                      hint="Ideal: PNG transparente o sello limpio sobre fondo claro."
+                      hint="Ideal: PNG transparente o sello limpio sobre fondo claro. Máximo 2 MB."
                       note={transparencyWarning(stampFileName)}
                       error={errors.stamp}
                     />

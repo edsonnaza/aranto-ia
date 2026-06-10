@@ -13,8 +13,12 @@
             font-size: 8px; color: #6b7280; }
 
         .brand { border-bottom: 2px solid #2563eb; padding-bottom: 6px; }
+        .brand-logo-cell { width: 72px; }
+        .brand-logo-box { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
+        .brand-logo-box img { max-width: 60px; max-height: 60px; object-fit: contain; }
         .brand-name { font-size: 20px; font-weight: bold; color: #2563eb; letter-spacing: 1px; }
         .brand-sub { font-size: 10px; color: #6b7280; }
+        .brand-meta { font-size: 9px; color: #6b7280; margin-top: 2px; }
         .brand-org { font-size: 12px; font-weight: bold; color: #374151; text-align: right; }
         .brand-org small { font-weight: normal; color: #6b7280; }
 
@@ -58,9 +62,23 @@
     <header>
         <table style="width:100%; border:0;" class="brand">
             <tr>
+                @if (!empty($clinic['logo_data_url']))
+                    <td class="brand-logo-cell" style="border:0; vertical-align:top;">
+                        <div class="brand-logo-box">
+                            <img src="{{ $clinic['logo_data_url'] }}" alt="Logo de la empresa">
+                        </div>
+                    </td>
+                @endif
                 <td style="border:0; vertical-align:top;">
                     <div class="brand-name">{{ $clinic['name'] }}</div>
                     <div class="brand-sub">Laboratorio Clínico</div>
+                    @if (!empty($clinic['ruc']) || !empty($clinic['phone']) || !empty($clinic['email']))
+                        <div class="brand-meta">
+                            @if (!empty($clinic['ruc']))RUC: {{ $clinic['ruc'] }}@endif
+                            @if (!empty($clinic['phone'])) &nbsp;|&nbsp; Tel: {{ $clinic['phone'] }}@endif
+                            @if (!empty($clinic['email'])) &nbsp;|&nbsp; {{ $clinic['email'] }}@endif
+                        </div>
+                    @endif
                 </td>
                 <td style="border:0; text-align:right; vertical-align:top;">
                     <div class="brand-org">

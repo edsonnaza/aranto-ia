@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\CompanySetting;
 use App\Models\Laboratory\LabReferenceRange;
 use App\Models\Laboratory\LabReport;
 use App\Models\Laboratory\LabResult;
@@ -217,6 +218,7 @@ class LabReportController extends Controller
 
         $genderLabels = ['M' => 'Masculino', 'F' => 'Femenino', 'OTHER' => 'Otro'];
         $signingProfessional = $report->signedByProfessional ?? $sample?->validation?->validatedProfessional;
+        $company = CompanySetting::current();
         $signatory = [
             'name' => $signingProfessional?->full_name ?: ($sample?->validation?->validatedBy?->name ?? '—'),
             'role_label' => $signingProfessional?->title ?: 'Bioquímico/a autorizado/a',
@@ -244,6 +246,14 @@ class LabReportController extends Controller
             'validatedBy' => $sample?->validation?->validatedBy?->name,
             'validatedAt' => optional($sample?->validation?->validated_at)?->format('d/m/Y H:i'),
             'generatedAt' => optional($report->generated_at)?->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i'),
+        ];
+
+        $data['clinic'] = [
+            'name' => $company?->name ?: config('app.name', 'Aranto'),
+            'logo_data_url' => $this->fileAsDataUrl($company?->logo_path),
+            'ruc' => $company?->ruc,
+            'phone' => $company?->phone,
+            'email' => $company?->email,
         ];
 
         return Pdf::loadView('lab.report', $data)->setPaper('a4');
