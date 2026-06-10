@@ -25,20 +25,38 @@ class LabSampleController extends Controller
 {
     public function index(Request $request): Response
     {
+        $today = now()->toDateString();
+        $dateFrom = $request->string('date_from')->toString() ?: $today;
+        $dateTo = $request->string('date_to')->toString() ?: $today;
+        $status = $request->string('status')->toString();
         $query = LabSample::query();
 
         if ($request->search) {
-            $query->where('sample_number', 'like', "%{$request->search}%")
-                  ->orWhere('barcode', 'like', "%{$request->search}%");
+            $search = $request->string('search')->toString();
+            $query->where(function ($sampleQuery) use ($search) {
+                $sampleQuery->where('sample_number', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%")
+                    ->orWhereHas('patient', function ($patientQuery) use ($search) {
+                        $patientQuery
+                            ->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('serviceRequestDetail.medicalService', function ($serviceQuery) use ($search) {
+                        $serviceQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
         }
 
-        if ($request->status) {
-            $query->where('status', $request->status);
+        if ($status !== '' && $status !== 'all') {
+            $query->where('status', $status);
         }
 
         if ($request->sample_type_id) {
             $query->where('lab_sample_type_id', $request->sample_type_id);
         }
+
+        $query->whereDate('collected_at', '>=', $dateFrom);
+        $query->whereDate('collected_at', '<=', $dateTo);
 
         $samples = $query
             ->with(['serviceRequestDetail.medicalService', 'patient', 'sampleType', 'receivedBy', 'latestCollection'])
@@ -51,7 +69,13 @@ class LabSampleController extends Controller
         return Inertia::render('laboratory/samples/Index', [
             'samples' => $samples,
             'sampleTypes' => $sampleTypes,
-            'filters' => $request->only(['search', 'status', 'sample_type_id']),
+            'filters' => [
+                'search' => $request->string('search')->toString() ?: null,
+                'status' => $status !== '' ? $status : null,
+                'sample_type_id' => $request->string('sample_type_id')->toString() ?: null,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
         ]);
     }
 

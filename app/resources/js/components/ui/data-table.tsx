@@ -171,6 +171,26 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
   }, [initialPaymentStatus, initialInsuranceType])
 
   React.useEffect(() => {
+    setSearchValue(initialSearch || "")
+  }, [initialSearch])
+
+  React.useEffect(() => {
+    setDateFrom(initialDateFrom || null)
+  }, [initialDateFrom])
+
+  React.useEffect(() => {
+    setDateTo(initialDateTo || null)
+  }, [initialDateTo])
+
+  React.useEffect(() => {
+    setStatus(initialStatus || "all")
+  }, [initialStatus])
+
+  React.useEffect(() => {
+    setCategory(initialCategory || "all")
+  }, [initialCategory])
+
+  React.useEffect(() => {
     if (!onSelectionChange) return
   const selectedIndices = Object.keys(rowSelection).filter((k) => (rowSelection as Record<string, boolean>)[k])
     const selectedRows = selectedIndices.map((i) => data.data[Number(i)])

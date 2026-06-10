@@ -33,6 +33,11 @@ interface LabReportRef {
 interface Sample {
   id: number
   sample_number: string
+  barcode?: string | null
+  collected_at?: string | null
+  sample_type?: {
+    name?: string | null
+  } | null
   patient?: {
     first_name?: string
     last_name?: string
@@ -59,6 +64,12 @@ interface Result {
 
 interface ResultsIndexProps {
   results: { data: Result[] }
+  filters: {
+    search?: string | null
+    status?: string | null
+    date_from?: string | null
+    date_to?: string | null
+  }
   canValidate: boolean
   validationAuthorizationMessage?: string | null
 }
@@ -66,15 +77,11 @@ interface ResultsIndexProps {
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Borrador',
   validated: 'Validado',
-  completed: 'Completado',
-  pending_validation: 'Pend. validación',
 }
 
 const STATUS_VARIANTS: Record<string, 'secondary' | 'pending' | 'paid'> = {
   draft: 'secondary',
-  pending_validation: 'pending',
   validated: 'paid',
-  completed: 'paid',
 }
 
 interface ResultGroup {
@@ -83,16 +90,23 @@ interface ResultGroup {
   sampleNumber: string
   patientName: string
   profileName: string
+  sampleTypeName: string
+  barcode: string
+  collectedAt: string | null
   status: string
   hasValues: boolean
   items: Result[]
   report?: LabReportRef | null
 }
 
-export default function ResultsIndex({ results, canValidate, validationAuthorizationMessage = null }: ResultsIndexProps) {
+export default function ResultsIndex({ results, filters, canValidate, validationAuthorizationMessage = null }: ResultsIndexProps) {
   const { parse: parseDecimal, format: formatDecimal } = useNumberFormatter()
   const [openGroups, setOpenGroups] = useState<Set<number>>(new Set())
-  const [search, setSearch] = useState('')
+  const today = new Date().toISOString().slice(0, 10)
+  const [search, setSearch] = useState(filters.search || '')
+  const [status, setStatus] = useState(filters.status || 'validated')
+  const [dateFrom, setDateFrom] = useState(filters.date_from || today)
+  const [dateTo, setDateTo] = useState(filters.date_to || today)
   const [validatingIds, setValidatingIds] = useState<Set<number>>(new Set())
   const [publishingIds, setPublishingIds] = useState<Set<number>>(new Set())
   const [groupToValidate, setGroupToValidate] = useState<ResultGroup | null>(null)
@@ -111,6 +125,18 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
     return formatNumberDisplay(parsed)
   }
 
+  const formatCollectedAt = (value?: string | null): string => {
+    if (!value) return '-'
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+
+    return date.toLocaleString('es-ES', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    })
+  }
+
   const groups = useMemo<ResultGroup[]>(() => {
     const map = new Map<number, ResultGroup>()
     for (const result of results.data) {
@@ -123,6 +149,9 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
           sampleNumber: result.sample?.sample_number ?? `#${trId}`,
           patientName: patient ? `${patient.first_name ?? ''} ${patient.last_name ?? ''}`.trim() : 'Paciente N/A',
           profileName: result.test_request?.test_profile?.name ?? 'Estudio N/A',
+          sampleTypeName: result.sample?.sample_type?.name ?? 'N/A',
+          barcode: result.sample?.barcode ?? '-',
+          collectedAt: result.sample?.collected_at ?? null,
           status: result.status ?? 'draft',
           hasValues: false,
           items: [],
@@ -202,6 +231,41 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
     { href: '/medical/laboratory/results', title: 'Resultados', current: true },
   ]
 
+  const applyFilters = () => {
+    router.get(
+      '/medical/laboratory/results',
+      {
+        search: search || undefined,
+        status,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      },
+      {
+        preserveState: true,
+        replace: true,
+      },
+    )
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setStatus('validated')
+    setDateFrom(today)
+    setDateTo(today)
+    router.get(
+      '/medical/laboratory/results',
+      {
+        status: 'validated',
+        date_from: today,
+        date_to: today,
+      },
+      {
+        preserveState: true,
+        replace: true,
+      },
+    )
+  }
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Resultados de Laboratorio" />
@@ -220,12 +284,48 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
           </Link>
         </div>
 
-        <Input
-          placeholder="Buscar por muestra, paciente o perfil..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm h-9"
-        />
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Buscar</label>
+              <Input
+                placeholder="Buscar por muestra, paciente o perfil..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-9"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Estado</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="h-9 w-full rounded-md border border-emerald-300 bg-white px-3 text-sm outline-none focus-visible:border-emerald-500 focus-visible:ring-[3px] focus-visible:ring-emerald-500/30"
+              >
+                <option value="all">Todos</option>
+                <option value="draft">Borrador</option>
+                <option value="validated">Validado</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Desde</label>
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Hasta</label>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <Button onClick={applyFilters}>Aplicar filtros</Button>
+            <Button variant="outline" onClick={clearFilters}>Limpiar</Button>
+          </div>
+        </div>
 
         {!canValidate && validationAuthorizationMessage && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -247,7 +347,7 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
             const isOpen = openGroups.has(group.testRequestId)
             const isValidating = validatingIds.has(group.testRequestId)
             const variant = STATUS_VARIANTS[group.status] ?? 'secondary'
-            const isClosed = group.status === 'validated' || group.status === 'completed'
+            const isClosed = group.status === 'validated'
             const showValidateBtn = canValidate && group.hasValues && !isClosed
 
             return (
@@ -268,6 +368,11 @@ export default function ResultsIndex({ results, canValidate, validationAuthoriza
                         <span className="text-sm text-gray-600 truncate">{group.profileName}</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">{group.patientName}</p>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
+                        <span><span className="font-medium text-gray-700">Tipo:</span> {group.sampleTypeName}</span>
+                        <span><span className="font-medium text-gray-700">Barcode:</span> {group.barcode}</span>
+                        <span><span className="font-medium text-gray-700">Recolección:</span> {formatCollectedAt(group.collectedAt)}</span>
+                      </div>
                     </div>
                   </button>
 

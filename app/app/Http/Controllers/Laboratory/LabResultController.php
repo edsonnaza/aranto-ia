@@ -69,24 +69,42 @@ class LabResultController extends Controller
     public function index(Request $request): Response
     {
         $authorizedSigner = $this->resolveAuthorizedSigner();
+        $today = now()->toDateString();
+        $dateFrom = $request->string('date_from')->toString() ?: $today;
+        $dateTo = $request->string('date_to')->toString() ?: $today;
+        $status = $request->string('status')->toString() ?: 'validated';
 
         $query = LabResult::query();
 
         if ($request->search) {
-            $query->whereHas('sample', function ($q) use ($request) {
-                $q->where('sample_number', 'like', "%{$request->search}%");
+            $search = $request->string('search')->toString();
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('sample', function ($sampleQuery) use ($search) {
+                    $sampleQuery
+                        ->where('sample_number', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%")
+                        ->orWhereHas('patient', function ($patientQuery) use ($search) {
+                            $patientQuery
+                                ->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%");
+                        });
+                })->orWhereHas('testRequest.testProfile', function ($profileQuery) use ($search) {
+                    $profileQuery->where('name', 'like', "%{$search}%");
+                });
             });
         }
 
-        if ($request->status) {
-            $query->where('status', $request->status);
+        if ($status !== 'all') {
+            $query->where('status', $status);
         }
 
+        $query->whereDate('updated_at', '>=', $dateFrom);
+        $query->whereDate('updated_at', '<=', $dateTo);
+
         $results = $query
-            ->with(['sample.patient', 'sample.report', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
+            ->with(['sample.patient', 'sample.report', 'sample.sampleType', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
             ->latest()
-            ->paginate(20)
-            ->withQueryString();
+            ->get();
 
         $testRequests = LabTestRequest::query()
             ->whereIn('status', ['pending', 'assigned', 'in_process'])
@@ -104,8 +122,15 @@ class LabResultController extends Controller
             ->get();
 
         return Inertia::render('laboratory/results/Index', [
-            'results' => $results,
-            'filters' => $request->only(['search', 'status']),
+            'results' => [
+                'data' => $results,
+            ],
+            'filters' => [
+                'search' => $request->string('search')->toString() ?: null,
+                'status' => $status,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
             'canValidate' => $authorizedSigner !== null,
             'validationAuthorizationMessage' => $authorizedSigner
                 ? null

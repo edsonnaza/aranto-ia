@@ -82,6 +82,13 @@ interface PaginatedSamples {
 interface SamplesIndexProps {
   samples: PaginatedSamples
   sampleTypes: SampleType[]
+  filters: {
+    search?: string | null
+    status?: string | null
+    sample_type_id?: string | null
+    date_from?: string | null
+    date_to?: string | null
+  }
 }
 
 const getStatusConfig = (status: string) => {
@@ -140,7 +147,7 @@ const getSampleConditionRisk = (sampleCondition?: string | null) => {
   }
 }
 
-export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps) {
+export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesIndexProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editSample, setEditSample] = useState<Sample | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -475,10 +482,24 @@ export default function SamplesIndex({ samples, sampleTypes }: SamplesIndexProps
               columns={columns}
               data={samples}
               searchable={true}
-              searchPlaceholder="Buscar por número de muestra o barcode..."
+              searchPlaceholder="Buscar por número, barcode, paciente o estudio..."
               emptyMessage="No hay muestras registradas."
               loading={loading}
+              dateRangeFilterable={true}
+              initialDateFrom={filters.date_from || ''}
+              initialDateTo={filters.date_to || ''}
+              initialStatus={filters.status || 'all'}
+              initialSearch={filters.search || ''}
               statusFilterable={true}
+              onDateRangeChange={(dateRange) => {
+                const url = new URL(window.location.href)
+                if (dateRange.from) url.searchParams.set('date_from', dateRange.from)
+                else url.searchParams.delete('date_from')
+                if (dateRange.to) url.searchParams.set('date_to', dateRange.to)
+                else url.searchParams.delete('date_to')
+                url.searchParams.set('page', '1')
+                router.visit(url.toString(), { preserveState: true })
+              }}
               statusOptions={[
                 { value: 'pending_collection', label: 'Pendiente Toma' },
                 { value: 'collected', label: 'Tomada' },

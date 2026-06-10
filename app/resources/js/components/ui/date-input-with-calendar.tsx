@@ -10,9 +10,10 @@ export interface DateInputWithCalendarProps {
   onChange: (value: string) => void
   placeholder?: string
   disabled?: boolean
+  format?: "iso" | "local"
 }
 
-export function DateInputWithCalendar({ value, onChange, placeholder, disabled }: DateInputWithCalendarProps) {
+export function DateInputWithCalendar({ value, onChange, placeholder, disabled, format = "local" }: DateInputWithCalendarProps) {
   const [open, setOpen] = React.useState(false)
   const [month, setMonth] = React.useState<Date>(() => {
     const parsed = value ? parseDate(value) : new Date()
@@ -33,11 +34,7 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
       selectedDate = date.from
     }
     if (!selectedDate) return
-    // Formatear dd-mm-yyyy
-    const day = String(selectedDate.getDate()).padStart(2, '0')
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
-    const year = selectedDate.getFullYear()
-    const formatted = `${day}-${month}-${year}`
+    const formatted = formatDateValue(selectedDate, format)
     onChange(formatted)
     setOpen(false)
   }
@@ -60,7 +57,9 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        pattern="^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[012])-\d{4}$"
+        pattern={format === "iso"
+          ? "^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"
+          : "^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[012])-\\d{4}$"}
         className="w-36"
         onKeyDown={e => {
           if (e.key === 'Enter') e.preventDefault();
@@ -93,8 +92,30 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled }
 }
 
 function parseDate(str: string): Date | undefined {
-  // Espera dd-mm-yyyy
-  const [d, m, y] = str.split("-").map(Number)
-  if (!d || !m || !y) return undefined
-  return new Date(y, m - 1, d)
+  const parts = str.split("-").map(Number)
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) return undefined
+
+  if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = parts
+    return new Date(y, m - 1, d)
+  }
+
+  if (str.match(/^\d{2}-\d{2}-\d{4}$/)) {
+    const [d, m, y] = parts
+    return new Date(y, m - 1, d)
+  }
+
+  return undefined
+}
+
+function formatDateValue(date: Date, format: "iso" | "local"): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+
+  if (format === "iso") {
+    return `${year}-${month}-${day}`
+  }
+
+  return `${day}-${month}-${year}`
 }
