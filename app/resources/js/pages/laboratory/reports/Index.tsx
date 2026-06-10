@@ -1,11 +1,22 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Download, FileText, Search } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { Check, ChevronDown, Download, FileText, Loader2, Search } from 'lucide-react';
 import { useState } from 'react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { DataTableSummary } from '@/components/ui/data-table-summary';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface ProfileOption {
     id: number;
@@ -58,10 +69,14 @@ interface Props {
 }
 
 export default function LabReportsIndex({ reports, profiles, filters }: Props) {
+    const today = new Date().toISOString().slice(0, 10);
     const [search, setSearch] = useState(filters.search || '');
     const [profileId, setProfileId] = useState(filters.profile_id || 'all');
-    const [dateFrom, setDateFrom] = useState(filters.date_from || '');
-    const [dateTo, setDateTo] = useState(filters.date_to || '');
+    const [dateFrom, setDateFrom] = useState(filters.date_from || today);
+    const [dateTo, setDateTo] = useState(filters.date_to || today);
+    const [isLoading, setIsLoading] = useState(false);
+    const [studyOpen, setStudyOpen] = useState(false);
+    const selectedProfile = profiles.find((profile) => String(profile.id) === profileId) ?? null;
 
     const breadcrumbs = [
         { href: '/medical', title: 'Sistema Médico' },
@@ -69,7 +84,7 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
         { href: '/medical/laboratory/reports', title: 'Informes PDF', current: true },
     ];
 
-    const applyFilters = () => {
+    const navigateWithFilters = (overrides: Record<string, string | number | undefined> = {}) => {
         router.get(
             '/medical/laboratory/reports',
             {
@@ -77,17 +92,38 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
                 profile_id: profileId === 'all' ? undefined : profileId,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
+                per_page: reports.per_page,
+                ...overrides,
             },
-            { preserveState: true, replace: true },
+            {
+                preserveState: true,
+                replace: true,
+                onStart: () => setIsLoading(true),
+                onFinish: () => setIsLoading(false),
+            },
         );
+    };
+
+    const applyFilters = () => {
+        navigateWithFilters({ page: 1 });
     };
 
     const clearFilters = () => {
         setSearch('');
         setProfileId('all');
-        setDateFrom('');
-        setDateTo('');
-        router.get('/medical/laboratory/reports', {}, { preserveState: true, replace: true });
+        setDateFrom(today);
+        setDateTo(today);
+        router.get('/medical/laboratory/reports', {
+            date_from: today,
+            date_to: today,
+            per_page: reports.per_page,
+            page: 1,
+        }, {
+            preserveState: true,
+            replace: true,
+            onStart: () => setIsLoading(true),
+            onFinish: () => setIsLoading(false),
+        });
     };
 
     return (
@@ -119,19 +155,65 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
 
                         <div>
                             <label className="mb-1 block text-xs font-medium text-gray-700">Estudio</label>
-                            <Select value={profileId} onValueChange={setProfileId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Todos" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos</SelectItem>
-                                    {profiles.map((profile) => (
-                                        <SelectItem key={profile.id} value={String(profile.id)}>
-                                            {profile.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Popover open={studyOpen} onOpenChange={setStudyOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={studyOpen}
+                                        className="w-full justify-between"
+                                        disabled={isLoading}
+                                    >
+                                        <span className={cn('truncate text-left', !selectedProfile && 'text-muted-foreground')}>
+                                            {selectedProfile ? selectedProfile.name : 'Todos'}
+                                        </span>
+                                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Buscar estudio..." />
+                                        <CommandList>
+                                            <CommandEmpty>No se encontraron estudios.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="Todos"
+                                                    onSelect={() => {
+                                                        setProfileId('all');
+                                                        setStudyOpen(false);
+                                                    }}
+                                                >
+                                                    <Check
+                                                        className={cn(
+                                                            'mr-2 h-4 w-4',
+                                                            profileId === 'all' ? 'opacity-100' : 'opacity-0',
+                                                        )}
+                                                    />
+                                                    Todos
+                                                </CommandItem>
+                                                {profiles.map((profile) => (
+                                                    <CommandItem
+                                                        key={profile.id}
+                                                        value={profile.name}
+                                                        onSelect={() => {
+                                                            setProfileId(String(profile.id));
+                                                            setStudyOpen(false);
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 h-4 w-4',
+                                                                profileId === String(profile.id) ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        <span className="truncate">{profile.name}</span>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -147,8 +229,11 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
                     </div>
 
                     <div className="mt-3 flex gap-2">
-                        <Button onClick={applyFilters}>Aplicar filtros</Button>
-                        <Button variant="outline" onClick={clearFilters}>Limpiar</Button>
+                        <Button onClick={applyFilters} disabled={isLoading}>
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Aplicar filtros
+                        </Button>
+                        <Button variant="outline" onClick={clearFilters} disabled={isLoading}>Limpiar</Button>
                     </div>
                 </div>
 
@@ -201,12 +286,12 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
                                                     <div className="text-xs text-gray-500">{report.generated_by?.name || 'Sistema'}</div>
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
-                                                    <Link href={`/medical/laboratory/reports/${report.id}/download`}>
-                                                        <Button variant="outline" size="sm">
+                                                    <Button variant="outline" size="sm" asChild>
+                                                        <a href={`/medical/laboratory/reports/${report.id}/download`} download>
                                                             <Download className="mr-2 h-4 w-4" />
                                                             Descargar
-                                                        </Button>
-                                                    </Link>
+                                                        </a>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         );
@@ -216,6 +301,23 @@ export default function LabReportsIndex({ reports, profiles, filters }: Props) {
                         </div>
                     )}
                 </div>
+
+                <div className="flex items-center justify-between px-2">
+                    <div className="flex-1" />
+                    <DataTablePagination
+                        currentPage={reports.current_page}
+                        lastPage={reports.last_page}
+                        perPage={reports.per_page}
+                        pageSizes={[10, 20, 30, 50, 100]}
+                        onPageChange={(page) => navigateWithFilters({ page })}
+                        onPageSizeChange={(size) => navigateWithFilters({ per_page: Number(size), page: 1 })}
+                        loading={isLoading}
+                    />
+                </div>
+
+                {reports.total > 0 && (
+                    <DataTableSummary from={reports.from} to={reports.to} total={reports.total} />
+                )}
             </div>
         </AppLayout>
     );

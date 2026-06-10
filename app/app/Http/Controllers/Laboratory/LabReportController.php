@@ -20,6 +20,10 @@ class LabReportController extends Controller
 {
     public function index(Request $request): Response
     {
+        $today = now()->toDateString();
+        $dateFrom = $request->string('date_from')->toString() ?: $today;
+        $dateTo = $request->string('date_to')->toString() ?: $today;
+
         $query = LabReport::query()
             ->with([
                 'sample.patient',
@@ -51,13 +55,8 @@ class LabReportController extends Controller
             });
         }
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('generated_at', '>=', $request->string('date_from')->toString());
-        }
-
-        if ($request->filled('date_to')) {
-            $query->whereDate('generated_at', '<=', $request->string('date_to')->toString());
-        }
+        $query->whereDate('generated_at', '>=', $dateFrom);
+        $query->whereDate('generated_at', '<=', $dateTo);
 
         $reports = $query
             ->orderByDesc('generated_at')
@@ -100,7 +99,12 @@ class LabReportController extends Controller
             'profiles' => LabTestProfile::query()
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'filters' => $request->only(['search', 'profile_id', 'date_from', 'date_to']),
+            'filters' => [
+                'search' => $request->string('search')->toString() ?: null,
+                'profile_id' => $request->string('profile_id')->toString() ?: null,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
         ]);
     }
 
