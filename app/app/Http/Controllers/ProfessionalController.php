@@ -11,6 +11,8 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * ProfessionalController
@@ -101,6 +103,7 @@ class ProfessionalController extends Controller
                 'email' => $professional->email,
                 'phone' => $professional->phone,
                 'license_number' => $professional->license_number,
+                'is_lab_signer' => (bool) $professional->is_lab_signer,
                 'commission_percentage' => $commission,
                 'is_active' => $professional->status === 'active',
                 'status' => $professional->status,
@@ -108,6 +111,8 @@ class ProfessionalController extends Controller
                 'specialties' => $professional->specialties ?? [],
                 'services' => $professional->services ?? [],
                 'commissionSettings' => $professional->commissionSettings,
+                'signature_url' => $professional->signature_url,
+                'stamp_url' => $professional->stamp_url,
             ];
         });
 
@@ -172,6 +177,9 @@ class ProfessionalController extends Controller
             'license_number' => ['nullable', 'string', 'max:50', 'unique:professionals,license_number'],
             'commission_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
+            'signature' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'stamp' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'is_lab_signer' => ['boolean'],
             'is_active' => ['boolean'],
             'services' => ['array'],
             'services.*' => ['exists:medical_services,id'],
@@ -185,8 +193,11 @@ class ProfessionalController extends Controller
         $validated['document_type'] = 'CI';
         $validated['document_number'] = $validated['identification'] ?: 'Sin identificación';
         $validated['status'] = $validated['is_active'] ? 'active' : 'inactive';
+        $validated['is_lab_signer'] = $request->boolean('is_lab_signer');
+        unset($validated['signature'], $validated['stamp']);
 
         $professional = Professional::create($validated);
+        $this->syncProfessionalAssets($request, $professional);
 
         // Attach specialties with first one as primary
         if (!empty($validated['specialties'])) {
@@ -283,6 +294,9 @@ class ProfessionalController extends Controller
             'license_number' => ['nullable', 'string', 'max:50', Rule::unique('professionals')->ignore($professional->id)],
             'commission_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
+            'signature' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'stamp' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'is_lab_signer' => ['boolean'],
             'is_active' => ['boolean'],
             'services' => ['array'],
             'services.*' => ['exists:medical_services,id'],
@@ -291,12 +305,15 @@ class ProfessionalController extends Controller
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['is_lab_signer'] = $request->boolean('is_lab_signer');
+        unset($validated['signature'], $validated['stamp']);
         
         // Extract commission_percentage to save in professional_commission_settings
         $commissionPercentage = $validated['commission_percentage'] ?? null;
         unset($validated['commission_percentage']); // Remove from professional update
 
         $professional->update($validated);
+        $this->syncProfessionalAssets($request, $professional);
         
         // Save commission_percentage in professional_commission_settings as single source of truth
         if ($commissionPercentage !== null) {
@@ -499,6 +516,42 @@ class ProfessionalController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error searching professionals: ' . $e->getMessage());
             return response()->json([], 500);
+        }
+    }
+
+    public function asset(Professional $professional, string $asset): StreamedResponse
+    {
+        $path = match ($asset) {
+            'signature' => $professional->signature_path,
+            'stamp' => $professional->stamp_path,
+            default => abort(404),
+        };
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path);
+    }
+
+    private function syncProfessionalAssets(Request $request, Professional $professional): void
+    {
+        if ($request->hasFile('signature')) {
+            if ($professional->signature_path) {
+                Storage::disk('public')->delete($professional->signature_path);
+            }
+
+            $professional->update([
+                'signature_path' => $request->file('signature')->store('professional-signatures', 'public'),
+            ]);
+        }
+
+        if ($request->hasFile('stamp')) {
+            if ($professional->stamp_path) {
+                Storage::disk('public')->delete($professional->stamp_path);
+            }
+
+            $professional->update([
+                'stamp_path' => $request->file('stamp')->store('professional-stamps', 'public'),
+            ]);
         }
     }
 }

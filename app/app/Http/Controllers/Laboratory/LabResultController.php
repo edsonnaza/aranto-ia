@@ -2,6 +2,7 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Professional;
 use App\Models\Laboratory\LabEquipment;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabSample;
@@ -16,6 +17,18 @@ use Inertia\Response;
 
 class LabResultController extends Controller
 {
+    private function resolveAuthorizedSigner(): ?Professional
+    {
+        if (! (auth()->user()?->hasPermissionTo('validate-lab-results') ?? false)) {
+            return null;
+        }
+
+        return Professional::query()
+            ->where('user_id', auth()->id())
+            ->where('is_lab_signer', true)
+            ->first();
+    }
+
     public function create(Request $request): Response
     {
         $testRequests = LabTestRequest::query()
@@ -55,6 +68,8 @@ class LabResultController extends Controller
 
     public function index(Request $request): Response
     {
+        $authorizedSigner = $this->resolveAuthorizedSigner();
+
         $query = LabResult::query();
 
         if ($request->search) {
@@ -91,7 +106,10 @@ class LabResultController extends Controller
         return Inertia::render('laboratory/results/Index', [
             'results' => $results,
             'filters' => $request->only(['search', 'status']),
-            'canValidate' => auth()->user()?->hasPermissionTo('validate-lab-results') ?? false,
+            'canValidate' => $authorizedSigner !== null,
+            'validationAuthorizationMessage' => $authorizedSigner
+                ? null
+                : 'Solo el bioquímico autorizado con firma habilitada puede validar resultados y cerrar el estudio.',
         ]);
     }
 

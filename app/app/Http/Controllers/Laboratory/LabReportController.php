@@ -122,14 +122,27 @@ class LabReportController extends Controller
             return back()->with('error', 'El estudio debe estar validado antes de publicarlo.');
         }
 
+        $publishingProfessional = \App\Models\Professional::query()
+            ->where('user_id', auth()->id())
+            ->where('is_lab_signer', true)
+            ->first();
+
+        if (! $publishingProfessional) {
+            return back()->with('error', 'Solo un bioquímico autorizado puede publicar el PDF del estudio.');
+        }
+
         $report = LabReport::firstOrNew(['lab_sample_id' => $sample->id]);
+        $signedByProfessionalId = $publishingProfessional->id;
 
         if (! $report->exists) {
             $report->report_number = 'LAB-'.now()->format('Ymd').'-'.str_pad((string) $sample->id, 6, '0', STR_PAD_LEFT);
             $report->generated_by = auth()->id();
+            $report->signed_by_professional_id = $signedByProfessionalId;
             $report->generated_at = now();
             $report->pdf_path = 'lab_reports/'.$report->report_number.'.pdf';
             $report->save();
+        } elseif ((int) $report->signed_by_professional_id !== $signedByProfessionalId) {
+            $report->update(['signed_by_professional_id' => $signedByProfessionalId]);
         }
 
         // The PDF is rendered on demand from the validated data (Railway's
@@ -162,7 +175,9 @@ class LabReportController extends Controller
             'testRequests.testProfile.parameters' => fn ($q) => $q->orderBy('display_order'),
             'results' => fn ($q) => $q->where('status', 'validated'),
             'validation.validatedBy',
+            'validation.validatedProfessional',
         ])->first();
+        $report->loadMissing('signedByProfessional');
 
         $patient = $sample?->patient;
 
@@ -201,6 +216,15 @@ class LabReportController extends Controller
         }
 
         $genderLabels = ['M' => 'Masculino', 'F' => 'Femenino', 'OTHER' => 'Otro'];
+        $signingProfessional = $report->signedByProfessional ?? $sample?->validation?->validatedProfessional;
+        $signatory = [
+            'name' => $signingProfessional?->full_name ?: ($sample?->validation?->validatedBy?->name ?? '—'),
+            'role_label' => $signingProfessional?->title ?: 'Bioquímico/a autorizado/a',
+            'title' => $signingProfessional?->title,
+            'license' => $signingProfessional?->license_number ?: $signingProfessional?->professional_license,
+            'signature_data_url' => $this->fileAsDataUrl($signingProfessional?->signature_path),
+            'stamp_data_url' => $this->fileAsDataUrl($signingProfessional?->stamp_path),
+        ];
 
         $data = [
             'report' => $report,
@@ -216,6 +240,7 @@ class LabReportController extends Controller
                 'received_at' => optional($sample?->received_at ?? $sample?->collected_at)?->format('d/m/Y H:i') ?? '—',
             ],
             'profiles' => $profiles,
+            'signatory' => $signatory,
             'validatedBy' => $sample?->validation?->validatedBy?->name,
             'validatedAt' => optional($sample?->validation?->validated_at)?->format('d/m/Y H:i'),
             'generatedAt' => optional($report->generated_at)?->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i'),
@@ -260,6 +285,18 @@ class LabReportController extends Controller
         }
 
         return '';
+    }
+
+    private function fileAsDataUrl(?string $path): ?string
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $contents = Storage::disk('public')->get($path);
+        $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode($contents);
     }
 
     private function formatResultValue(?string $value, ?string $parameterType): string

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Head, useForm } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ArrowLeft, UserPlus, Save, X } from 'lucide-react'
+import { ArrowLeft, Save, Search, ShieldCheck, UserPlus, X } from 'lucide-react'
 
 interface MedicalService {
   id: number
@@ -26,7 +26,7 @@ interface Props {
 }
 
 export default function Create({ services = [], specialties = [] }: Props) {
-  const { data, setData, post, processing, errors } = useForm({
+  const { data, setData, post, processing, errors, transform } = useForm({
     first_name: '',
     last_name: '',
     identification: '',
@@ -35,14 +35,35 @@ export default function Create({ services = [], specialties = [] }: Props) {
     license_number: '',
     commission_percentage: 10,
     address: '',
+    signature: null as File | null,
+    stamp: null as File | null,
+    is_lab_signer: false,
     is_active: true,
     services: [] as number[],
     specialties: [] as number[]
   })
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null)
+  const [stampPreview, setStampPreview] = useState<string | null>(null)
+  const [serviceSearch, setServiceSearch] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    transform((currentData) => {
+      const payload = { ...currentData }
+
+      if (!payload.signature) {
+        delete payload.signature
+      }
+
+      if (!payload.stamp) {
+        delete payload.stamp
+      }
+
+      return payload
+    })
+
     post('/medical/professionals', {
+      forceFormData: true,
       preserveScroll: true,
       onSuccess: () => {
         // Toast será manejado por FlashMessageProvider
@@ -52,6 +73,35 @@ export default function Create({ services = [], specialties = [] }: Props) {
       }
     })
   }
+
+  const handleFileChange = (field: 'signature' | 'stamp', file: File | null) => {
+    setData(field, file)
+
+    const setPreview = field === 'signature' ? setSignaturePreview : setStampPreview
+    setPreview((previous) => {
+      if (previous?.startsWith('blob:')) {
+        URL.revokeObjectURL(previous)
+      }
+
+      return file ? URL.createObjectURL(file) : null
+    })
+  }
+
+  useEffect(() => {
+    return () => {
+      if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview)
+      if (stampPreview?.startsWith('blob:')) URL.revokeObjectURL(stampPreview)
+    }
+  }, [signaturePreview, stampPreview])
+
+  const filteredServices = useMemo(() => {
+    const query = serviceSearch.trim().toLowerCase()
+    if (!query) return services
+
+    return services.filter((service) =>
+      service.name.toLowerCase().includes(query) || service.code.toLowerCase().includes(query)
+    )
+  }, [serviceSearch, services])
 
   const handleServiceToggle = (serviceId: number, checked: boolean) => {
     if (checked) {
@@ -245,6 +295,60 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   />
                   <Label htmlFor="is_active">Activo</Label>
                 </div>
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-700" />
+                    <div className="space-y-2">
+                      <div>
+                        <Label htmlFor="is_lab_signer" className="text-sm font-medium text-emerald-900">
+                          Autorizado para firmar informes de laboratorio
+                        </Label>
+                        <p className="text-xs text-emerald-800/80">
+                          Si está activo, este profesional podrá figurar como firmante en los PDFs del laboratorio cuando valide estudios.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="is_lab_signer"
+                          checked={data.is_lab_signer}
+                          onCheckedChange={(checked) => setData('is_lab_signer', Boolean(checked))}
+                        />
+                        <Label htmlFor="is_lab_signer" className="font-normal">Habilitar firma de laboratorio</Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signature">Firma escaneada</Label>
+                    <Input
+                      id="signature"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleFileChange('signature', e.target.files?.[0] ?? null)}
+                    />
+                    {signaturePreview && (
+                      <img src={signaturePreview} alt="Vista previa de firma" className="h-20 rounded border bg-white object-contain p-2" />
+                    )}
+                    {errors.signature && <p className="text-sm text-red-600 mt-1">{errors.signature}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stamp">Sello profesional</Label>
+                    <Input
+                      id="stamp"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleFileChange('stamp', e.target.files?.[0] ?? null)}
+                    />
+                    {stampPreview && (
+                      <img src={stampPreview} alt="Vista previa de sello" className="h-20 rounded border bg-white object-contain p-2" />
+                    )}
+                    {errors.stamp && <p className="text-sm text-red-600 mt-1">{errors.stamp}</p>}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -288,8 +392,23 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   <CardTitle className="text-base">Servicios Médicos</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 py-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {services.map((service) => (
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="relative max-w-sm flex-1">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input
+                        value={serviceSearch}
+                        onChange={(e) => setServiceSearch(e.target.value)}
+                        placeholder="Buscar servicio por nombre o código..."
+                        className="pl-9"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {data.services.length} seleccionados
+                    </p>
+                  </div>
+
+                  <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto rounded-md border p-3 md:grid-cols-2 lg:grid-cols-3">
+                    {filteredServices.map((service) => (
                       <div key={service.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`service-${service.id}`}
@@ -308,6 +427,9 @@ export default function Create({ services = [], specialties = [] }: Props) {
                       </div>
                     ))}
                   </div>
+                  {filteredServices.length === 0 && (
+                    <p className="mt-3 text-sm text-gray-500">No se encontraron servicios con esa búsqueda.</p>
+                  )}
                 </CardContent>
               </Card>
             )}

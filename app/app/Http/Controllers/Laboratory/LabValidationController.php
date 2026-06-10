@@ -2,6 +2,7 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Professional;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabValidation;
 use App\Models\Laboratory\LabTestRequest;
@@ -12,6 +13,18 @@ use Inertia\Response;
 
 class LabValidationController extends Controller
 {
+    private function resolveAuthorizedSigner(): ?Professional
+    {
+        if (! (auth()->user()?->hasPermissionTo('validate-lab-results') ?? false)) {
+            return null;
+        }
+
+        return Professional::query()
+            ->where('user_id', auth()->id())
+            ->where('is_lab_signer', true)
+            ->first();
+    }
+
     public function index(Request $request): Response
     {
         $query = LabValidation::query();
@@ -40,6 +53,8 @@ class LabValidationController extends Controller
 
     public function create(Request $request): Response
     {
+        abort_unless($this->resolveAuthorizedSigner(), 403, 'Solo un bioquímico autorizado puede validar resultados.');
+
         // Get test requests that are completed but not validated
         $testRequests = LabTestRequest::where('status', 'completed')
             ->whereDoesntHave('validations')
@@ -54,6 +69,12 @@ class LabValidationController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $authorizedSigner = $this->resolveAuthorizedSigner();
+
+        if (! $authorizedSigner) {
+            return back()->with('error', 'Solo un bioquímico autorizado puede validar resultados de laboratorio.');
+        }
+
         $validated = $request->validate([
             'lab_sample_id' => 'required|exists:lab_samples,id',
             'lab_test_request_id' => 'required|exists:lab_test_requests,id',
@@ -61,6 +82,7 @@ class LabValidationController extends Controller
         ]);
 
         $validated['validated_by'] = auth()->id();
+        $validated['validated_by_professional_id'] = $authorizedSigner->id;
         $validated['validated_at'] = now();
 
         LabValidation::create($validated);
@@ -132,4 +154,3 @@ class LabValidationController extends Controller
             ->with('success', 'Validación eliminada exitosamente.');
     }
 }
-

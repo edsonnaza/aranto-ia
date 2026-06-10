@@ -160,6 +160,9 @@ Route::middleware(['auth', 'verified'])->prefix('medical')->name('medical.')->gr
     ]);
     Route::get('professionals-search', [ProfessionalController::class, 'search'])
         ->name('professionals.search');
+    Route::get('professionals/{professional}/assets/{asset}', [ProfessionalController::class, 'asset'])
+        ->whereIn('asset', ['signature', 'stamp'])
+        ->name('professionals.asset');
     Route::get('professionals/{professional}/commission-report', [ProfessionalController::class, 'commissionReport'])
         ->name('professionals.commission-report');
     Route::patch('professionals/{professional}/toggle-status', [ProfessionalController::class, 'toggleStatus'])

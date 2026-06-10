@@ -35,6 +35,8 @@ interface ServiceItem {
   medical_service_id: number
   service_name?: string
   professional_id: number
+  requires_professional?: boolean
+  is_laboratory?: boolean
   insurance_type_id: number
   scheduled_date: string
   scheduled_time: string
@@ -45,6 +47,18 @@ interface ServiceItem {
   discount_amount: number
   preparation_instructions: string
   notes: string
+}
+
+interface MedicalServiceOption {
+  value: number
+  label: string
+  name: string
+  code?: string
+  base_price: number
+  estimated_duration: number
+  is_laboratory: boolean
+  requires_professional: boolean
+  category: string
 }
 
 interface ReceptionCreateProps {
@@ -125,7 +139,7 @@ export default function ReceptionCreate({
 
   // Flatten services for select options
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const flatServices = useMemo((): any[] => {
+  const flatServices = useMemo((): MedicalServiceOption[] => {
     if (!medicalServices || !Array.isArray(medicalServices) || medicalServices.length === 0) {
       return []
     }
@@ -142,6 +156,8 @@ export default function ReceptionCreate({
         code: service.code,
         base_price: service.base_price || 0,
         estimated_duration: service.estimated_duration || 30,
+        is_laboratory: Boolean(service.is_laboratory),
+        requires_professional: Boolean(service.requires_professional ?? true),
         category: category.category
       }))
     })
@@ -180,7 +196,7 @@ export default function ReceptionCreate({
   }
 
   // Handle service selection
-  const handleServiceSelect = (service: { value: number; base_price: number; label?: string; estimated_duration?: number }, serviceItemId: string) => {
+  const handleServiceSelect = (service: Partial<MedicalServiceOption> & { value: number; base_price: number }, serviceItemId: string) => {
     setServices(services.map(item => {
       if (item.id === serviceItemId) {
         const updated = {
@@ -188,7 +204,9 @@ export default function ReceptionCreate({
           medical_service_id: service.value || 0,
           service_name: service.label || 'Servicio',
           unit_price: service.base_price || 0,
-          estimated_duration: service.estimated_duration || 30
+          estimated_duration: service.estimated_duration || 30,
+          is_laboratory: Boolean(service.is_laboratory),
+          requires_professional: Boolean(service.requires_professional ?? true),
         }
         return updated
       }
@@ -297,7 +315,7 @@ export default function ReceptionCreate({
       notes: notes || undefined,
       services: services.map(service => ({
         medical_service_id: service.medical_service_id,
-        professional_id: service.professional_id,
+        professional_id: service.professional_id > 0 ? service.professional_id : undefined,
         insurance_type_id: service.insurance_type_id,
         scheduled_date: service.scheduled_date || undefined,
         scheduled_time: service.scheduled_time || undefined,
@@ -381,7 +399,7 @@ export default function ReceptionCreate({
                 </div>
                 
                 {expandedPatient && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {initialContext?.appointment && (
                       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         Turno vinculado #{initialContext.appointment.id}
@@ -389,13 +407,40 @@ export default function ReceptionCreate({
                         {initialContext.appointment.medical_service_name ? ` · ${initialContext.appointment.medical_service_name}` : ''}
                       </div>
                     )}
-                    <SearchableInput
-                      placeholder="Buscar paciente por nombre, documento..."
-                      value={selectedPatient?.name || ''}
-                      onSelect={handlePatientSelect}
-                      onSearch={searchPatients}
-                      className="w-full"
-                    />
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(240px,1fr)]">
+                      <div className="max-w-3xl">
+                        <label className="mb-2 block text-sm font-medium text-gray-700">
+                          Paciente
+                        </label>
+                        <SearchableInput
+                          placeholder="Buscar por nombre o documento..."
+                          value={selectedPatient?.name || ''}
+                          onSelect={handlePatientSelect}
+                          onSearch={searchPatients}
+                          className="w-full"
+                        />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Escribí nombre, apellido o número de documento para encontrar rápido al paciente.
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                          Paciente seleccionado
+                        </p>
+                        {selectedPatient ? (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm font-semibold text-slate-900">{selectedPatient.name}</p>
+                            <p className="text-xs text-slate-500">Listo para agregar servicios a la solicitud.</p>
+                          </div>
+                        ) : (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm font-medium text-slate-700">Sin paciente seleccionado</p>
+                            <p className="text-xs text-slate-500">Buscá y elegí un paciente para continuar.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

@@ -177,7 +177,7 @@ class ServiceRequestController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
             'services' => ['required', 'array', 'min:1'],
             'services.*.medical_service_id' => ['required', 'exists:medical_services,id'],
-            'services.*.professional_id' => ['required', 'exists:professionals,id'],
+            'services.*.professional_id' => ['nullable', 'exists:professionals,id'],
             'services.*.insurance_type_id' => ['required', 'exists:insurance_types,id'],
             'services.*.scheduled_date' => ['nullable', 'date'],
             'services.*.scheduled_time' => ['nullable', 'date_format:H:i'],
@@ -248,20 +248,34 @@ class ServiceRequestController extends Controller
                 'confirmed_at' => $shouldAutoConfirmFromAppointment ? now() : null,
             ]);
 
-            foreach ($validated['services'] as $serviceData) {
-                $professional = Professional::with('commissionSettings')->find($serviceData['professional_id']);
+            foreach ($validated['services'] as $index => $serviceData) {
+                $medicalServiceId = (int) $serviceData['medical_service_id'];
+                $isLaboratoryService = in_array($medicalServiceId, $laboratoryServiceIds, true);
+                $professionalId = isset($serviceData['professional_id']) && (int) $serviceData['professional_id'] > 0
+                    ? (int) $serviceData['professional_id']
+                    : null;
+
+                if (! $isLaboratoryService && ! $professionalId) {
+                    throw ValidationException::withMessages([
+                        "services.{$index}.professional_id" => 'Debe seleccionar un profesional para los servicios no laboratoriales.',
+                    ]);
+                }
+
+                $professional = $professionalId
+                    ? Professional::with('commissionSettings')->find($professionalId)
+                    : null;
                 $commissionPercentage = $professional?->commissionSettings?->commission_percentage ?? 0;
 
                 \Log::info('Service detail created with commission percentage', [
-                    'professional_id' => $serviceData['professional_id'],
+                    'professional_id' => $professionalId,
                     'professional_name' => $professional?->full_name,
                     'commission_percentage' => $commissionPercentage,
                     'source' => 'professional_commission_settings',
                 ]);
 
                 $detail = $serviceRequest->details()->create([
-                    'medical_service_id' => $serviceData['medical_service_id'],
-                    'professional_id' => $serviceData['professional_id'],
+                    'medical_service_id' => $medicalServiceId,
+                    'professional_id' => $professionalId,
                     'professional_commission_percentage' => $commissionPercentage,
                     'insurance_type_id' => $serviceData['insurance_type_id'],
                     'scheduled_date' => $serviceData['scheduled_date'] ?? null,
@@ -276,8 +290,8 @@ class ServiceRequestController extends Controller
                     'status' => ServiceRequestDetail::STATUS_PENDING,
                 ]);
 
-                if (in_array((int) $serviceData['medical_service_id'], $laboratoryServiceIds, true)) {
-                    $serviceName = $medicalServiceNames[(int) $serviceData['medical_service_id']] ?? null;
+                if ($isLaboratoryService) {
+                    $serviceName = $medicalServiceNames[$medicalServiceId] ?? null;
 
                     LabSample::create([
                         'service_request_detail_id' => $detail->id,

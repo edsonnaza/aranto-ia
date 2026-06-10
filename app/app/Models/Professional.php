@@ -58,6 +58,9 @@ class Professional extends Model
         'professional_license',
         'license_expiry_date',
         'title',
+        'signature_path',
+        'stamp_path',
+        'is_lab_signer',
         'commission_percentage',
         'commission_calculation_method',
         'status',
@@ -74,10 +77,16 @@ class Professional extends Model
         'date_of_birth' => 'datetime',
         'license_expiry_date' => 'datetime',
         'commission_percentage' => 'float',
+        'is_lab_signer' => 'boolean',
         'hire_date' => 'datetime',
         'termination_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+    ];
+
+    protected $appends = [
+        'signature_url',
+        'stamp_url',
     ];
 
     /**
@@ -195,6 +204,30 @@ class Professional extends Model
     public function getFormattedDocumentAttribute(): string
     {
         return $this->document_type . ': ' . $this->document_number;
+    }
+
+    public function getSignatureUrlAttribute(): ?string
+    {
+        if (! $this->signature_path) {
+            return null;
+        }
+
+        return route('medical.professionals.asset', [
+            'professional' => $this->id,
+            'asset' => 'signature',
+        ]);
+    }
+
+    public function getStampUrlAttribute(): ?string
+    {
+        if (! $this->stamp_path) {
+            return null;
+        }
+
+        return route('medical.professionals.asset', [
+            'professional' => $this->id,
+            'asset' => 'stamp',
+        ]);
     }
 
     /**

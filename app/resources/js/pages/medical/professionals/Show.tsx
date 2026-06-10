@@ -24,7 +24,8 @@ import {
   DollarSign,
   Calendar,
   TrendingUp,
-  Activity
+  Activity,
+  ShieldCheck
 } from 'lucide-react'
 
 // Types
@@ -59,6 +60,9 @@ interface Professional {
   license_number: string
   commission_percentage: number
   address?: string
+  signature_url?: string | null
+  stamp_url?: string | null
+  is_lab_signer?: boolean
   is_active: boolean
   created_at: string
   services?: MedicalService[]
@@ -238,9 +242,42 @@ export default function Show({ professional, commissionStats }: Props) {
                         </p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-gray-400" />
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Firma de laboratorio</label>
+                        <p className="text-gray-900">{professional.is_lab_signer ? 'Autorizado' : 'No autorizado'}</p>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {(professional.signature_url || professional.stamp_url) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Firma y sello</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Firma cargada</label>
+                      {professional.signature_url ? (
+                        <img src={professional.signature_url} alt="Firma profesional" className="mt-2 h-24 rounded border bg-white object-contain p-2" />
+                      ) : (
+                        <p className="text-gray-500">No cargada</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Sello cargado</label>
+                      {professional.stamp_url ? (
+                        <img src={professional.stamp_url} alt="Sello profesional" className="mt-2 h-24 rounded border bg-white object-contain p-2" />
+                      ) : (
+                        <p className="text-gray-500">No cargado</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Services */}
               {professional.services && professional.services.length > 0 && (

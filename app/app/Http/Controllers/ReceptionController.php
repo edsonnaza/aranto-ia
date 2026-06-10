@@ -228,6 +228,8 @@ class ReceptionController extends Controller
                         'code' => $s['code'] ?? null,
                         'base_price' => $s['base_price'] ?? 0,
                         'estimated_duration' => $s['estimated_duration'] ?? 30,
+                        'is_laboratory' => (bool) ($s['is_laboratory'] ?? false),
+                        'requires_professional' => (bool) ($s['requires_professional'] ?? true),
                     ];
                 }, $cat['services']),
             ];
@@ -252,6 +254,11 @@ class ReceptionController extends Controller
     private function getMedicalServicesGroupedByCategory()
     {
         try {
+            $labRootId = ServiceCategory::query()
+                ->where('name', 'Laboratorio Clínico')
+                ->whereNull('parent_id')
+                ->value('id');
+
             $categories = ServiceCategory::where('status', 'active')
                 ->with(['services' => function ($query) {
                     $query->where('status', 'active')->orderBy('name');
@@ -259,17 +266,21 @@ class ReceptionController extends Controller
                 ->orderBy('name')
                 ->get();
 
-            return $categories->map(function ($category) {
+            return $categories->map(function ($category) use ($labRootId) {
+                $isLaboratoryCategory = $this->isLaboratoryCategory($category, $labRootId);
+
                 return [
                     'id' => $category->id,
                     'category' => $category->name,
-                    'services' => $category->services->map(function ($service) {
+                    'services' => $category->services->map(function ($service) use ($isLaboratoryCategory) {
                         return [
                             'id' => $service->id,
                             'name' => $service->name,
                             'code' => $service->code,
                             'base_price' => $service->base_price ?? 0,
                             'estimated_duration' => $service->duration_minutes ?? 30,
+                            'is_laboratory' => $isLaboratoryCategory,
+                            'requires_professional' => ! $isLaboratoryCategory,
                         ];
                     })->toArray(),
                 ];
@@ -278,6 +289,18 @@ class ReceptionController extends Controller
             \Log::error('Error getting medical services: ' . $e->getMessage());
             return [];
         }
+    }
+
+    private function isLaboratoryCategory(ServiceCategory $category, ?int $labRootId): bool
+    {
+        if ($labRootId && (int) $category->parent_id === (int) $labRootId) {
+            return true;
+        }
+
+        return in_array($category->name, [
+            'servicios de Analisis',
+            'Análisis Microbiología',
+        ], true);
     }
 
     /**

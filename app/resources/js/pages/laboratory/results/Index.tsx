@@ -60,6 +60,7 @@ interface Result {
 interface ResultsIndexProps {
   results: { data: Result[] }
   canValidate: boolean
+  validationAuthorizationMessage?: string | null
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -88,7 +89,7 @@ interface ResultGroup {
   report?: LabReportRef | null
 }
 
-export default function ResultsIndex({ results, canValidate }: ResultsIndexProps) {
+export default function ResultsIndex({ results, canValidate, validationAuthorizationMessage = null }: ResultsIndexProps) {
   const { parse: parseDecimal, format: formatDecimal } = useNumberFormatter()
   const [openGroups, setOpenGroups] = useState<Set<number>>(new Set())
   const [search, setSearch] = useState('')
@@ -225,6 +226,12 @@ export default function ResultsIndex({ results, canValidate }: ResultsIndexProps
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm h-9"
         />
+
+        {!canValidate && validationAuthorizationMessage && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {validationAuthorizationMessage}
+          </div>
+        )}
 
         {filtered.length === 0 && (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white px-6 py-12 text-center">

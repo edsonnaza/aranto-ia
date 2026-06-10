@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Head, useForm, router } from '@inertiajs/react'
 import { toast } from 'sonner'
 
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ArrowLeft, UserCog, Save, X } from 'lucide-react'
+import { ArrowLeft, Save, Search, ShieldCheck, UserCog, X } from 'lucide-react'
 
 // Types
 interface MedicalService {
@@ -36,6 +36,9 @@ interface Professional {
   license_number: string
   commission_percentage: number
   address?: string
+  signature_url?: string | null
+  stamp_url?: string | null
+  is_lab_signer?: boolean
   is_active: boolean
   services?: MedicalService[]
   specialties?: Specialty[]
@@ -54,7 +57,8 @@ export default function Edit({ professional, services, specialties }: Props) {
   const professionalSpecialtyIds = professional.specialties?.map(s => s.id) || []
 
   // Simple Inertia form
-  const { data, setData, patch, processing, errors } = useForm({
+  const { data, setData, post, processing, errors, transform } = useForm({
+    _method: 'patch' as const,
     first_name: professional.first_name || '',
     last_name: professional.last_name || '',
     identification: professional.identification || '',
@@ -63,16 +67,38 @@ export default function Edit({ professional, services, specialties }: Props) {
     license_number: professional.license_number || '',
     commission_percentage: professional.commission_percentage || 0,
     address: professional.address || '',
+    signature: null as File | null,
+    stamp: null as File | null,
+    is_lab_signer: professional.is_lab_signer ?? false,
     is_active: professional.is_active,
     services: professionalServiceIds,
     specialties: professionalSpecialtyIds
   })
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(professional.signature_url || null)
+  const [stampPreview, setStampPreview] = useState<string | null>(professional.stamp_url || null)
+  const [serviceSearch, setServiceSearch] = useState('')
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    patch(`/medical/professionals/${professional.id}`, {
+    setData('_method', 'patch')
+    transform((currentData) => {
+      const payload = { ...currentData }
+
+      if (!payload.signature) {
+        delete payload.signature
+      }
+
+      if (!payload.stamp) {
+        delete payload.stamp
+      }
+
+      return payload
+    })
+
+    post(`/medical/professionals/${professional.id}`, {
+      forceFormData: true,
       preserveScroll: true,
       onSuccess: () => {
         toast.success('Profesional actualizado exitosamente')
@@ -83,6 +109,36 @@ export default function Edit({ professional, services, specialties }: Props) {
       }
     })
   }
+
+  const handleFileChange = (field: 'signature' | 'stamp', file: File | null) => {
+    setData(field, file)
+    const fallback = field === 'signature' ? professional.signature_url : professional.stamp_url
+    const setPreview = field === 'signature' ? setSignaturePreview : setStampPreview
+
+    setPreview((previous) => {
+      if (previous?.startsWith('blob:')) {
+        URL.revokeObjectURL(previous)
+      }
+
+      return file ? URL.createObjectURL(file) : (fallback || null)
+    })
+  }
+
+  useEffect(() => {
+    return () => {
+      if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview)
+      if (stampPreview?.startsWith('blob:')) URL.revokeObjectURL(stampPreview)
+    }
+  }, [signaturePreview, stampPreview])
+
+  const filteredServices = useMemo(() => {
+    const query = serviceSearch.trim().toLowerCase()
+    if (!query) return services
+
+    return services.filter((service) =>
+      service.name.toLowerCase().includes(query) || service.code.toLowerCase().includes(query)
+    )
+  }, [serviceSearch, services])
 
   // Handle service selection
   const handleServiceToggle = (serviceId: number, checked: boolean) => {
@@ -298,6 +354,60 @@ export default function Edit({ professional, services, specialties }: Props) {
                     <Label htmlFor="is_active">Profesional Activo</Label>
                   </div>
                 </div>
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-700" />
+                    <div className="space-y-2">
+                      <div>
+                        <Label htmlFor="is_lab_signer" className="text-sm font-medium text-emerald-900">
+                          Autorizado para firmar informes de laboratorio
+                        </Label>
+                        <p className="text-xs text-emerald-800/80">
+                          Este profesional podrá aparecer en el PDF del laboratorio si valida estudios y tiene firma/sello cargados.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="is_lab_signer"
+                          checked={data.is_lab_signer}
+                          onCheckedChange={(checked) => setData('is_lab_signer', Boolean(checked))}
+                        />
+                        <Label htmlFor="is_lab_signer" className="font-normal">Habilitar firma de laboratorio</Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 pt-2 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signature">Firma escaneada</Label>
+                    <Input
+                      id="signature"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleFileChange('signature', e.target.files?.[0] ?? null)}
+                    />
+                    {signaturePreview && (
+                      <img src={signaturePreview} alt="Vista previa de firma" className="h-20 rounded border bg-white object-contain p-2" />
+                    )}
+                    {errors.signature && <p className="text-sm text-red-600 mt-1">{errors.signature}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stamp">Sello profesional</Label>
+                    <Input
+                      id="stamp"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleFileChange('stamp', e.target.files?.[0] ?? null)}
+                    />
+                    {stampPreview && (
+                      <img src={stampPreview} alt="Vista previa de sello" className="h-20 rounded border bg-white object-contain p-2" />
+                    )}
+                    {errors.stamp && <p className="text-sm text-red-600 mt-1">{errors.stamp}</p>}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -310,8 +420,23 @@ export default function Edit({ professional, services, specialties }: Props) {
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {services.map((service) => (
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="relative max-w-sm flex-1">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <Input
+                      value={serviceSearch}
+                      onChange={(e) => setServiceSearch(e.target.value)}
+                      placeholder="Buscar servicio por nombre o código..."
+                      className="pl-9"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {data.services.length} seleccionados
+                  </p>
+                </div>
+
+                <div className="grid max-h-72 grid-cols-1 gap-3 overflow-y-auto rounded-md border p-3 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredServices.map((service) => (
                     <div key={service.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={`service-${service.id}`}
@@ -327,6 +452,9 @@ export default function Edit({ professional, services, specialties }: Props) {
                     </div>
                   ))}
                 </div>
+                {filteredServices.length === 0 && (
+                  <p className="mt-3 text-sm text-gray-500">No se encontraron servicios con esa búsqueda.</p>
+                )}
                 {errors.services && (
                   <p className="text-sm text-red-600 mt-2">
                     {errors.services}

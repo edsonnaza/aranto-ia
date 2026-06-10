@@ -9,6 +9,8 @@ interface ServiceItem {
   medical_service_id: number
   service_name?: string
   professional_id: number
+  requires_professional?: boolean
+  is_laboratory?: boolean
   insurance_type_id: number
   scheduled_date: string
   scheduled_time: string
@@ -166,6 +168,19 @@ export default function ServiceCartTable({
     onUpdate(serviceItemId, 'professional_id', selectedProfessional.value || selectedProfessional.id)
   }
 
+  const searchProfessionalsForService = async (query: string, isLaboratoryService: boolean) => {
+    const results = await searchProfessionals(query)
+
+    if (!isLaboratoryService) {
+      return results
+    }
+
+    return [
+      { id: 0, label: 'Sin profesional' },
+      ...results,
+    ]
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInsuranceSelection = (selectedInsurance: any, serviceItemId: string) => {
     onUpdate(serviceItemId, 'insurance_type_id', selectedInsurance.value || selectedInsurance.id)
@@ -306,7 +321,7 @@ export default function ServiceCartTable({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-1.5 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Servicio</th>
-              <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Prof.</th>
+              <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Profesional solicitante</th>
               <th className="px-1 py-1.5 text-left font-medium text-gray-700 whitespace-nowrap">Seguro</th>
               <th className="px-1 py-1.5 text-center font-medium text-gray-700 whitespace-nowrap">Cant.</th>
               <th className="px-1 py-1.5 text-right font-medium text-gray-700 whitespace-nowrap">Precio</th>
@@ -315,14 +330,19 @@ export default function ServiceCartTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {services.map((service) => (
-              <tr key={service.id} className="hover:bg-gray-50 transition-colors">
+            {services.map((service) => {
+              const currentService = selectedService(service.medical_service_id)
+              const isLaboratoryService = Boolean(currentService?.is_laboratory)
+              const requiresProfessional = Boolean(currentService?.requires_professional ?? true)
+
+              return (
+                <tr key={service.id} className="hover:bg-gray-50 transition-colors">
                 {/* Service Name */}
                 <td className="px-1.5 py-1.5">
                   <div className="min-w-64">
                     <SearchableInput
                       placeholder="Servicio..."
-                      value={selectedService(service.medical_service_id)?.label || service.service_name || ''}
+                      value={currentService?.label || service.service_name || ''}
                       onSelect={(s) => {
                         const extractLabel = (item: unknown): string => {
                           if (typeof item === 'object' && item !== null) {
@@ -346,6 +366,11 @@ export default function ServiceCartTable({
                       onSearch={onSearchServices}
                       className="w-full"
                     />
+                    {isLaboratoryService && (
+                      <p className="mt-1 text-[11px] text-emerald-700">
+                        Servicio de laboratorio
+                      </p>
+                    )}
                   </div>
                 </td>
 
@@ -353,14 +378,28 @@ export default function ServiceCartTable({
                 <td className="px-1 py-1.5">
                   <div className="min-w-40">
                     <SearchableInput
-                      placeholder="Prof."
+                      placeholder={requiresProfessional ? 'Prof.' : 'Opcional'}
                       value={selectedProfessional(service.professional_id)?.label || ''}
                       onSelect={(p) => handleProfessionalSelection(p, service.id)}
-                      onSearch={searchProfessionals}
-                      minSearchLength={1}
+                      onSearch={(query) => searchProfessionalsForService(query, isLaboratoryService)}
+                      minSearchLength={isLaboratoryService ? 0 : 1}
                       maxResults={10}
                       className="w-full"
                     />
+                    {!requiresProfessional && (
+                      <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                        <span>Profesional solicitante (opcional para laboratorio)</span>
+                        {service.professional_id > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdate(service.id, 'professional_id', 0)}
+                            className="text-indigo-600 hover:text-indigo-700"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </td>
 
@@ -431,8 +470,9 @@ export default function ServiceCartTable({
                     </button>
                   </div>
                 </td>
-              </tr>
-            ))}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

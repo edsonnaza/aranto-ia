@@ -52,9 +52,10 @@ FROM php:8.4-fpm-alpine3.21
 WORKDIR /var/www/html
 
 # Runtime deps + extensiones PHP minimizando paquetes persistentes
-RUN apk add --no-cache icu-libs libzip tini netcat-openbsd \
-    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libzip-dev \
-    && docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl \
+RUN apk add --no-cache icu-libs libzip tini netcat-openbsd freetype libjpeg-turbo libpng libwebp \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libzip-dev freetype-dev libjpeg-turbo-dev libpng-dev libwebp-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install gd pdo pdo_mysql intl zip opcache pcntl \
     && apk del .build-deps
 
 # Copy backend and frontend build
