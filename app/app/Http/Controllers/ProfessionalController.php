@@ -6,6 +6,7 @@ use App\Models\Professional;
 use App\Models\MedicalService;
 use App\Models\ProfessionalCommission;
 use App\Models\ProfessionalCommissionSettings;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -157,6 +158,8 @@ class ProfessionalController extends Controller
         return Inertia::render('medical/professionals/Create', [
             'services' => $services,
             'specialties' => $specialties,
+            'users' => $this->canManageLinkedUser() ? $this->availableUsers() : [],
+            'can_manage_linked_user' => $this->canManageLinkedUser(),
         ]);
     }
 
@@ -171,6 +174,7 @@ class ProfessionalController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
+            'user_id' => ['nullable', 'exists:users,id', Rule::unique('professionals', 'user_id')],
             'identification' => ['nullable', 'string', 'max:20', 'unique:professionals,identification'],
             'email' => ['nullable', 'email', 'max:255', 'unique:professionals,email'],
             'phone' => ['nullable', 'string', 'max:15'],
@@ -188,6 +192,9 @@ class ProfessionalController extends Controller
         ]);
 
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['user_id'] = $this->canManageLinkedUser()
+            ? ($validated['user_id'] ?? null)
+            : null;
         
         // Set additional required fields
         $validated['document_type'] = 'CI';
@@ -198,6 +205,13 @@ class ProfessionalController extends Controller
 
         $professional = Professional::create($validated);
         $this->syncProfessionalAssets($request, $professional);
+
+        if (array_key_exists('commission_percentage', $validated) && $validated['commission_percentage'] !== null) {
+            $professional->commissionSettings()->updateOrCreate(
+                ['professional_id' => $professional->id],
+                ['commission_percentage' => $validated['commission_percentage']]
+            );
+        }
 
         // Attach specialties with first one as primary
         if (!empty($validated['specialties'])) {
@@ -226,6 +240,7 @@ class ProfessionalController extends Controller
     public function show(Professional $professional): Response
     {
         $professional->load([
+            'user',
             'services' => function ($query) {
                 $query->withPivot('created_at')->orderBy('name');
             },
@@ -246,7 +261,15 @@ class ProfessionalController extends Controller
         ];
 
         return Inertia::render('medical/professionals/Show', [
-            'professional' => $professional,
+            'professional' => array_merge($professional->toArray(), [
+                'commission_percentage' => (float) ($professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0),
+                'is_active' => $professional->status === 'active',
+                'linked_user' => $professional->user ? [
+                    'id' => $professional->user->id,
+                    'name' => $professional->user->name,
+                    'email' => $professional->user->email,
+                ] : null,
+            ]),
             'commissionStats' => $commissionStats,
         ]);
     }
@@ -259,7 +282,7 @@ class ProfessionalController extends Controller
      */
     public function edit(Professional $professional): Response
     {
-        $professional->load(['services', 'specialties']);
+        $professional->load(['services', 'specialties', 'user', 'commissionSettings']);
         
         $services = MedicalService::where('status', 'active')
             ->orderBy('name')
@@ -270,9 +293,13 @@ class ProfessionalController extends Controller
             ->get(['id', 'name']);
 
         return Inertia::render('medical/professionals/Edit', [
-            'professional' => $professional,
+            'professional' => $this->professionalFormPayload($professional),
             'services' => $services,
             'specialties' => $specialties,
+            'users' => $this->canManageLinkedUser()
+                ? $this->availableUsers($professional)
+                : $this->currentLinkedUserOption($professional),
+            'can_manage_linked_user' => $this->canManageLinkedUser(),
         ]);
     }
 
@@ -288,6 +315,7 @@ class ProfessionalController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
+            'user_id' => ['nullable', 'exists:users,id', Rule::unique('professionals', 'user_id')->ignore($professional->id)],
             'identification' => ['nullable', 'string', 'max:20', Rule::unique('professionals')->ignore($professional->id)],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('professionals')->ignore($professional->id)],
             'phone' => ['nullable', 'string', 'max:15'],
@@ -305,7 +333,12 @@ class ProfessionalController extends Controller
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['user_id'] = $this->canManageLinkedUser()
+            ? ($validated['user_id'] ?? null)
+            : $professional->user_id;
         $validated['is_lab_signer'] = $request->boolean('is_lab_signer');
+        $validated['document_number'] = $validated['identification'] ?: 'Sin identificación';
+        $validated['status'] = $validated['is_active'] ? 'active' : 'inactive';
         unset($validated['signature'], $validated['stamp']);
         
         // Extract commission_percentage to save in professional_commission_settings
@@ -337,7 +370,7 @@ class ProfessionalController extends Controller
             $professional->services()->sync($validated['services'] ?? []);
         }
 
-        return redirect()->route('medical.professionals.show', $professional)
+        return redirect()->route('medical.professionals.edit', $professional)
             ->with('message', "Profesional {$professional->full_name} actualizado exitosamente.");
     }
 
@@ -553,5 +586,88 @@ class ProfessionalController extends Controller
                 'stamp_path' => $request->file('stamp')->store('professional-stamps', 'public'),
             ]);
         }
+    }
+
+    private function availableUsers(?Professional $professional = null)
+    {
+        return User::query()
+            ->with(['roles:id,name', 'professional:id,user_id,first_name,last_name'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->filter(function (User $user) use ($professional) {
+                if (! $user->professional) {
+                    return true;
+                }
+
+                return $professional && $user->professional->id === $professional->id;
+            })
+            ->values()
+            ->map(function (User $user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'roles' => $user->roles->pluck('name')->values()->all(),
+                ];
+            });
+    }
+
+    private function professionalFormPayload(Professional $professional): array
+    {
+        return [
+            'id' => $professional->id,
+            'first_name' => $professional->first_name,
+            'last_name' => $professional->last_name,
+            'identification' => $professional->identification ?? '',
+            'email' => $professional->email ?? '',
+            'phone' => $professional->phone ?? '',
+            'license_number' => $professional->license_number ?? '',
+            'commission_percentage' => (float) ($professional->commissionSettings?->commission_percentage ?? $professional->commission_percentage ?? 0),
+            'address' => $professional->address ?? '',
+            'signature_url' => $professional->signature_url,
+            'stamp_url' => $professional->stamp_url,
+            'is_lab_signer' => (bool) $professional->is_lab_signer,
+            'is_active' => $professional->status === 'active',
+            'user_id' => $professional->user_id,
+            'user' => $professional->user ? [
+                'id' => $professional->user->id,
+                'name' => $professional->user->name,
+                'email' => $professional->user->email,
+            ] : null,
+            'services' => $professional->services->map(fn (MedicalService $service) => [
+                'id' => $service->id,
+                'name' => $service->name,
+                'code' => $service->code,
+            ])->values()->all(),
+            'specialties' => $professional->specialties->map(fn ($specialty) => [
+                'id' => $specialty->id,
+                'name' => $specialty->name,
+            ])->values()->all(),
+        ];
+    }
+
+    private function currentLinkedUserOption(Professional $professional)
+    {
+        if (! $professional->user) {
+            return [];
+        }
+
+        return [[
+            'id' => $professional->user->id,
+            'name' => $professional->user->name,
+            'email' => $professional->user->email,
+            'roles' => $professional->user->getRoleNames()->values()->all(),
+        ]];
+    }
+
+    private function canManageLinkedUser(): bool
+    {
+        $user = auth()->user();
+
+        return (bool) (
+            $user
+            && method_exists($user, 'hasRole')
+            && ($user->hasRole('admin') || $user->hasRole('super-admin') || $user->hasRole('super_admin'))
+        );
     }
 }

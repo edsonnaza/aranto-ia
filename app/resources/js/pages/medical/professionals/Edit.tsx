@@ -8,11 +8,22 @@ import AppLayout from '@/layouts/app-layout'
 // UI Components
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
+import { FileUploadField } from '@/components/ui/file-upload-field'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ArrowLeft, Save, Search, ShieldCheck, UserCog, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { ArrowLeft, Check, ChevronsUpDown, Save, Search, ShieldCheck, UserCog, X } from 'lucide-react'
 
 // Types
 interface MedicalService {
@@ -24,6 +35,13 @@ interface MedicalService {
 interface Specialty {
   id: number
   name: string
+}
+
+interface LinkableUser {
+  id: number
+  name: string
+  email: string
+  roles: string[]
 }
 
 interface Professional {
@@ -40,6 +58,7 @@ interface Professional {
   stamp_url?: string | null
   is_lab_signer?: boolean
   is_active: boolean
+  user_id?: number | null
   services?: MedicalService[]
   specialties?: Specialty[]
 }
@@ -48,9 +67,11 @@ interface Props {
   professional: Professional
   services: MedicalService[]
   specialties: Specialty[]
+  users: LinkableUser[]
+  can_manage_linked_user: boolean
 }
 
-export default function Edit({ professional, services, specialties }: Props) {
+export default function Edit({ professional, services, specialties, users, can_manage_linked_user }: Props) {
   // Get professional's service IDs
   const professionalServiceIds = professional.services?.map(s => s.id) || []
   // Get professional's specialty IDs
@@ -59,6 +80,7 @@ export default function Edit({ professional, services, specialties }: Props) {
   // Simple Inertia form
   const { data, setData, post, processing, errors, transform } = useForm({
     _method: 'patch' as const,
+    user_id: professional.user_id ?? null,
     first_name: professional.first_name || '',
     last_name: professional.last_name || '',
     identification: professional.identification || '',
@@ -76,7 +98,21 @@ export default function Edit({ professional, services, specialties }: Props) {
   })
   const [signaturePreview, setSignaturePreview] = useState<string | null>(professional.signature_url || null)
   const [stampPreview, setStampPreview] = useState<string | null>(professional.stamp_url || null)
+  const [signatureFileName, setSignatureFileName] = useState<string | null>(null)
+  const [stampFileName, setStampFileName] = useState<string | null>(null)
   const [serviceSearch, setServiceSearch] = useState('')
+  const [userOpen, setUserOpen] = useState(false)
+
+  const transparencyWarning = (fileName: string | null) => {
+    if (!fileName) return null
+
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    if (extension === 'jpg' || extension === 'jpeg') {
+      return 'JPG no conserva transparencia real. Para una firma limpia en PDF, usá PNG transparente.'
+    }
+
+    return null
+  }
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,7 +120,7 @@ export default function Edit({ professional, services, specialties }: Props) {
 
     setData('_method', 'patch')
     transform((currentData) => {
-      const payload = { ...currentData }
+      const payload = { ...currentData } as Record<string, unknown>
 
       if (!payload.signature) {
         delete payload.signature
@@ -112,6 +148,13 @@ export default function Edit({ professional, services, specialties }: Props) {
 
   const handleFileChange = (field: 'signature' | 'stamp', file: File | null) => {
     setData(field, file)
+
+    if (field === 'signature') {
+      setSignatureFileName(file?.name ?? null)
+    } else {
+      setStampFileName(file?.name ?? null)
+    }
+
     const fallback = field === 'signature' ? professional.signature_url : professional.stamp_url
     const setPreview = field === 'signature' ? setSignaturePreview : setStampPreview
 
@@ -139,6 +182,11 @@ export default function Edit({ professional, services, specialties }: Props) {
       service.name.toLowerCase().includes(query) || service.code.toLowerCase().includes(query)
     )
   }, [serviceSearch, services])
+
+  const selectedUser = useMemo(
+    () => users.find((user) => user.id === data.user_id) ?? null,
+    [data.user_id, users],
+  )
 
   // Handle service selection
   const handleServiceToggle = (serviceId: number, checked: boolean) => {
@@ -309,6 +357,80 @@ export default function Edit({ professional, services, specialties }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <Label htmlFor="linked-user">Usuario vinculado</Label>
+                    <Popover open={userOpen} onOpenChange={setUserOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="linked-user"
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={userOpen}
+                          disabled={!can_manage_linked_user}
+                          className={cn(
+                            'mt-2 w-full justify-between',
+                            !selectedUser && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="truncate text-left">
+                            {selectedUser
+                              ? `${selectedUser.name} (${selectedUser.email})`
+                              : 'Buscar usuario vinculado'}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar usuario..." />
+                          <CommandList>
+                            <CommandEmpty>No se encontraron usuarios disponibles.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="Sin vincular"
+                                onSelect={() => {
+                                  setData('user_id', null)
+                                  setUserOpen(false)
+                                }}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', data.user_id === null ? 'opacity-100' : 'opacity-0')} />
+                                Sin vincular usuario
+                              </CommandItem>
+                              {users.map((user) => (
+                                <CommandItem
+                                  key={user.id}
+                                  value={`${user.name} ${user.email} ${user.roles.join(' ')}`}
+                                  onSelect={() => {
+                                    setData('user_id', user.id)
+                                    setUserOpen(false)
+                                  }}
+                                >
+                                  <Check className={cn('mr-2 h-4 w-4', data.user_id === user.id ? 'opacity-100' : 'opacity-0')} />
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{user.name}</div>
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {user.email}
+                                      {user.roles.length > 0 ? ` · ${user.roles.join(', ')}` : ''}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <p className="mt-2 text-xs text-gray-500">
+                      {can_manage_linked_user
+                        ? 'El usuario vinculado es quien puede quedar habilitado para validar y firmar resultados de laboratorio con este profesional.'
+                        : 'Podés ver el usuario vinculado, pero solo un administrador puede cambiarlo.'}
+                    </p>
+                    {errors.user_id && (
+                      <p className="text-sm text-red-600 mt-1">{errors.user_id}</p>
+                    )}
+                  </div>
+
                   <div>
                     <Label htmlFor="license_number">Número de Licencia</Label>
                     <Input
@@ -382,30 +504,61 @@ export default function Edit({ professional, services, specialties }: Props) {
                 <div className="grid grid-cols-1 gap-3 pt-2 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="signature">Firma escaneada</Label>
-                    <Input
+                    <FileUploadField
                       id="signature"
-                      type="file"
                       accept="image/png,image/jpeg,image/webp"
-                      onChange={(e) => handleFileChange('signature', e.target.files?.[0] ?? null)}
+                      onChange={(file) => handleFileChange('signature', file)}
+                      fileName={signatureFileName}
+                      hasExistingFile={Boolean(signaturePreview)}
+                      placeholder="Subir firma del profesional"
+                      hint="Ideal: PNG transparente, recortado y sin fondo extra."
+                      note={transparencyWarning(signatureFileName)}
+                      error={errors.signature}
                     />
                     {signaturePreview && (
-                      <img src={signaturePreview} alt="Vista previa de firma" className="h-20 rounded border bg-white object-contain p-2" />
+                      <div
+                        className="flex h-24 items-center justify-center rounded border p-2"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          backgroundImage:
+                            'linear-gradient(45deg, #eef2f7 25%, transparent 25%), linear-gradient(-45deg, #eef2f7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eef2f7 75%), linear-gradient(-45deg, transparent 75%, #eef2f7 75%)',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                        }}
+                      >
+                        <img src={signaturePreview} alt="Vista previa de firma" className="h-20 max-w-full object-contain" />
+                      </div>
                     )}
-                    {errors.signature && <p className="text-sm text-red-600 mt-1">{errors.signature}</p>}
+                    <p className="text-xs text-gray-500">Si en la vista previa ves cuadros dentro de la firma, el fondo quedó incorporado en la imagen.</p>
                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="stamp">Sello profesional</Label>
-                    <Input
+                    <FileUploadField
                       id="stamp"
-                      type="file"
                       accept="image/png,image/jpeg,image/webp"
-                      onChange={(e) => handleFileChange('stamp', e.target.files?.[0] ?? null)}
+                      onChange={(file) => handleFileChange('stamp', file)}
+                      fileName={stampFileName}
+                      hasExistingFile={Boolean(stampPreview)}
+                      placeholder="Subir sello profesional"
+                      hint="Ideal: PNG transparente o sello limpio sobre fondo claro."
+                      note={transparencyWarning(stampFileName)}
+                      error={errors.stamp}
                     />
                     {stampPreview && (
-                      <img src={stampPreview} alt="Vista previa de sello" className="h-20 rounded border bg-white object-contain p-2" />
+                      <div
+                        className="flex h-24 items-center justify-center rounded border p-2"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          backgroundImage:
+                            'linear-gradient(45deg, #eef2f7 25%, transparent 25%), linear-gradient(-45deg, #eef2f7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eef2f7 75%), linear-gradient(-45deg, transparent 75%, #eef2f7 75%)',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                        }}
+                      >
+                        <img src={stampPreview} alt="Vista previa de sello" className="h-20 max-w-full object-contain" />
+                      </div>
                     )}
-                    {errors.stamp && <p className="text-sm text-red-600 mt-1">{errors.stamp}</p>}
                   </div>
                 </div>
               </CardContent>

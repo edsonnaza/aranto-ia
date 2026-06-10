@@ -40,14 +40,14 @@
         .flag { font-size: 8px; color: #b91c1c; font-weight: bold; }
         .ref { color: #6b7280; font-size: 9px; }
 
-        .sign { margin-top: 40px; width: 100%; }
+        .sign { margin-top: 44px; width: 100%; }
         .sign td { width: 50%; vertical-align: bottom; padding-top: 30px; }
         .sign .line { border-top: 1px solid #9ca3af; width: 70%; padding-top: 6px;
             font-size: 9px; color: #374151; }
-        .signature-box { min-height: 72px; margin-bottom: 6px; }
-        .signature-box img { max-height: 60px; max-width: 180px; object-fit: contain; }
-        .stamp-box { margin-top: 6px; }
-        .stamp-box img { max-height: 70px; max-width: 120px; object-fit: contain; }
+        .signature-box { min-height: 86px; margin-bottom: 8px; text-align: center; }
+        .signature-box img { display: inline-block; max-height: 74px; max-width: 210px; object-fit: contain; }
+        .stamp-box { margin-top: 10px; text-align: center; }
+        .stamp-box img { display: inline-block; max-height: 78px; max-width: 130px; object-fit: contain; }
         .sign-name { font-size: 10px; font-weight: bold; color: #111827; line-height: 1.35; }
         .sign-role { font-size: 9px; color: #374151; line-height: 1.35; }
         .sign-license { font-size: 9px; color: #4b5563; line-height: 1.35; }

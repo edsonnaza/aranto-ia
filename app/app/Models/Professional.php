@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\Auditable;
@@ -45,6 +46,7 @@ class Professional extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'user_id',
         'document_type',
         'document_number',
         'identification',
@@ -164,6 +166,11 @@ class Professional extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(ProfessionalSchedule::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**

@@ -64,6 +64,11 @@ interface Professional {
   stamp_url?: string | null
   is_lab_signer?: boolean
   is_active: boolean
+  linked_user?: {
+    id: number
+    name: string
+    email: string
+  } | null
   created_at: string
   services?: MedicalService[]
   commissions?: Commission[]
@@ -196,6 +201,17 @@ export default function Show({ professional, commissionStats }: Props) {
                       <div>
                         <label className="text-sm font-medium text-gray-500">Dirección</label>
                         <p className="text-gray-900">{professional.address}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {professional.linked_user && (
+                    <div className="flex items-start gap-2">
+                      <User size={16} className="text-gray-400 mt-0.5" />
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Usuario vinculado</label>
+                        <p className="text-gray-900">{professional.linked_user.name}</p>
+                        <p className="text-sm text-gray-500">{professional.linked_user.email}</p>
                       </div>
                     </div>
                   )}
