@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Laboratory\LabArea;
 use App\Models\Laboratory\LabEquipment;
 use App\Models\Laboratory\LabProfileEquipment;
 use App\Models\Laboratory\LabTestParameter;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,7 +21,7 @@ class LabTestProfileController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = LabTestProfile::query()->with(['medicalService', 'parameters', 'profileEquipments.equipment']);
+        $query = LabTestProfile::query()->with(['medicalService', 'area', 'parameters', 'profileEquipments.equipment']);
 
         if ($request->search) {
             $query->where(function ($q) use ($request) {
@@ -36,6 +38,10 @@ class LabTestProfileController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->area_id) {
+            $query->where('lab_area_id', $request->area_id);
+        }
+
         $profiles = $query->orderBy('name')->paginate(20)->withQueryString();
 
         $allLabServices = MedicalService::query()
@@ -49,7 +55,11 @@ class LabTestProfileController extends Controller
 
         return Inertia::render('laboratory/test-profiles/Index', [
             'profiles' => $profiles,
-            'filters' => $request->only(['search', 'status']),
+            'areas' => LabArea::query()
+                ->where('status', 'active')
+                ->orderBy('display_order')
+                ->get(['id', 'name', 'code']),
+            'filters' => $request->only(['search', 'status', 'area_id']),
             'stats' => [
                 'totalLabServices' => $allLabServices->count(),
                 'configuredServices' => count(array_unique($configuredServiceIds)),
@@ -61,6 +71,7 @@ class LabTestProfileController extends Controller
     public function create(): Response
     {
         return Inertia::render('laboratory/test-profiles/Create', [
+            'areas' => $this->activeAreas(),
             'services' => $this->labServices(),
             'equipments' => $this->activeEquipments(),
         ]);
@@ -70,6 +81,7 @@ class LabTestProfileController extends Controller
     {
         $validated = $request->validate([
             'medical_service_id' => ['required', 'exists:medical_services,id'],
+            'lab_area_id' => ['nullable', 'exists:lab_areas,id'],
             'name' => ['required', 'string', 'max:200'],
             'code' => ['required', 'string', 'max:50', 'unique:lab_test_profiles,code'],
             'description' => ['nullable', 'string'],
@@ -88,11 +100,25 @@ class LabTestProfileController extends Controller
             'parameters.*.is_required' => ['nullable', 'boolean'],
             'parameters.*.include_in_sum_100' => ['nullable', 'boolean'],
             'parameters.*.formula' => ['nullable', 'string'],
+            'parameters.*.reference_ranges' => ['nullable', 'array'],
+            'parameters.*.reference_ranges.*.gender' => ['nullable', Rule::in(['male', 'female', 'all'])],
+            'parameters.*.reference_ranges.*.age_min' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'parameters.*.reference_ranges.*.age_max' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'parameters.*.reference_ranges.*.min_value' => ['nullable', 'numeric'],
+            'parameters.*.reference_ranges.*.max_value' => ['nullable', 'numeric'],
+            'parameters.*.reference_ranges.*.reference_text' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $this->validateEquipmentSelection(
+            $validated['lab_area_id'] ?? null,
+            $validated['equipment_ids'] ?? [],
+            $validated['default_equipment_id'] ?? null,
+        );
 
         DB::transaction(function () use ($validated) {
             $profile = LabTestProfile::create([
                 'medical_service_id' => $validated['medical_service_id'],
+                'lab_area_id' => $validated['lab_area_id'] ?? null,
                 'name' => $validated['name'],
                 'code' => strtoupper(trim($validated['code'])),
                 'description' => $validated['description'] ?? null,
@@ -103,7 +129,7 @@ class LabTestProfileController extends Controller
             ]);
 
             foreach ($validated['parameters'] as $index => $parameter) {
-                LabTestParameter::create([
+                $createdParameter = LabTestParameter::create([
                     'lab_test_profile_id' => $profile->id,
                     'name' => $parameter['name'],
                     'code' => strtoupper(trim($parameter['code'])),
@@ -111,21 +137,21 @@ class LabTestProfileController extends Controller
                     'unit' => $parameter['unit'] ?? null,
                     'display_order' => $index + 1,
                     'is_required' => (bool) ($parameter['is_required'] ?? true),
+                    'status' => 'active',
                     'include_in_sum_100' => (bool) ($parameter['include_in_sum_100'] ?? false),
                     'formula' => $parameter['formula'] ?? null,
                 ]);
+
+                foreach ($this->sanitizeReferenceRanges($parameter['reference_ranges'] ?? []) as $range) {
+                    $createdParameter->referenceRanges()->create($range);
+                }
             }
 
-            $equipmentIds = collect($validated['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
-            $defaultEquipmentId = isset($validated['default_equipment_id']) ? (int) $validated['default_equipment_id'] : null;
-
-            foreach ($equipmentIds as $equipmentId) {
-                LabProfileEquipment::create([
-                    'lab_test_profile_id' => $profile->id,
-                    'lab_equipment_id' => $equipmentId,
-                    'is_default' => $defaultEquipmentId === $equipmentId,
-                ]);
-            }
+            $this->syncProfileEquipments(
+                $profile,
+                $validated['equipment_ids'] ?? [],
+                $validated['default_equipment_id'] ?? null,
+            );
         });
 
         return redirect()
@@ -135,10 +161,11 @@ class LabTestProfileController extends Controller
 
     public function edit(LabTestProfile $testProfile): Response
     {
-        $testProfile->load(['parameters', 'profileEquipments']);
+        $testProfile->load(['area', 'parameters.referenceRanges', 'profileEquipments']);
 
         return Inertia::render('laboratory/test-profiles/Edit', [
             'profile' => $testProfile,
+            'areas' => $this->activeAreas(),
             'services' => $this->labServices(),
             'equipments' => $this->activeEquipments(),
         ]);
@@ -148,6 +175,7 @@ class LabTestProfileController extends Controller
     {
         $validated = $request->validate([
             'medical_service_id' => ['required', 'exists:medical_services,id'],
+            'lab_area_id' => ['nullable', 'exists:lab_areas,id'],
             'name' => ['required', 'string', 'max:200'],
             'code' => ['required', 'string', 'max:50', Rule::unique('lab_test_profiles', 'code')->ignore($testProfile->id)],
             'description' => ['nullable', 'string'],
@@ -166,11 +194,25 @@ class LabTestProfileController extends Controller
             'parameters.*.is_required' => ['nullable', 'boolean'],
             'parameters.*.include_in_sum_100' => ['nullable', 'boolean'],
             'parameters.*.formula' => ['nullable', 'string'],
+            'parameters.*.reference_ranges' => ['nullable', 'array'],
+            'parameters.*.reference_ranges.*.gender' => ['nullable', Rule::in(['male', 'female', 'all'])],
+            'parameters.*.reference_ranges.*.age_min' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'parameters.*.reference_ranges.*.age_max' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'parameters.*.reference_ranges.*.min_value' => ['nullable', 'numeric'],
+            'parameters.*.reference_ranges.*.max_value' => ['nullable', 'numeric'],
+            'parameters.*.reference_ranges.*.reference_text' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $this->validateEquipmentSelection(
+            $validated['lab_area_id'] ?? null,
+            $validated['equipment_ids'] ?? [],
+            $validated['default_equipment_id'] ?? null,
+        );
 
         DB::transaction(function () use ($validated, $testProfile) {
             $testProfile->update([
                 'medical_service_id' => $validated['medical_service_id'],
+                'lab_area_id' => $validated['lab_area_id'] ?? null,
                 'name' => $validated['name'],
                 'code' => strtoupper(trim($validated['code'])),
                 'description' => $validated['description'] ?? null,
@@ -183,7 +225,7 @@ class LabTestProfileController extends Controller
             $testProfile->parameters()->delete();
 
             foreach ($validated['parameters'] as $index => $parameter) {
-                LabTestParameter::create([
+                $createdParameter = LabTestParameter::create([
                     'lab_test_profile_id' => $testProfile->id,
                     'name' => $parameter['name'],
                     'code' => strtoupper(trim($parameter['code'])),
@@ -191,23 +233,21 @@ class LabTestProfileController extends Controller
                     'unit' => $parameter['unit'] ?? null,
                     'display_order' => $index + 1,
                     'is_required' => (bool) ($parameter['is_required'] ?? true),
+                    'status' => 'active',
                     'include_in_sum_100' => (bool) ($parameter['include_in_sum_100'] ?? false),
                     'formula' => $parameter['formula'] ?? null,
                 ]);
+
+                foreach ($this->sanitizeReferenceRanges($parameter['reference_ranges'] ?? []) as $range) {
+                    $createdParameter->referenceRanges()->create($range);
+                }
             }
 
-            $testProfile->profileEquipments()->delete();
-
-            $equipmentIds = collect($validated['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
-            $defaultEquipmentId = isset($validated['default_equipment_id']) ? (int) $validated['default_equipment_id'] : null;
-
-            foreach ($equipmentIds as $equipmentId) {
-                LabProfileEquipment::create([
-                    'lab_test_profile_id' => $testProfile->id,
-                    'lab_equipment_id' => $equipmentId,
-                    'is_default' => $defaultEquipmentId === $equipmentId,
-                ]);
-            }
+            $this->syncProfileEquipments(
+                $testProfile,
+                $validated['equipment_ids'] ?? [],
+                $validated['default_equipment_id'] ?? null,
+            );
         });
 
         return redirect()
@@ -234,20 +274,144 @@ class LabTestProfileController extends Controller
 
     private function labServices()
     {
+        $areasByCode = LabArea::query()
+            ->get(['id', 'code'])
+            ->keyBy('code');
+
         return MedicalService::query()
             ->where('status', 'active')
             ->where('code', 'like', 'LAB-%')
-            ->select('id', 'name', 'code')
+            ->with('category:id,name')
+            ->select('id', 'name', 'code', 'category_id')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(function (MedicalService $service) use ($areasByCode) {
+                $areaCode = $this->inferAreaCodeFromService($service);
+                $area = $areaCode ? $areasByCode->get($areaCode) : null;
+
+                return [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'code' => $service->code,
+                    'lab_area_id' => $area?->id,
+                    'lab_area_code' => $area?->code,
+                ];
+            })
+            ->values();
     }
 
     private function activeEquipments()
     {
         return LabEquipment::query()
             ->where('status', 'active')
-            ->select('id', 'name', 'code')
+            ->select('id', 'name', 'code', 'lab_area_id')
             ->orderBy('name')
             ->get();
+    }
+
+    private function activeAreas()
+    {
+        return LabArea::query()
+            ->where('status', 'active')
+            ->orderBy('display_order')
+            ->get(['id', 'name', 'code']);
+    }
+
+    private function validateEquipmentSelection(?int $labAreaId, array $equipmentIds, ?int $defaultEquipmentId): void
+    {
+        $labAreaId = $labAreaId !== null ? (int) $labAreaId : null;
+        $defaultEquipmentId = $defaultEquipmentId !== null ? (int) $defaultEquipmentId : null;
+        $equipmentIds = array_values(array_unique(array_map('intval', $equipmentIds)));
+
+        if ($defaultEquipmentId !== null && ! in_array($defaultEquipmentId, $equipmentIds, true)) {
+            throw ValidationException::withMessages([
+                'default_equipment_id' => 'El equipo por defecto debe estar seleccionado en la lista de equipos.',
+            ]);
+        }
+
+        if ($equipmentIds === []) {
+            return;
+        }
+
+        $equipments = LabEquipment::query()
+            ->whereIn('id', $equipmentIds)
+            ->get(['id', 'lab_area_id']);
+
+        if ($equipments->count() !== count($equipmentIds)) {
+            throw ValidationException::withMessages([
+                'equipment_ids' => 'Uno o mas equipos seleccionados no existen.',
+            ]);
+        }
+
+        if ($labAreaId === null) {
+            return;
+        }
+
+        $invalidEquipment = $equipments->first(function (LabEquipment $equipment) use ($labAreaId) {
+            return $equipment->lab_area_id !== null && $equipment->lab_area_id !== $labAreaId;
+        });
+
+        if ($invalidEquipment) {
+            throw ValidationException::withMessages([
+                'equipment_ids' => 'Solo se pueden vincular equipos del area seleccionada o equipos compartidos sin area.',
+            ]);
+        }
+    }
+
+    private function syncProfileEquipments(LabTestProfile $testProfile, array $equipmentIds, ?int $defaultEquipmentId): void
+    {
+        $defaultEquipmentId = $defaultEquipmentId !== null ? (int) $defaultEquipmentId : null;
+        $equipmentIds = array_values(array_unique(array_map('intval', $equipmentIds)));
+
+        $testProfile->profileEquipments()->delete();
+
+        foreach ($equipmentIds as $equipmentId) {
+            LabProfileEquipment::create([
+                'lab_test_profile_id' => $testProfile->id,
+                'lab_equipment_id' => $equipmentId,
+                'is_default' => $defaultEquipmentId !== null && $defaultEquipmentId === $equipmentId,
+            ]);
+        }
+    }
+
+    private function inferAreaCodeFromService(MedicalService $service): ?string
+    {
+        $categoryName = $service->category?->name;
+
+        return match ($categoryName) {
+            'Hematología', 'Coagulación', 'Metabolismo del Hierro' => 'HEMA',
+            'Bioquímica General', 'Hepatología', 'Orina y Riñón' => 'BIO',
+            'Endocrinología / Hormonas', 'Serología e Inmunología' => 'INMU',
+            'Microbiología y Cultivos' => 'MICRO',
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $referenceRanges
+     * @return array<int, array<string, mixed>>
+     */
+    private function sanitizeReferenceRanges(array $referenceRanges): array
+    {
+        return collect($referenceRanges)
+            ->map(function (array $range) {
+                $referenceText = isset($range['reference_text']) ? trim((string) $range['reference_text']) : null;
+
+                return [
+                    'gender' => $range['gender'] ?? 'all',
+                    'age_min' => ($range['age_min'] ?? '') === '' ? null : (int) $range['age_min'],
+                    'age_max' => ($range['age_max'] ?? '') === '' ? null : (int) $range['age_max'],
+                    'min_value' => ($range['min_value'] ?? '') === '' ? null : $range['min_value'],
+                    'max_value' => ($range['max_value'] ?? '') === '' ? null : $range['max_value'],
+                    'reference_text' => $referenceText !== '' ? $referenceText : null,
+                ];
+            })
+            ->filter(fn (array $range) => $range['age_min'] !== null
+                || $range['age_max'] !== null
+                || $range['min_value'] !== null
+                || $range['max_value'] !== null
+                || $range['reference_text'] !== null)
+            ->values()
+            ->all();
     }
 }

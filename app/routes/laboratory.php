@@ -1,6 +1,7 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Laboratory\LabDashboardController;
+use App\Http\Controllers\Laboratory\LabEquipmentController;
 use App\Http\Controllers\Laboratory\LabSampleController;
 use App\Http\Controllers\Laboratory\LabSampleTypeController;
 use App\Http\Controllers\Laboratory\LabTestProfileController;
@@ -27,7 +28,9 @@ Route::middleware(['auth', 'verified'])
         Route::resource('test-profiles', LabTestProfileController::class)
             ->except(['show'])
             ->middleware('permission:manage-lab-profiles');
-        
+        Route::resource('equipments', LabEquipmentController::class)
+            ->except(['show'])
+            ->middleware('permission:manage-lab-equipment');
         // Samples
         Route::post('samples/bulk', [LabSampleController::class, 'bulkStore'])->name('samples.bulk-store');
         Route::get('samples/{sample}/collect', [LabSampleController::class, 'showCollectForm'])->name('samples.collect-form');
@@ -66,4 +69,3 @@ Route::middleware(['auth', 'verified'])
         Route::post('samples/{sample}/report', [LabReportController::class, 'publish'])->name('reports.publish');
         Route::get('reports/{report}/download', [LabReportController::class, 'download'])->name('reports.download');
     });
-

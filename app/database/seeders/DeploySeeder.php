@@ -45,10 +45,12 @@ class DeploySeeder extends Seeder
         $this->call(MedicalServicesSeeder::class);
 
         // 5. Catálogo clínico de laboratorio.
+        $this->call(LabAreaSeeder::class);
         $this->call(LabSampleTypeSeeder::class);
         $this->call(LabEquipmentSeeder::class);
         $this->call(LabTestProfileSeeder::class);
         $this->call(LabProfilesCoverageSeeder::class);
+        $this->call(LabHemogramProfileSeeder::class);
         $this->call(LabReferenceRangeSeeder::class);
 
         // 6. Usuarios de producción (no pisa contraseñas; solo agrega faltantes).

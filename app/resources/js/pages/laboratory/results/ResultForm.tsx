@@ -49,6 +49,8 @@ interface TestRequest {
     patient?: {
       first_name?: string
       last_name?: string
+      gender?: string | null
+      birth_date?: string | null
     }
   }
   test_profile?: {
@@ -197,7 +199,42 @@ export default function ResultForm({
     return equipments.filter((item) => ids.includes(item.id))
   }, [selectedRequest, equipments])
 
+  const hasProfileLinkedEquipments = Boolean(
+    selectedRequest?.test_profile?.profile_equipments?.length,
+  )
+
   const parameters = useMemo(() => selectedRequest?.test_profile?.parameters || [], [selectedRequest])
+
+  const patientContext = useMemo(() => {
+    const patient = selectedRequest?.sample?.patient
+    if (!patient) {
+      return { gender: 'all' as const, age: null as number | null }
+    }
+
+    const genderMap: Record<string, 'male' | 'female' | 'all'> = {
+      M: 'male',
+      F: 'female',
+      male: 'male',
+      female: 'female',
+    }
+
+    const resolvedGender = genderMap[String(patient.gender ?? '').trim()] || 'all'
+    let age: number | null = null
+
+    if (patient.birth_date) {
+      const birthDate = new Date(patient.birth_date)
+      if (!Number.isNaN(birthDate.getTime())) {
+        const now = new Date()
+        age = now.getFullYear() - birthDate.getFullYear()
+        const monthDiff = now.getMonth() - birthDate.getMonth()
+        if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+          age -= 1
+        }
+      }
+    }
+
+    return { gender: resolvedGender, age }
+  }, [selectedRequest])
 
   const visibleParameters = useMemo(() => {
     const selectedEquipmentId = Number(data.equipment_id) || null
@@ -263,6 +300,62 @@ export default function ResultForm({
       ? error
       : ((error as Record<string, string | undefined> | null)?.results ?? null)
 
+  const resolveReference = (parameter: Parameter): ReferenceRange | null => {
+    const ranges = parameter.reference_ranges || []
+    if (!ranges.length) {
+      return null
+    }
+
+    const compatibleRanges = ranges
+      .filter((range) => !range.gender || range.gender === 'all' || range.gender === patientContext.gender)
+      .filter((range) => {
+        if (patientContext.age == null) {
+          return true
+        }
+
+        const ageMin = range.age_min
+        const ageMax = range.age_max
+        return (ageMin == null || patientContext.age >= ageMin) && (ageMax == null || patientContext.age <= ageMax)
+      })
+
+    const sortedRanges = [...(compatibleRanges.length ? compatibleRanges : ranges)].sort((a, b) => {
+      const aPriority = a.gender === patientContext.gender ? 1 : 0
+      const bPriority = b.gender === patientContext.gender ? 1 : 0
+      return bPriority - aPriority
+    })
+
+    return sortedRanges[0] || null
+  }
+
+  const isOutOfRange = (parameter: Parameter, rawValue: string): boolean => {
+    if (parameter.parameter_type !== 'numeric' && parameter.parameter_type !== 'calculated') {
+      return false
+    }
+
+    const parsedValue = parseDecimal(rawValue)
+    if (Number.isNaN(parsedValue)) {
+      return false
+    }
+
+    const reference = resolveReference(parameter)
+    if (!reference) {
+      return false
+    }
+
+    const minValue = reference.min_value != null ? parseDecimal(String(reference.min_value)) : Number.NaN
+    const maxValue = reference.max_value != null ? parseDecimal(String(reference.max_value)) : Number.NaN
+
+    if (!Number.isNaN(minValue) && parsedValue < minValue) {
+      return true
+    }
+
+    if (!Number.isNaN(maxValue) && parsedValue > maxValue) {
+      return true
+    }
+
+    return false
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -281,10 +374,15 @@ export default function ResultForm({
     const resultRows = visibleParameters
       .filter((parameter) => !excludedParams.has(parameter.id))
       .map((parameter) => ({
+        rawValue: data.values_by_parameter[String(parameter.id)] || '',
         lab_test_parameter_id: parameter.id,
         value: parameter.parameter_type === 'numeric'
           ? normalizeNumericForSubmit(data.values_by_parameter[String(parameter.id)] || '')
           : (data.values_by_parameter[String(parameter.id)] || ''),
+        is_out_of_range: isOutOfRange(
+          parameter,
+          data.values_by_parameter[String(parameter.id)] || '',
+        ),
       }))
       .filter((row) => row.value.trim().length > 0)
 
@@ -301,7 +399,7 @@ export default function ResultForm({
   }
 
   const renderReference = (parameter: Parameter) => {
-    const reference = parameter.reference_ranges?.[0]
+    const reference = resolveReference(parameter)
     if (!reference) {
       return 'Sin rango configurado'
     }
@@ -407,7 +505,9 @@ export default function ResultForm({
               ))}
             </select>
             <p className="mt-1 text-[11px] text-gray-500">
-              Seleccione equipo solo si el perfil del estudio tiene más de un equipo disponible.
+              {hasProfileLinkedEquipments
+                ? 'Solo aparecen los equipos vinculados al perfil del estudio.'
+                : 'Este perfil no tiene equipos vinculados; se muestran todos los equipos activos.'}
             </p>
           </div>
         </div>
@@ -416,6 +516,10 @@ export default function ResultForm({
           <div className="rounded-lg border border-gray-200 p-3 bg-gray-50 space-y-0.5">
             <p className="text-sm text-gray-700">
               Paciente: <span className="font-medium">{selectedRequest.sample?.patient ? `${selectedRequest.sample.patient.first_name || ''} ${selectedRequest.sample.patient.last_name || ''}`.trim() : 'N/A'}</span>
+            </p>
+            <p className="text-sm text-gray-700">
+              Sexo aplicado a referencia: <span className="font-medium">{patientContext.gender === 'male' ? 'Masculino' : patientContext.gender === 'female' ? 'Femenino' : 'General'}</span>
+              {patientContext.age != null ? <> · Edad: <span className="font-medium">{patientContext.age} años</span></> : null}
             </p>
             <p className="text-sm text-gray-700">
               Estudio: <span className="font-medium">{selectedRequest.test_profile?.name || 'N/A'}</span>
@@ -459,6 +563,12 @@ export default function ResultForm({
                   <div className="md:col-span-3 min-w-0">
                     <p className="text-sm font-medium text-gray-900 leading-tight truncate">{parameter.name}</p>
                     <p className="text-[11px] text-gray-500 leading-tight">{parameter.parameter_type}</p>
+                    {(() => {
+                      const currentValue = data.values_by_parameter[String(parameter.id)] || ''
+                      return currentValue && isOutOfRange(parameter, currentValue) ? (
+                        <p className="text-[11px] font-medium text-red-600 leading-tight">Fuera de rango</p>
+                      ) : null
+                    })()}
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-[11px] text-gray-600 mb-1 md:sr-only">Valor</label>

@@ -108,8 +108,13 @@ class LabResultController extends Controller
         ]);
 
         $testRequest = LabTestRequest::query()
-            ->with('testProfile.parameters')
+            ->with('testProfile.parameters', 'testProfile.profileEquipments')
             ->findOrFail((int) $validated['lab_test_request_id']);
+
+        $this->validateEquipmentForTestRequest(
+            $testRequest,
+            isset($validated['equipment_id']) ? (int) $validated['equipment_id'] : null,
+        );
 
         $allowedParameterIds = $testRequest->testProfile
             ? $testRequest->testProfile->parameters->pluck('id')->map(fn ($id) => (int) $id)->all()
@@ -219,6 +224,15 @@ class LabResultController extends Controller
             'status' => ['required', Rule::in(['draft', 'validated'])],
         ]);
 
+        $testRequest = LabTestRequest::query()
+            ->with('testProfile.profileEquipments')
+            ->findOrFail((int) $validated['lab_test_request_id']);
+
+        $this->validateEquipmentForTestRequest(
+            $testRequest,
+            isset($validated['equipment_id']) ? (int) $validated['equipment_id'] : null,
+        );
+
         $validated['entered_by'] = auth()->id();
 
         LabResult::create($validated);
@@ -266,6 +280,17 @@ class LabResultController extends Controller
             'status' => ['required', Rule::in(['draft', 'validated'])],
         ]);
 
+        $testRequest = $result->testRequest()
+            ->with('testProfile.profileEquipments')
+            ->first();
+
+        if ($testRequest) {
+            $this->validateEquipmentForTestRequest(
+                $testRequest,
+                isset($validated['equipment_id']) ? (int) $validated['equipment_id'] : null,
+            );
+        }
+
         $result->update($validated);
 
         return redirect()
@@ -286,5 +311,30 @@ class LabResultController extends Controller
         return redirect()
             ->route('medical.laboratory.results.index')
             ->with('success', 'Resultado eliminado exitosamente.');
+    }
+
+    private function validateEquipmentForTestRequest(LabTestRequest $testRequest, ?int $equipmentId): void
+    {
+        $profile = $testRequest->testProfile;
+
+        if (! $profile) {
+            return;
+        }
+
+        $linkedEquipmentIds = $profile->profileEquipments
+            ->pluck('lab_equipment_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($linkedEquipmentIds->isEmpty() || $equipmentId === null || $equipmentId === 0) {
+            return;
+        }
+
+        if (! $linkedEquipmentIds->contains($equipmentId)) {
+            throw ValidationException::withMessages([
+                'equipment_id' => 'El equipo seleccionado no esta vinculado al perfil de este estudio.',
+            ]);
+        }
     }
 }

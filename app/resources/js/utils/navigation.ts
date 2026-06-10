@@ -18,6 +18,7 @@ import {
   Microscope,
   Shield,
   Beaker,
+  Settings2,
 } from 'lucide-react'
 
 export type NavigationItem = {
@@ -104,24 +105,9 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         icon: ClipboardList,
       },
       {
-        title: 'Validaciones',
-        href: { url: '/medical/laboratory/validations', method: 'get' },
-        icon: CheckCircle,
-      },
-      {
         title: 'Informes PDF',
         href: { url: '/medical/laboratory/reports', method: 'get' },
         icon: FileText,
-      },
-      {
-        title: 'Microbiología',
-        href: { url: '/medical/laboratory/microbiology', method: 'get' },
-        icon: Microscope,
-      },
-      {
-        title: 'Control de Calidad',
-        href: { url: '/medical/laboratory/qc', method: 'get' },
-        icon: Shield,
       },
       {
         title: 'Parámetros',
@@ -136,6 +122,11 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
             title: 'Perfiles de Laboratorio',
             href: { url: '/medical/laboratory/test-profiles', method: 'get' },
             icon: Beaker,
+          },
+          {
+            title: 'Equipos',
+            href: { url: '/medical/laboratory/equipments', method: 'get' },
+            icon: Settings2,
           },
         ],
       },

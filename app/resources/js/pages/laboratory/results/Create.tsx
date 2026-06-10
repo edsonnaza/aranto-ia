@@ -31,6 +31,8 @@ interface TestRequest {
     patient?: {
       first_name?: string
       last_name?: string
+      gender?: string | null
+      birth_date?: string | null
     }
   }
   test_profile?: {

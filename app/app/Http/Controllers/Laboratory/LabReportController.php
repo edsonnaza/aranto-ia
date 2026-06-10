@@ -94,7 +94,7 @@ class LabReportController extends Controller
 
                 $rows[] = [
                     'name' => $parameter->name,
-                    'value' => $result->value ?? '—',
+                    'value' => $this->formatResultValue($result->value, $parameter->parameter_type),
                     'unit' => $parameter->unit ?? '',
                     'reference' => $this->referenceFor($parameter->id, $patientRangeGender, $age),
                     'out_of_range' => (bool) $result->is_out_of_range,
@@ -154,17 +154,40 @@ class LabReportController extends Controller
         }
 
         if ($match->min_value !== null && $match->max_value !== null) {
-            return rtrim(rtrim((string) $match->min_value, '0'), '.').' - '.rtrim(rtrim((string) $match->max_value, '0'), '.');
+            return $this->formatDisplayNumber($match->min_value).' - '.$this->formatDisplayNumber($match->max_value);
         }
 
         if ($match->max_value !== null) {
-            return 'Menor a '.rtrim(rtrim((string) $match->max_value, '0'), '.');
+            return 'Menor a '.$this->formatDisplayNumber($match->max_value);
         }
 
         if ($match->min_value !== null) {
-            return 'Mayor a '.rtrim(rtrim((string) $match->min_value, '0'), '.');
+            return 'Mayor a '.$this->formatDisplayNumber($match->min_value);
         }
 
         return '';
+    }
+
+    private function formatResultValue(?string $value, ?string $parameterType): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        if (in_array($parameterType, ['numeric', 'calculated'], true) && is_numeric($value)) {
+            return $this->formatDisplayNumber((float) $value);
+        }
+
+        return $value;
+    }
+
+    private function formatDisplayNumber(int|float|string $value): string
+    {
+        $numeric = (float) $value;
+        $formatted = number_format($numeric, 2, ',', '.');
+        $formatted = preg_replace('/,00$/', '', $formatted) ?? $formatted;
+        $formatted = preg_replace('/(\,\d*[1-9])0+$/', '$1', $formatted) ?? $formatted;
+
+        return $formatted;
     }
 }

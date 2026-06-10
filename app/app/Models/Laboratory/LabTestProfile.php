@@ -22,8 +22,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class LabTestProfile extends Model
 {
     use SoftDeletes;
+
     protected $fillable = [
         'medical_service_id',
+        'lab_area_id',
         'name',
         'code',
         'description',
@@ -38,13 +40,23 @@ class LabTestProfile extends Model
         'validation_tolerance' => 'decimal:2',
     ];
 
-    public function parameters(): HasMany {
+    public function parameters(): HasMany
+    {
         return $this->hasMany(LabTestParameter::class);
     }
-    public function medicalService(): BelongsTo {
+
+    public function medicalService(): BelongsTo
+    {
         return $this->belongsTo(\App\Models\MedicalService::class);
     }
-    public function profileEquipments(): HasMany {
+
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(LabArea::class, 'lab_area_id');
+    }
+
+    public function profileEquipments(): HasMany
+    {
         return $this->hasMany(LabProfileEquipment::class);
     }
 }

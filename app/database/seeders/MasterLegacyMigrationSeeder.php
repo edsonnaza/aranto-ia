@@ -59,6 +59,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                     
                     $this->call(InsuranceTypesSeeder::class);
                     $this->call(ServiceCategoriesSeeder::class);
+                    $this->call(LabAreaSeeder::class);
                 });
 
                 // FASE 2: Datos Básicos de Aranto (sin legacy)
@@ -101,6 +102,7 @@ class MasterLegacyMigrationSeeder extends Seeder
                 
                 $this->call(InsuranceTypesSeeder::class);
                 $this->call(ServiceCategoriesSeeder::class);
+                $this->call(LabAreaSeeder::class);
                 // CreateAdditionalServiceCategoriesSeeder removed - ServiceCategoriesSeeder now includes all 27 legacy categories with preserved IDs
             });
 
