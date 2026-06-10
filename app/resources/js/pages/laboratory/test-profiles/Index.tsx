@@ -15,9 +15,20 @@ import {
 } from '@/components/ui/select';
 import { useLabTestProfiles } from '@/hooks/useLabTestProfiles';
 import AppLayout from '@/layouts/app-layout';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Head, Link, router } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import { FlaskConical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 interface LabArea {
@@ -68,6 +79,7 @@ export default function LabTestProfilesIndex({
     stats,
 }: Props) {
     const { destroy } = useLabTestProfiles();
+    const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
     const breadcrumbs = [
         { href: '/medical', title: 'Sistema Médico' },
         { href: '/medical/laboratory', title: 'Laboratorio' },
@@ -78,9 +90,12 @@ export default function LabTestProfilesIndex({
         },
     ];
 
-    const handleDelete = (id: number, name: string) => {
-        if (!confirm(`¿Eliminar perfil "${name}"?`)) return;
-        destroy(id, () => toast.success('Perfil eliminado exitosamente'));
+    const handleDelete = () => {
+        if (!profileToDelete) return;
+        destroy(profileToDelete.id, () => {
+            toast.success('Perfil eliminado exitosamente');
+            setProfileToDelete(null);
+        });
     };
 
     const columns: ColumnDef<Profile>[] = [
@@ -173,9 +188,7 @@ export default function LabTestProfilesIndex({
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
-                            handleDelete(row.original.id, row.original.name)
-                        }
+                        onClick={() => setProfileToDelete(row.original)}
                     >
                         <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -294,6 +307,23 @@ export default function LabTestProfilesIndex({
                     </div>
                 </div>
             </div>
+
+            <AlertDialog open={!!profileToDelete} onOpenChange={(open) => !open && setProfileToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar perfil?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {profileToDelete
+                                ? `Se eliminará el perfil "${profileToDelete.name}". Esta acción no se puede deshacer.`
+                                : 'Esta acción no se puede deshacer.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>Eliminar perfil</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

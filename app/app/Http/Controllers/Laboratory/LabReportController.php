@@ -7,13 +7,103 @@ use App\Models\Laboratory\LabReferenceRange;
 use App\Models\Laboratory\LabReport;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabSample;
+use App\Models\Laboratory\LabTestProfile;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class LabReportController extends Controller
 {
+    public function index(Request $request): Response
+    {
+        $query = LabReport::query()
+            ->with([
+                'sample.patient',
+                'sample.testRequests.testProfile',
+                'generatedBy:id,name',
+            ]);
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->toString();
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('report_number', 'like', "%{$search}%")
+                    ->orWhereHas('sample', function ($sampleQuery) use ($search) {
+                        $sampleQuery
+                            ->where('sample_number', 'like', "%{$search}%")
+                            ->orWhereHas('patient', function ($patientQuery) use ($search) {
+                                $patientQuery
+                                    ->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%");
+                            });
+                    });
+            });
+        }
+
+        if ($request->filled('profile_id')) {
+            $profileId = $request->integer('profile_id');
+            $query->whereHas('sample.testRequests', function ($testRequestQuery) use ($profileId) {
+                $testRequestQuery->where('lab_test_profile_id', $profileId);
+            });
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('generated_at', '>=', $request->string('date_from')->toString());
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('generated_at', '<=', $request->string('date_to')->toString());
+        }
+
+        $reports = $query
+            ->orderByDesc('generated_at')
+            ->paginate(20)
+            ->through(function (LabReport $report) {
+                return [
+                    'id' => $report->id,
+                    'report_number' => $report->report_number,
+                    'generated_at' => optional($report->generated_at)->format('d/m/Y H:i'),
+                    'generated_by' => $report->generatedBy
+                        ? ['id' => $report->generatedBy->id, 'name' => $report->generatedBy->name]
+                        : null,
+                    'sample' => $report->sample
+                        ? [
+                            'id' => $report->sample->id,
+                            'sample_number' => $report->sample->sample_number,
+                            'patient' => $report->sample->patient
+                                ? [
+                                    'first_name' => $report->sample->patient->first_name,
+                                    'last_name' => $report->sample->patient->last_name,
+                                ]
+                                : null,
+                            'test_requests' => $report->sample->testRequests->map(fn ($request) => [
+                                'id' => $request->id,
+                                'test_profile' => $request->testProfile
+                                    ? [
+                                        'id' => $request->testProfile->id,
+                                        'name' => $request->testProfile->name,
+                                    ]
+                                    : null,
+                            ])->all(),
+                        ]
+                        : null,
+                ];
+            })
+            ->withQueryString();
+
+        return Inertia::render('laboratory/reports/Index', [
+            'reports' => $reports,
+            'profiles' => LabTestProfile::query()
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'filters' => $request->only(['search', 'profile_id', 'date_from', 'date_to']),
+        ]);
+    }
+
     /**
      * Publish the validated study for a sample: create the LabReport record
      * and render its PDF. Idempotent per sample.

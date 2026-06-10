@@ -1,6 +1,7 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Laboratory\LabDashboardController;
+use App\Http\Controllers\Laboratory\LabAreaController;
 use App\Http\Controllers\Laboratory\LabEquipmentController;
 use App\Http\Controllers\Laboratory\LabSampleController;
 use App\Http\Controllers\Laboratory\LabSampleTypeController;
@@ -23,6 +24,9 @@ Route::middleware(['auth', 'verified'])
         
         // Sample Types
         Route::resource('sample-types', LabSampleTypeController::class);
+        Route::resource('areas', LabAreaController::class)
+            ->except(['show'])
+            ->middleware('permission:manage-lab-profiles');
 
         // Test Profiles
         Route::resource('test-profiles', LabTestProfileController::class)
@@ -66,6 +70,7 @@ Route::middleware(['auth', 'verified'])
         Route::resource('validations', LabValidationController::class);
 
         // Reports (published study PDFs)
+        Route::get('reports', [LabReportController::class, 'index'])->name('reports.index');
         Route::post('samples/{sample}/report', [LabReportController::class, 'publish'])->name('reports.publish');
         Route::get('reports/{report}/download', [LabReportController::class, 'download'])->name('reports.download');
     });

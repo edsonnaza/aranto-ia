@@ -1,9 +1,20 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable, DataTableColumnHeader, DataTableRowActions } from '@/components/ui/data-table';
@@ -48,6 +59,7 @@ interface Props {
 
 export default function LabEquipmentsIndex({ equipments, areas, filters }: Props) {
     const { destroy } = useLabEquipments();
+    const [equipmentToDelete, setEquipmentToDelete] = useState<Equipment | null>(null);
 
     const breadcrumbs = [
         { href: '/medical', title: 'Sistema Médico' },
@@ -55,12 +67,15 @@ export default function LabEquipmentsIndex({ equipments, areas, filters }: Props
         { href: '/medical/laboratory/equipments', title: 'Equipos', current: true },
     ];
 
-    const handleDelete = (equipment: Equipment) => {
-        if (!confirm(`¿Eliminar equipo "${equipment.name}"?`)) {
+    const handleDelete = () => {
+        if (!equipmentToDelete) {
             return;
         }
 
-        destroy(equipment.id, () => toast.success('Equipo eliminado exitosamente'));
+        destroy(equipmentToDelete.id, () => {
+            toast.success('Equipo eliminado exitosamente');
+            setEquipmentToDelete(null);
+        });
     };
 
     const columns: ColumnDef<Equipment>[] = [
@@ -120,7 +135,7 @@ export default function LabEquipmentsIndex({ equipments, areas, filters }: Props
                             <Pencil className="h-4 w-4" />
                         </Button>
                     </Link>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(row.original)}>
+                    <Button variant="ghost" size="sm" onClick={() => setEquipmentToDelete(row.original)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                 </DataTableRowActions>
@@ -199,6 +214,26 @@ export default function LabEquipmentsIndex({ equipments, areas, filters }: Props
                     </div>
                 </div>
             </div>
+
+            <AlertDialog
+                open={!!equipmentToDelete}
+                onOpenChange={(open) => !open && setEquipmentToDelete(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar equipo?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {equipmentToDelete
+                                ? `Se eliminará el equipo "${equipmentToDelete.name}". Esta acción no se puede deshacer.`
+                                : 'Esta acción no se puede deshacer.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>Eliminar equipo</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

@@ -114,6 +114,11 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         icon: Settings,
         items: [
           {
+            title: 'Áreas',
+            href: { url: '/medical/laboratory/areas', method: 'get' },
+            icon: Settings2,
+          },
+          {
             title: 'Tipos de Muestra',
             href: { url: '/medical/laboratory/sample-types', method: 'get' },
             icon: TestTubes,
