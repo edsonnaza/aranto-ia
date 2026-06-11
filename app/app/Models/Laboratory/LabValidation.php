@@ -3,6 +3,7 @@ namespace App\Models\Laboratory;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Professional;
 use App\Models\User;
 
 class LabValidation extends Model
@@ -13,6 +14,7 @@ class LabValidation extends Model
         'lab_sample_id',
         'lab_test_request_id',
         'validated_by',
+        'validated_by_professional_id',
         'validated_at',
         'comments'
     ];
@@ -43,5 +45,10 @@ class LabValidation extends Model
     public function validatedBy()
     {
         return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function validatedProfessional()
+    {
+        return $this->belongsTo(Professional::class, 'validated_by_professional_id');
     }
 }

@@ -1,5 +1,15 @@
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +53,7 @@ interface Props {
 export default function WorksheetsIndex({ worksheets, filters }: Props) {
   const [search, setSearch] = useState(filters.search || '');
   const [status, setStatus] = useState(filters.status || '');
+  const [worksheetToComplete, setWorksheetToComplete] = useState<Worksheet | null>(null);
   const { start, complete } = useWorksheets();
 
   const handleSearch = () => {
@@ -55,12 +66,13 @@ export default function WorksheetsIndex({ worksheets, filters }: Props) {
     });
   };
 
-  const handleComplete = (id: number) => {
-    if (confirm('¿Marcar hoja de trabajo como completada?')) {
-      complete(id, () => {
-        toast.success('Hoja de trabajo completada');
-      });
-    }
+  const handleComplete = () => {
+    if (!worksheetToComplete) return;
+
+    complete(worksheetToComplete.id, () => {
+      toast.success('Hoja de trabajo completada');
+      setWorksheetToComplete(null);
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -150,7 +162,7 @@ export default function WorksheetsIndex({ worksheets, filters }: Props) {
                     </Button>
                   )}
                   {worksheet.status === 'in_progress' && (
-                    <Button variant="outline" size="sm" onClick={() => handleComplete(worksheet.id)}>
+                    <Button variant="outline" size="sm" onClick={() => setWorksheetToComplete(worksheet)}>
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Completar
                     </Button>
@@ -190,6 +202,23 @@ export default function WorksheetsIndex({ worksheets, filters }: Props) {
             </CardContent>
           </Card>
         )}
+
+        <AlertDialog open={!!worksheetToComplete} onOpenChange={(open) => !open && setWorksheetToComplete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Completar hoja de trabajo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {worksheetToComplete
+                  ? `Se marcará la hoja "${worksheetToComplete.worksheet_number}" como completada.`
+                  : 'Esta acción confirmará la hoja de trabajo.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleComplete}>Completar hoja</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );

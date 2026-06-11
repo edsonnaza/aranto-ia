@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Laboratory\ExternalLaboratory;
+use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabTestRequest;
+use App\Models\Laboratory\LabTestRequestAttachment;
 use App\Models\Laboratory\LabSample;
 use App\Models\Laboratory\LabTestProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Validation\Rule;
@@ -209,6 +214,168 @@ class LabTestRequestController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Solicitud cancelada.');
+    }
+
+    public function asset(LabTestRequest $testRequest): StreamedResponse
+    {
+        $path = $testRequest->external_report_path;
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path);
+    }
+
+    public function attachmentAsset(LabTestRequest $testRequest, LabTestRequestAttachment $attachment): StreamedResponse
+    {
+        abort_unless($attachment->lab_test_request_id === $testRequest->id, 404);
+        abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
+
+        return Storage::disk('public')->response($attachment->file_path);
+    }
+
+    public function destroyAttachment(LabTestRequest $testRequest, LabTestRequestAttachment $attachment): RedirectResponse
+    {
+        abort_unless($attachment->lab_test_request_id === $testRequest->id, 404);
+
+        if (Storage::disk('public')->exists($attachment->file_path)) {
+            Storage::disk('public')->delete($attachment->file_path);
+        }
+
+        $attachment->delete();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Adjunto eliminado correctamente.');
+    }
+
+    public function updateProcessing(Request $request, LabTestRequest $testRequest): RedirectResponse
+    {
+        $validated = $request->validate([
+            'processing_mode' => ['required', Rule::in(['internal', 'referred'])],
+            'status' => ['required', Rule::in(['pending', 'in_process', 'referred_sent', 'external_result_received', 'not_performed'])],
+            'external_laboratory_id' => ['nullable', 'exists:external_laboratories,id'],
+            'external_reference_number' => ['nullable', 'string', 'max:120'],
+            'expected_result_at' => ['nullable', 'date'],
+            'processing_notes' => ['nullable', 'string'],
+            'not_performed_reason' => ['nullable', 'string'],
+            'include_external_attachments_in_medical_history' => ['nullable', 'boolean'],
+            'external_reports' => ['nullable', 'array'],
+            'external_reports.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'external_report_titles' => ['nullable', 'array'],
+            'external_report_titles.*' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        if ($validated['processing_mode'] === 'referred' && empty($validated['external_laboratory_id'])) {
+            return redirect()
+                ->back()
+                ->withErrors(['external_laboratory_id' => 'Debe seleccionar un laboratorio externo.']);
+        }
+
+        if (($validated['status'] ?? null) === 'not_performed' && blank($validated['not_performed_reason'] ?? null)) {
+            return redirect()
+                ->back()
+                ->withErrors(['not_performed_reason' => 'Debe indicar el motivo si el estudio no fue realizado.']);
+        }
+
+        $testRequest->loadMissing('attachments');
+        $uploadedExternalReports = $request->file('external_reports', []);
+
+        if ($validated['processing_mode'] === 'referred') {
+            $this->ensureDraftResultsExist($testRequest);
+
+            $testRequest->update([
+                'processing_mode' => 'referred',
+                'status' => $validated['status'],
+                'external_laboratory_id' => $validated['external_laboratory_id'] ?? null,
+                'external_reference_number' => $validated['external_reference_number'] ?? null,
+                'expected_result_at' => $validated['expected_result_at'] ?? null,
+                'processing_notes' => $validated['processing_notes'] ?? null,
+                'include_external_attachments_in_medical_history' => (bool) ($validated['include_external_attachments_in_medical_history'] ?? false),
+                'not_performed_reason' => $validated['status'] === 'not_performed'
+                    ? ($validated['not_performed_reason'] ?? null)
+                    : null,
+                'not_performed_at' => $validated['status'] === 'not_performed' ? now() : null,
+                'sent_to_external_at' => in_array($validated['status'], ['referred_sent', 'external_result_received'], true)
+                    ? ($testRequest->sent_to_external_at ?? now())
+                    : null,
+                'external_result_received_at' => $validated['status'] === 'external_result_received'
+                    ? ($testRequest->external_result_received_at ?? now())
+                    : null,
+                'started_at' => $testRequest->started_at ?? now(),
+            ]);
+
+            foreach ($uploadedExternalReports as $index => $uploadedFile) {
+                $path = $uploadedFile->store('laboratory/external-results', 'public');
+                $displayName = trim((string) (($validated['external_report_titles'][$index] ?? '') ?: ''));
+
+                LabTestRequestAttachment::create([
+                    'lab_test_request_id' => $testRequest->id,
+                    'file_path' => $path,
+                    'original_name' => $uploadedFile->getClientOriginalName(),
+                    'display_name' => $displayName !== '' ? $displayName : null,
+                    'mime_type' => $uploadedFile->getClientMimeType(),
+                    'file_size' => $uploadedFile->getSize(),
+                    'kind' => 'external_result',
+                    'uploaded_by' => auth()->id(),
+                ]);
+            }
+        } else {
+            if ($testRequest->external_report_path) {
+                Storage::disk('public')->delete($testRequest->external_report_path);
+            }
+
+            foreach ($testRequest->attachments as $attachment) {
+                Storage::disk('public')->delete($attachment->file_path);
+                $attachment->delete();
+            }
+
+            $testRequest->update([
+                'processing_mode' => 'internal',
+                'status' => in_array($testRequest->status, ['pending', 'assigned'], true) ? 'pending' : 'in_process',
+                'external_laboratory_id' => null,
+                'external_reference_number' => null,
+                'expected_result_at' => null,
+                'processing_notes' => $validated['processing_notes'] ?? null,
+                'include_external_attachments_in_medical_history' => false,
+                'not_performed_reason' => null,
+                'not_performed_at' => null,
+                'sent_to_external_at' => null,
+                'external_result_received_at' => null,
+                'external_report_path' => null,
+                'started_at' => $testRequest->started_at ?? now(),
+            ]);
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'Estado de derivación actualizado exitosamente.');
+    }
+
+    private function ensureDraftResultsExist(LabTestRequest $testRequest): void
+    {
+        $testRequest->loadMissing('testProfile.parameters');
+
+        $parameterIds = $testRequest->testProfile?->parameters
+            ?->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all() ?? [];
+
+        foreach ($parameterIds as $parameterId) {
+            LabResult::firstOrCreate(
+                [
+                    'lab_sample_id' => $testRequest->lab_sample_id,
+                    'lab_test_request_id' => $testRequest->id,
+                    'lab_test_parameter_id' => $parameterId,
+                ],
+                [
+                    'equipment_id' => null,
+                    'value' => null,
+                    'is_out_of_range' => false,
+                    'status' => 'draft',
+                    'entered_by' => auth()->id(),
+                ]
+            );
+        }
     }
 
     /**

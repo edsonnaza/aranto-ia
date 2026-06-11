@@ -67,7 +67,7 @@ interface ServiceRequestFilters {
 
 interface ServiceData {
   medical_service_id: number
-  professional_id: number
+  professional_id?: number
   insurance_type_id: number
   scheduled_date?: string
   scheduled_time?: string

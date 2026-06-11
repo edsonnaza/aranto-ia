@@ -1,6 +1,17 @@
 import { Head, Link } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
+import { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -38,6 +49,7 @@ interface Props {
 
 export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
   const { destroy } = useSampleTypes();
+  const [sampleTypeToDelete, setSampleTypeToDelete] = useState<SampleType | null>(null);
 
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
@@ -45,10 +57,13 @@ export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
     { href: '/medical/laboratory/sample-types', title: 'Tipos de Muestra', current: true },
   ];
 
-  const handleDelete = (id: number, name: string) => {
-    if (confirm(`¿Eliminar tipo de muestra "${name}"?`)) {
-      destroy(id, () => toast.success('Tipo de muestra eliminado exitosamente'));
-    }
+  const handleDelete = () => {
+    if (!sampleTypeToDelete) return;
+
+    destroy(sampleTypeToDelete.id, () => {
+      toast.success('Tipo de muestra eliminado exitosamente');
+      setSampleTypeToDelete(null);
+    });
   };
 
   const columns: ColumnDef<SampleType>[] = [
@@ -93,10 +108,10 @@ export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
               <Pencil className="h-4 w-4" />
             </Button>
           </Link>
-          <Button
+            <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleDelete(row.original.id, row.original.name)}
+            onClick={() => setSampleTypeToDelete(row.original)}
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -139,6 +154,23 @@ export default function SampleTypesIndex({ sampleTypes, filters }: Props) {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!sampleTypeToDelete} onOpenChange={(open) => !open && setSampleTypeToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar tipo de muestra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sampleTypeToDelete
+                ? `Se eliminará el tipo de muestra "${sampleTypeToDelete.name}". Esta acción no se puede deshacer.`
+                : 'Esta acción no se puede deshacer.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Eliminar tipo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

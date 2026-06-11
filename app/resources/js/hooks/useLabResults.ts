@@ -17,6 +17,16 @@ interface LabResultData {
 interface LabResultBatchData {
   lab_test_request_id: number
   equipment_id?: number
+  processing_mode?: 'internal' | 'referred'
+  referred_status?: 'referred_sent' | 'external_result_received' | 'not_performed'
+  external_laboratory_id?: number
+  external_reference_number?: string
+  expected_result_at?: string
+  processing_notes?: string
+  not_performed_reason?: string
+  include_external_attachments_in_medical_history?: boolean
+  external_reports?: File[]
+  external_report_titles?: string[]
   status: string
   results: Array<{
     lab_test_parameter_id: number
@@ -58,6 +68,7 @@ export function useLabResults() {
     setLoading(true)
     setError(null)
     router.post('/medical/laboratory/results/batch', data, {
+      forceFormData: true,
       onSuccess: () => {
         setLoading(false)
         if (onSuccess) onSuccess()

@@ -1,13 +1,24 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Head, useForm } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
+import { FileUploadField } from '@/components/ui/file-upload-field'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ArrowLeft, UserPlus, Save, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { ArrowLeft, Check, ChevronsUpDown, Save, Search, ShieldCheck, UserPlus, X } from 'lucide-react'
 
 interface MedicalService {
   id: number
@@ -20,13 +31,23 @@ interface Specialty {
   name: string
 }
 
+interface LinkableUser {
+  id: number
+  name: string
+  email: string
+  roles: string[]
+}
+
 interface Props {
   services: MedicalService[]
   specialties: Specialty[]
+  users: LinkableUser[]
+  can_manage_linked_user: boolean
 }
 
-export default function Create({ services = [], specialties = [] }: Props) {
-  const { data, setData, post, processing, errors } = useForm({
+export default function Create({ services = [], specialties = [], users = [], can_manage_linked_user }: Props) {
+  const { data, setData, post, processing, errors, transform } = useForm({
+    user_id: null as number | null,
     first_name: '',
     last_name: '',
     identification: '',
@@ -35,14 +56,49 @@ export default function Create({ services = [], specialties = [] }: Props) {
     license_number: '',
     commission_percentage: 10,
     address: '',
+    signature: null as File | null,
+    stamp: null as File | null,
+    is_lab_signer: false,
     is_active: true,
     services: [] as number[],
     specialties: [] as number[]
   })
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null)
+  const [stampPreview, setStampPreview] = useState<string | null>(null)
+  const [signatureFileName, setSignatureFileName] = useState<string | null>(null)
+  const [stampFileName, setStampFileName] = useState<string | null>(null)
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [userOpen, setUserOpen] = useState(false)
+
+  const transparencyWarning = (fileName: string | null) => {
+    if (!fileName) return null
+
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    if (extension === 'jpg' || extension === 'jpeg') {
+      return 'JPG no conserva transparencia real. Para una firma limpia en PDF, usá PNG transparente.'
+    }
+
+    return null
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    transform((currentData) => {
+      const payload = { ...currentData } as Record<string, unknown>
+
+      if (!payload.signature) {
+        delete payload.signature
+      }
+
+      if (!payload.stamp) {
+        delete payload.stamp
+      }
+
+      return payload
+    })
+
     post('/medical/professionals', {
+      forceFormData: true,
       preserveScroll: true,
       onSuccess: () => {
         // Toast será manejado por FlashMessageProvider
@@ -52,6 +108,46 @@ export default function Create({ services = [], specialties = [] }: Props) {
       }
     })
   }
+
+  const handleFileChange = (field: 'signature' | 'stamp', file: File | null) => {
+    setData(field, file)
+
+    if (field === 'signature') {
+      setSignatureFileName(file?.name ?? null)
+    } else {
+      setStampFileName(file?.name ?? null)
+    }
+
+    const setPreview = field === 'signature' ? setSignaturePreview : setStampPreview
+    setPreview((previous) => {
+      if (previous?.startsWith('blob:')) {
+        URL.revokeObjectURL(previous)
+      }
+
+      return file ? URL.createObjectURL(file) : null
+    })
+  }
+
+  useEffect(() => {
+    return () => {
+      if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview)
+      if (stampPreview?.startsWith('blob:')) URL.revokeObjectURL(stampPreview)
+    }
+  }, [signaturePreview, stampPreview])
+
+  const filteredServices = useMemo(() => {
+    const query = serviceSearch.trim().toLowerCase()
+    if (!query) return services
+
+    return services.filter((service) =>
+      service.name.toLowerCase().includes(query) || service.code.toLowerCase().includes(query)
+    )
+  }, [serviceSearch, services])
+
+  const selectedUser = useMemo(
+    () => users.find((user) => user.id === data.user_id) ?? null,
+    [data.user_id, users],
+  )
 
   const handleServiceToggle = (serviceId: number, checked: boolean) => {
     if (checked) {
@@ -204,6 +300,80 @@ export default function Create({ services = [], specialties = [] }: Props) {
               </CardHeader>
               <CardContent className="space-y-2 px-4 py-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="linked-user">Usuario vinculado</Label>
+                    <Popover open={userOpen} onOpenChange={setUserOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="linked-user"
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={userOpen}
+                          disabled={!can_manage_linked_user}
+                          className={cn(
+                            'w-full justify-between',
+                            !selectedUser && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="truncate text-left">
+                            {selectedUser
+                              ? `${selectedUser.name} (${selectedUser.email})`
+                              : 'Buscar usuario para este profesional'}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar usuario..." />
+                          <CommandList>
+                            <CommandEmpty>No se encontraron usuarios disponibles.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="Sin vincular"
+                                onSelect={() => {
+                                  setData('user_id', null)
+                                  setUserOpen(false)
+                                }}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', data.user_id === null ? 'opacity-100' : 'opacity-0')} />
+                                Sin vincular usuario
+                              </CommandItem>
+                              {users.map((user) => (
+                                <CommandItem
+                                  key={user.id}
+                                  value={`${user.name} ${user.email} ${user.roles.join(' ')}`}
+                                  onSelect={() => {
+                                    setData('user_id', user.id)
+                                    setUserOpen(false)
+                                  }}
+                                >
+                                  <Check className={cn('mr-2 h-4 w-4', data.user_id === user.id ? 'opacity-100' : 'opacity-0')} />
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{user.name}</div>
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {user.email}
+                                      {user.roles.length > 0 ? ` · ${user.roles.join(', ')}` : ''}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <p className="text-xs text-gray-500">
+                      {can_manage_linked_user
+                        ? 'Este vínculo permite que el usuario logueado valide estudios y firme como este profesional en laboratorio.'
+                        : 'Solo un administrador puede asignar o cambiar el usuario vinculado.'}
+                    </p>
+                    {errors.user_id && (
+                      <p className="text-sm text-red-600 mt-1">{errors.user_id}</p>
+                    )}
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="license_number">Número de Licencia</Label>
                     <Input
@@ -244,6 +414,91 @@ export default function Create({ services = [], specialties = [] }: Props) {
                     onCheckedChange={(checked) => setData('is_active', Boolean(checked))}
                   />
                   <Label htmlFor="is_active">Activo</Label>
+                </div>
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-700" />
+                    <div className="space-y-2">
+                      <div>
+                        <Label htmlFor="is_lab_signer" className="text-sm font-medium text-emerald-900">
+                          Autorizado para firmar informes de laboratorio
+                        </Label>
+                        <p className="text-xs text-emerald-800/80">
+                          Si está activo, este profesional podrá figurar como firmante en los PDFs del laboratorio cuando valide estudios.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="is_lab_signer"
+                          checked={data.is_lab_signer}
+                          onCheckedChange={(checked) => setData('is_lab_signer', Boolean(checked))}
+                        />
+                        <Label htmlFor="is_lab_signer" className="font-normal">Habilitar firma de laboratorio</Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signature">Firma escaneada</Label>
+                    <FileUploadField
+                      id="signature"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(file) => handleFileChange('signature', file)}
+                      fileName={signatureFileName}
+                      hasExistingFile={Boolean(signaturePreview)}
+                      placeholder="Subir firma del profesional"
+                      hint="Ideal: PNG transparente, recortado y sin fondo extra. Máximo 2 MB."
+                      note={transparencyWarning(signatureFileName)}
+                      error={errors.signature}
+                    />
+                    {signaturePreview && (
+                      <div
+                        className="flex h-24 items-center justify-center rounded border p-2"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          backgroundImage:
+                            'linear-gradient(45deg, #eef2f7 25%, transparent 25%), linear-gradient(-45deg, #eef2f7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eef2f7 75%), linear-gradient(-45deg, transparent 75%, #eef2f7 75%)',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                        }}
+                      >
+                        <img src={signaturePreview} alt="Vista previa de firma" className="h-20 max-w-full object-contain" />
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500">Si en la vista previa ves cuadros dentro de la firma, el fondo quedó incorporado en la imagen.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stamp">Sello profesional</Label>
+                    <FileUploadField
+                      id="stamp"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(file) => handleFileChange('stamp', file)}
+                      fileName={stampFileName}
+                      hasExistingFile={Boolean(stampPreview)}
+                      placeholder="Subir sello profesional"
+                      hint="Opcional, pero recomendado para el informe. Máximo 2 MB."
+                      note={transparencyWarning(stampFileName)}
+                      error={errors.stamp}
+                    />
+                    {stampPreview && (
+                      <div
+                        className="flex h-24 items-center justify-center rounded border p-2"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          backgroundImage:
+                            'linear-gradient(45deg, #eef2f7 25%, transparent 25%), linear-gradient(-45deg, #eef2f7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eef2f7 75%), linear-gradient(-45deg, transparent 75%, #eef2f7 75%)',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                        }}
+                      >
+                        <img src={stampPreview} alt="Vista previa de sello" className="h-20 max-w-full object-contain" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -288,8 +543,23 @@ export default function Create({ services = [], specialties = [] }: Props) {
                   <CardTitle className="text-base">Servicios Médicos</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 py-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {services.map((service) => (
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="relative max-w-sm flex-1">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input
+                        value={serviceSearch}
+                        onChange={(e) => setServiceSearch(e.target.value)}
+                        placeholder="Buscar servicio por nombre o código..."
+                        className="pl-9"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {data.services.length} seleccionados
+                    </p>
+                  </div>
+
+                  <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto rounded-md border p-3 md:grid-cols-2 lg:grid-cols-3">
+                    {filteredServices.map((service) => (
                       <div key={service.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`service-${service.id}`}
@@ -308,6 +578,9 @@ export default function Create({ services = [], specialties = [] }: Props) {
                       </div>
                     ))}
                   </div>
+                  {filteredServices.length === 0 && (
+                    <p className="mt-3 text-sm text-gray-500">No se encontraron servicios con esa búsqueda.</p>
+                  )}
                 </CardContent>
               </Card>
             )}

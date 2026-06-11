@@ -8,6 +8,7 @@ use App\Models\MedicalRecord;
 use App\Models\MedicalRecordFile;
 use App\Models\Patient;
 use App\Models\User;
+use App\Models\Laboratory\LabReport;
 use App\Http\Requests\StoreMedicalRecordRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +29,35 @@ class MedicalRecordController extends Controller
 
         // If the current user is a doctor, do not expose the doctors dropdown.
         $fromQueue = session('from_queue', false);
+        $recentMedicalRecords = $patient->medicalRecords()
+            ->with(['files'])
+            ->latest('consultation_date')
+            ->limit(6)
+            ->get();
+
+        $recentLabReports = LabReport::whereHas('sample', fn ($q) => $q->where('patient_id', $patient->id))
+            ->with(['sample.testRequests.testProfile'])
+            ->latest('generated_at')
+            ->limit(6)
+            ->get()
+            ->map(fn ($report) => [
+                'id' => $report->id,
+                'report_number' => $report->report_number,
+                'generated_at' => optional($report->generated_at)?->toDateTimeString(),
+                'sample_number' => $report->sample?->sample_number,
+                'profiles' => $report->sample?->testRequests
+                    ->map(fn ($tr) => $tr->testProfile?->name)
+                    ->filter()
+                    ->unique()
+                    ->values(),
+            ]);
+
+        $basePayload = [
+            'patient' => $patient,
+            'fromQueue' => $fromQueue,
+            'recentMedicalRecords' => $recentMedicalRecords,
+            'recentLabReports' => $recentLabReports,
+        ];
 
         if ($isDoctor) {
             $currentDoctor = [
@@ -35,20 +65,16 @@ class MedicalRecordController extends Controller
                 'name' => $user->name,
             ];
 
-            return Inertia::render('medical/medical-records/Create', [
-                'patient' => $patient,
+            return Inertia::render('medical/medical-records/Create', array_merge($basePayload, [
                 'currentDoctor' => $currentDoctor,
-                'fromQueue' => $fromQueue,
-            ]);
+            ]));
         }
 
         $doctors = User::select('id', 'name')->limit(200)->get();
 
-        return Inertia::render('medical/medical-records/Create', [
-            'patient' => $patient,
+        return Inertia::render('medical/medical-records/Create', array_merge($basePayload, [
             'doctors' => $doctors,
-            'fromQueue' => $fromQueue,
-        ]);
+        ]));
     }
 
     public function store(StoreMedicalRecordRequest $request, Patient $patient): RedirectResponse

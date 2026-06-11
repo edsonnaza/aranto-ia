@@ -3,17 +3,116 @@
 namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
+use App\Models\CompanySetting;
+use App\Models\MedicalRecord;
+use App\Models\MedicalRecordFile;
 use App\Models\Laboratory\LabReferenceRange;
 use App\Models\Laboratory\LabReport;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabSample;
+use App\Models\Laboratory\LabTestRequestAttachment;
+use App\Models\Laboratory\LabTestProfile;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class LabReportController extends Controller
 {
+    public function index(Request $request): Response
+    {
+        $today = now()->toDateString();
+        $dateFrom = $request->string('date_from')->toString() ?: $today;
+        $dateTo = $request->string('date_to')->toString() ?: $today;
+
+        $query = LabReport::query()
+            ->with([
+                'sample.patient',
+                'sample.testRequests.testProfile',
+                'generatedBy:id,name',
+            ]);
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->toString();
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('report_number', 'like', "%{$search}%")
+                    ->orWhereHas('sample', function ($sampleQuery) use ($search) {
+                        $sampleQuery
+                            ->where('sample_number', 'like', "%{$search}%")
+                            ->orWhereHas('patient', function ($patientQuery) use ($search) {
+                                $patientQuery
+                                    ->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%");
+                            });
+                    });
+            });
+        }
+
+        if ($request->filled('profile_id')) {
+            $profileId = $request->integer('profile_id');
+            $query->whereHas('sample.testRequests', function ($testRequestQuery) use ($profileId) {
+                $testRequestQuery->where('lab_test_profile_id', $profileId);
+            });
+        }
+
+        $query->whereDate('generated_at', '>=', $dateFrom);
+        $query->whereDate('generated_at', '<=', $dateTo);
+
+        $reports = $query
+            ->orderByDesc('generated_at')
+            ->paginate(20)
+            ->through(function (LabReport $report) {
+                return [
+                    'id' => $report->id,
+                    'report_number' => $report->report_number,
+                    'generated_at' => optional($report->generated_at)->format('d/m/Y H:i'),
+                    'generated_by' => $report->generatedBy
+                        ? ['id' => $report->generatedBy->id, 'name' => $report->generatedBy->name]
+                        : null,
+                    'sample' => $report->sample
+                        ? [
+                            'id' => $report->sample->id,
+                            'sample_number' => $report->sample->sample_number,
+                            'patient' => $report->sample->patient
+                                ? [
+                                    'first_name' => $report->sample->patient->first_name,
+                                    'last_name' => $report->sample->patient->last_name,
+                                ]
+                                : null,
+                            'test_requests' => $report->sample->testRequests->map(fn ($request) => [
+                                'id' => $request->id,
+                                'test_profile' => $request->testProfile
+                                    ? [
+                                        'id' => $request->testProfile->id,
+                                        'name' => $request->testProfile->name,
+                                    ]
+                                    : null,
+                            ])->all(),
+                        ]
+                        : null,
+                ];
+            })
+            ->withQueryString();
+
+        return Inertia::render('laboratory/reports/Index', [
+            'reports' => $reports,
+            'profiles' => LabTestProfile::query()
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'filters' => [
+                'search' => $request->string('search')->toString() ?: null,
+                'profile_id' => $request->string('profile_id')->toString() ?: null,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
+        ]);
+    }
+
     /**
      * Publish the validated study for a sample: create the LabReport record
      * and render its PDF. Idempotent per sample.
@@ -28,15 +127,30 @@ class LabReportController extends Controller
             return back()->with('error', 'El estudio debe estar validado antes de publicarlo.');
         }
 
+        $publishingProfessional = \App\Models\Professional::query()
+            ->where('user_id', auth()->id())
+            ->where('is_lab_signer', true)
+            ->first();
+
+        if (! $publishingProfessional) {
+            return back()->with('error', 'Solo un bioquímico autorizado puede publicar el PDF del estudio.');
+        }
+
         $report = LabReport::firstOrNew(['lab_sample_id' => $sample->id]);
+        $signedByProfessionalId = $publishingProfessional->id;
 
         if (! $report->exists) {
             $report->report_number = 'LAB-'.now()->format('Ymd').'-'.str_pad((string) $sample->id, 6, '0', STR_PAD_LEFT);
             $report->generated_by = auth()->id();
+            $report->signed_by_professional_id = $signedByProfessionalId;
             $report->generated_at = now();
             $report->pdf_path = 'lab_reports/'.$report->report_number.'.pdf';
             $report->save();
+        } elseif ((int) $report->signed_by_professional_id !== $signedByProfessionalId) {
+            $report->update(['signed_by_professional_id' => $signedByProfessionalId]);
         }
+
+        $this->syncExternalAttachmentsToMedicalHistory($sample, $report);
 
         // The PDF is rendered on demand from the validated data (Railway's
         // filesystem is ephemeral), so publishing only records the report.
@@ -68,7 +182,9 @@ class LabReportController extends Controller
             'testRequests.testProfile.parameters' => fn ($q) => $q->orderBy('display_order'),
             'results' => fn ($q) => $q->where('status', 'validated'),
             'validation.validatedBy',
+            'validation.validatedProfessional',
         ])->first();
+        $report->loadMissing('signedByProfessional');
 
         $patient = $sample?->patient;
 
@@ -94,7 +210,7 @@ class LabReportController extends Controller
 
                 $rows[] = [
                     'name' => $parameter->name,
-                    'value' => $result->value ?? '—',
+                    'value' => $this->formatResultValue($result->value, $parameter->parameter_type),
                     'unit' => $parameter->unit ?? '',
                     'reference' => $this->referenceFor($parameter->id, $patientRangeGender, $age),
                     'out_of_range' => (bool) $result->is_out_of_range,
@@ -107,6 +223,16 @@ class LabReportController extends Controller
         }
 
         $genderLabels = ['M' => 'Masculino', 'F' => 'Femenino', 'OTHER' => 'Otro'];
+        $signingProfessional = $report->signedByProfessional ?? $sample?->validation?->validatedProfessional;
+        $company = CompanySetting::current();
+        $signatory = [
+            'name' => $signingProfessional?->full_name ?: ($sample?->validation?->validatedBy?->name ?? '—'),
+            'role_label' => $signingProfessional?->title ?: 'Bioquímico/a autorizado/a',
+            'title' => $signingProfessional?->title,
+            'license' => $signingProfessional?->license_number ?: $signingProfessional?->professional_license,
+            'signature_data_url' => $this->fileAsDataUrl($signingProfessional?->signature_path),
+            'stamp_data_url' => $this->fileAsDataUrl($signingProfessional?->stamp_path),
+        ];
 
         $data = [
             'report' => $report,
@@ -122,12 +248,94 @@ class LabReportController extends Controller
                 'received_at' => optional($sample?->received_at ?? $sample?->collected_at)?->format('d/m/Y H:i') ?? '—',
             ],
             'profiles' => $profiles,
+            'signatory' => $signatory,
             'validatedBy' => $sample?->validation?->validatedBy?->name,
             'validatedAt' => optional($sample?->validation?->validated_at)?->format('d/m/Y H:i'),
             'generatedAt' => optional($report->generated_at)?->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i'),
         ];
 
+        $data['clinic'] = [
+            'name' => $company?->name ?: config('app.name', 'Aranto'),
+            'logo_data_url' => $this->fileAsDataUrl($company?->logo_path),
+            'ruc' => $company?->ruc,
+            'phone' => $company?->phone,
+            'email' => $company?->email,
+        ];
+
         return Pdf::loadView('lab.report', $data)->setPaper('a4');
+    }
+
+    private function syncExternalAttachmentsToMedicalHistory(LabSample $sample, LabReport $report): void
+    {
+        $sample->loadMissing([
+            'patient',
+            'testRequests.testProfile',
+            'testRequests.attachments',
+        ]);
+
+        $eligibleRequests = $sample->testRequests
+            ->filter(fn ($request) => $request->include_external_attachments_in_medical_history)
+            ->filter(fn ($request) => $request->attachments->isNotEmpty());
+
+        if ($eligibleRequests->isEmpty() || ! $sample->patient) {
+            return;
+        }
+
+        DB::transaction(function () use ($eligibleRequests, $sample, $report) {
+            $medicalRecord = $report->medicalRecord;
+
+            if (! $medicalRecord) {
+                $profileNames = $eligibleRequests
+                    ->map(fn ($request) => $request->testProfile?->name)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
+
+                $medicalRecord = MedicalRecord::create([
+                    'patient_id' => $sample->patient_id,
+                    'doctor_id' => auth()->id(),
+                    'consultation_date' => $report->generated_at ?? now(),
+                    'reason' => 'Adjuntos de laboratorio externo',
+                    'notes' => trim('Documentos externos incorporados desde laboratorio'
+                        .($report->report_number ? ' - '.$report->report_number : '')
+                        .($profileNames !== '' ? ' - '.$profileNames : '')),
+                    'created_by' => auth()->id(),
+                    'updated_by' => auth()->id(),
+                ]);
+
+                $report->update(['medical_record_id' => $medicalRecord->id]);
+            }
+
+            foreach ($eligibleRequests as $testRequest) {
+                foreach ($testRequest->attachments as $attachment) {
+                    if ($attachment->medical_record_file_id || ! Storage::disk('public')->exists($attachment->file_path)) {
+                        continue;
+                    }
+
+                    $extension = pathinfo($attachment->original_name ?: $attachment->file_path, PATHINFO_EXTENSION);
+                    $copiedPath = 'medical_records/laboratory/'
+                        .($sample->patient_id)
+                        .'/'.uniqid('lab_', true)
+                        .($extension ? '.'.$extension : '');
+
+                    Storage::disk('public')->copy($attachment->file_path, $copiedPath);
+
+                    $medicalRecordFile = MedicalRecordFile::create([
+                        'medical_record_id' => $medicalRecord->id,
+                        'file_path' => $copiedPath,
+                        'file_type' => $attachment->mime_type,
+                        'original_name' => $attachment->display_name ?: ($attachment->original_name ?: basename($attachment->file_path)),
+                        'uploaded_by' => auth()->id(),
+                    ]);
+
+                    $attachment->update([
+                        'medical_record_file_id' => $medicalRecordFile->id,
+                        'copied_to_medical_history_at' => now(),
+                    ]);
+                }
+            }
+        });
     }
 
     /**
@@ -154,17 +362,52 @@ class LabReportController extends Controller
         }
 
         if ($match->min_value !== null && $match->max_value !== null) {
-            return rtrim(rtrim((string) $match->min_value, '0'), '.').' - '.rtrim(rtrim((string) $match->max_value, '0'), '.');
+            return $this->formatDisplayNumber($match->min_value).' - '.$this->formatDisplayNumber($match->max_value);
         }
 
         if ($match->max_value !== null) {
-            return 'Menor a '.rtrim(rtrim((string) $match->max_value, '0'), '.');
+            return 'Menor a '.$this->formatDisplayNumber($match->max_value);
         }
 
         if ($match->min_value !== null) {
-            return 'Mayor a '.rtrim(rtrim((string) $match->min_value, '0'), '.');
+            return 'Mayor a '.$this->formatDisplayNumber($match->min_value);
         }
 
         return '';
+    }
+
+    private function fileAsDataUrl(?string $path): ?string
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $contents = Storage::disk('public')->get($path);
+        $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode($contents);
+    }
+
+    private function formatResultValue(?string $value, ?string $parameterType): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        if (in_array($parameterType, ['numeric', 'calculated'], true) && is_numeric($value)) {
+            return $this->formatDisplayNumber((float) $value);
+        }
+
+        return $value;
+    }
+
+    private function formatDisplayNumber(int|float|string $value): string
+    {
+        $numeric = (float) $value;
+        $formatted = number_format($numeric, 2, ',', '.');
+        $formatted = preg_replace('/,00$/', '', $formatted) ?? $formatted;
+        $formatted = preg_replace('/(\,\d*[1-9])0+$/', '$1', $formatted) ?? $formatted;
+
+        return $formatted;
     }
 }

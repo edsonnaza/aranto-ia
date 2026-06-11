@@ -10,7 +10,7 @@ use App\Traits\Auditable;
  * @property int $id
  * @property int $service_request_id
  * @property int $medical_service_id
- * @property int $professional_id
+ * @property int|null $professional_id
  * @property float|null $professional_commission_percentage
  * @property \Carbon\Carbon|null $scheduled_date
  * @property string|null $scheduled_time

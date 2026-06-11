@@ -20,12 +20,21 @@ FROM php:8.4-fpm-alpine
 
 RUN apk add --no-cache \
     bash \
+    freetype \
+    libjpeg-turbo \
+    libpng \
+    libwebp \
     icu-dev \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
     libzip-dev \
     zip \
     unzip
 
-RUN docker-php-ext-install pdo pdo_mysql intl zip opcache pcntl
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install gd pdo pdo_mysql intl zip opcache pcntl
 
 WORKDIR /var/www/html
 

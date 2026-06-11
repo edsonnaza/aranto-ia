@@ -18,6 +18,8 @@ import {
   Microscope,
   Shield,
   Beaker,
+  Settings2,
+  Building2,
 } from 'lucide-react'
 
 export type NavigationItem = {
@@ -104,29 +106,19 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
         icon: ClipboardList,
       },
       {
-        title: 'Validaciones',
-        href: { url: '/medical/laboratory/validations', method: 'get' },
-        icon: CheckCircle,
-      },
-      {
         title: 'Informes PDF',
         href: { url: '/medical/laboratory/reports', method: 'get' },
         icon: FileText,
       },
       {
-        title: 'Microbiología',
-        href: { url: '/medical/laboratory/microbiology', method: 'get' },
-        icon: Microscope,
-      },
-      {
-        title: 'Control de Calidad',
-        href: { url: '/medical/laboratory/qc', method: 'get' },
-        icon: Shield,
-      },
-      {
         title: 'Parámetros',
         icon: Settings,
         items: [
+          {
+            title: 'Áreas',
+            href: { url: '/medical/laboratory/areas', method: 'get' },
+            icon: Settings2,
+          },
           {
             title: 'Tipos de Muestra',
             href: { url: '/medical/laboratory/sample-types', method: 'get' },
@@ -136,6 +128,16 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
             title: 'Perfiles de Laboratorio',
             href: { url: '/medical/laboratory/test-profiles', method: 'get' },
             icon: Beaker,
+          },
+          {
+            title: 'Equipos',
+            href: { url: '/medical/laboratory/equipments', method: 'get' },
+            icon: Settings2,
+          },
+          {
+            title: 'Laboratorios Externos',
+            href: { url: '/medical/laboratory/external-laboratories', method: 'get' },
+            icon: Building2,
           },
         ],
       },
