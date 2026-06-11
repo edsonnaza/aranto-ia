@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import { useMemo, useState } from 'react'
 import AppLayout from '@/layouts/app-layout'
+import Modal from '@/components/ui/Modal'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,9 +14,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DateInputWithCalendar } from '@/components/ui/date-input-with-calendar'
+import { FileUploadField } from '@/components/ui/file-upload-field'
 import { Input } from '@/components/ui/input'
+import { useDateFormat } from '@/hooks/useDateFormat'
 import { useNumberFormatter } from '@/hooks/useNumberFormatter'
-import { Beaker, ChevronDown, ChevronRight, CheckCircle2, FileText, Download } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Beaker, ChevronDown, ChevronRight, CheckCircle2, FileText, Download, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Parameter {
@@ -28,6 +33,16 @@ interface Parameter {
 interface LabReportRef {
   id: number
   report_number?: string
+}
+
+interface ExternalReportAttachment {
+  id: number
+  display_name?: string | null
+  original_name?: string | null
+  file_path?: string | null
+  mime_type?: string | null
+  file_size?: number | null
+  created_at?: string | null
 }
 
 interface Sample {
@@ -48,6 +63,19 @@ interface Sample {
 interface ResultTestRequest {
   id: number
   status: string
+  processing_mode?: 'internal' | 'referred'
+  include_external_attachments_in_medical_history?: boolean
+  external_reference_number?: string | null
+  expected_result_at?: string | null
+  processing_notes?: string | null
+  not_performed_reason?: string | null
+  external_report_path?: string | null
+  attachments?: ExternalReportAttachment[]
+  external_laboratory_id?: number | null
+  external_laboratory?: {
+    id: number
+    name?: string | null
+  } | null
   test_profile?: { id: number; name: string }
 }
 
@@ -70,6 +98,14 @@ interface ResultsIndexProps {
     date_from?: string | null
     date_to?: string | null
   }
+  externalLaboratories: Array<{
+    id: number
+    name: string
+    contact_name?: string | null
+    phone?: string | null
+    whatsapp?: string | null
+    email?: string | null
+  }>
   canValidate: boolean
   validationAuthorizationMessage?: string | null
 }
@@ -94,22 +130,79 @@ interface ResultGroup {
   barcode: string
   collectedAt: string | null
   status: string
+  processingMode: 'internal' | 'referred'
+  includeExternalAttachmentsInMedicalHistory: boolean
+  testRequestStatus: string
+  externalLaboratoryId: number | null
+  externalLaboratoryName: string | null
+  externalReferenceNumber: string
+  expectedResultAt: string
+  processingNotes: string
+  notPerformedReason: string
+  externalReportPath: string | null
+  attachments: ExternalReportAttachment[]
   hasValues: boolean
   items: Result[]
   report?: LabReportRef | null
 }
 
-export default function ResultsIndex({ results, filters, canValidate, validationAuthorizationMessage = null }: ResultsIndexProps) {
+const getDerivedStatusLabel = (status: string, processingMode: 'internal' | 'referred') => {
+  if (processingMode !== 'referred') return null
+  if (status === 'external_result_received') return 'Derivado - recibido'
+  if (status === 'not_performed') return 'Derivado - no realizado'
+  return 'Derivado - enviado'
+}
+
+const PROCESSING_MODE_OPTIONS: Array<{ value: 'internal' | 'referred'; label: string }> = [
+  { value: 'internal', label: 'Interno' },
+  { value: 'referred', label: 'Derivado' },
+]
+
+const DERIVED_STATUS_OPTIONS: Array<{ value: string; label: string; fullLabel: string }> = [
+  { value: 'referred_sent', label: 'Enviado', fullLabel: 'Enviado a externo' },
+  { value: 'external_result_received', label: 'Recibido', fullLabel: 'Resultado externo recibido' },
+  { value: 'not_performed', label: 'No realizado', fullLabel: 'No realizado' },
+]
+
+const getTempFileKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`
+
+export default function ResultsIndex({
+  results,
+  filters,
+  externalLaboratories,
+  canValidate,
+  validationAuthorizationMessage = null,
+}: ResultsIndexProps) {
+  const { toBackend, toFrontend } = useDateFormat()
   const { parse: parseDecimal, format: formatDecimal } = useNumberFormatter()
   const [openGroups, setOpenGroups] = useState<Set<number>>(new Set())
   const today = new Date().toISOString().slice(0, 10)
+  const todayFrontend = toFrontend(today)
   const [search, setSearch] = useState(filters.search || '')
   const [status, setStatus] = useState(filters.status || 'validated')
-  const [dateFrom, setDateFrom] = useState(filters.date_from || today)
-  const [dateTo, setDateTo] = useState(filters.date_to || today)
+  const [dateFrom, setDateFrom] = useState(filters.date_from ? toFrontend(filters.date_from) : todayFrontend)
+  const [dateTo, setDateTo] = useState(filters.date_to ? toFrontend(filters.date_to) : todayFrontend)
   const [validatingIds, setValidatingIds] = useState<Set<number>>(new Set())
   const [publishingIds, setPublishingIds] = useState<Set<number>>(new Set())
   const [groupToValidate, setGroupToValidate] = useState<ResultGroup | null>(null)
+  const [processingGroup, setProcessingGroup] = useState<ResultGroup | null>(null)
+  const [processingMode, setProcessingMode] = useState<'internal' | 'referred'>('internal')
+  const [processingStatus, setProcessingStatus] = useState('referred_sent')
+  const [externalLaboratoryId, setExternalLaboratoryId] = useState<number>(0)
+  const [externalReferenceNumber, setExternalReferenceNumber] = useState('')
+  const [expectedResultAt, setExpectedResultAt] = useState('')
+  const [processingNotes, setProcessingNotes] = useState('')
+  const [notPerformedReason, setNotPerformedReason] = useState('')
+  const [externalReports, setExternalReports] = useState<File[]>([])
+  const [externalReportFileNames, setExternalReportFileNames] = useState<string[]>([])
+  const [externalReportTitles, setExternalReportTitles] = useState<string[]>([])
+  const [includeInMedicalHistory, setIncludeInMedicalHistory] = useState(false)
+  const [processingSaving, setProcessingSaving] = useState(false)
+  const [pendingAttachmentRemoval, setPendingAttachmentRemoval] = useState<
+    | { type: 'new'; index: number; label: string }
+    | { type: 'existing'; attachmentId: number; label: string }
+    | null
+  >(null)
 
   const formatNumberDisplay = (value: number | string): string => {
     return formatDecimal(value)
@@ -153,6 +246,17 @@ export default function ResultsIndex({ results, filters, canValidate, validation
           barcode: result.sample?.barcode ?? '-',
           collectedAt: result.sample?.collected_at ?? null,
           status: result.status ?? 'draft',
+          processingMode: result.test_request?.processing_mode === 'referred' ? 'referred' : 'internal',
+          includeExternalAttachmentsInMedicalHistory: Boolean(result.test_request?.include_external_attachments_in_medical_history),
+          testRequestStatus: result.test_request?.status ?? 'pending',
+          externalLaboratoryId: result.test_request?.external_laboratory_id ?? null,
+          externalLaboratoryName: result.test_request?.external_laboratory?.name ?? null,
+          externalReferenceNumber: result.test_request?.external_reference_number ?? '',
+          expectedResultAt: result.test_request?.expected_result_at ? String(result.test_request?.expected_result_at).split('T')[0] : '',
+          processingNotes: result.test_request?.processing_notes ?? '',
+          notPerformedReason: result.test_request?.not_performed_reason ?? '',
+          externalReportPath: result.test_request?.external_report_path ?? null,
+          attachments: result.test_request?.attachments ?? [],
           hasValues: false,
           items: [],
           report: result.sample?.report ?? null,
@@ -225,6 +329,62 @@ export default function ResultsIndex({ results, filters, canValidate, validation
     )
   }
 
+  const openProcessingModal = (group: ResultGroup) => {
+    setProcessingGroup(group)
+    setProcessingMode(group.processingMode)
+    setProcessingStatus(
+      group.processingMode === 'referred'
+        ? (['external_result_received', 'not_performed'].includes(group.testRequestStatus)
+          ? group.testRequestStatus
+          : 'referred_sent')
+        : 'pending',
+    )
+    setExternalLaboratoryId(group.externalLaboratoryId || 0)
+    setExternalReferenceNumber(group.externalReferenceNumber || '')
+    setExpectedResultAt(group.expectedResultAt ? toFrontend(group.expectedResultAt) : '')
+    setProcessingNotes(group.processingNotes || '')
+    setNotPerformedReason(group.notPerformedReason || '')
+    setIncludeInMedicalHistory(group.includeExternalAttachmentsInMedicalHistory)
+    setExternalReports([])
+    setExternalReportFileNames([])
+    setExternalReportTitles([])
+  }
+
+  const handleSaveProcessing = () => {
+    if (!processingGroup) return
+
+    setProcessingSaving(true)
+    router.post(
+      `/medical/laboratory/test-requests/${processingGroup.testRequestId}/processing`,
+      {
+        processing_mode: processingMode,
+        status: processingMode === 'referred' ? processingStatus : 'in_process',
+        external_laboratory_id: processingMode === 'referred' ? (externalLaboratoryId || undefined) : undefined,
+        external_reference_number: processingMode === 'referred' ? (externalReferenceNumber || undefined) : undefined,
+        expected_result_at: processingMode === 'referred'
+          ? (expectedResultAt ? toBackend(expectedResultAt) : undefined)
+          : undefined,
+        processing_notes: processingNotes || undefined,
+        include_external_attachments_in_medical_history: processingMode === 'referred' ? includeInMedicalHistory : false,
+        not_performed_reason: processingMode === 'referred' && processingStatus === 'not_performed'
+          ? (notPerformedReason || undefined)
+          : undefined,
+        external_reports: processingMode === 'referred' ? externalReports : [],
+        external_report_titles: processingMode === 'referred' ? externalReportTitles : [],
+      },
+      {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+          toast.success('Estado de derivación actualizado')
+          setProcessingGroup(null)
+        },
+        onError: () => toast.error('No se pudo actualizar el estado de derivación.'),
+        onFinish: () => setProcessingSaving(false),
+      },
+    )
+  }
+
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
     { href: '/medical/laboratory', title: 'Laboratorio' },
@@ -237,8 +397,8 @@ export default function ResultsIndex({ results, filters, canValidate, validation
       {
         search: search || undefined,
         status,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateFrom ? toBackend(dateFrom) : undefined,
+        date_to: dateTo ? toBackend(dateTo) : undefined,
       },
       {
         preserveState: true,
@@ -250,8 +410,8 @@ export default function ResultsIndex({ results, filters, canValidate, validation
   const clearFilters = () => {
     setSearch('')
     setStatus('validated')
-    setDateFrom(today)
-    setDateTo(today)
+    setDateFrom(todayFrontend)
+    setDateTo(todayFrontend)
     router.get(
       '/medical/laboratory/results',
       {
@@ -264,6 +424,67 @@ export default function ResultsIndex({ results, filters, canValidate, validation
         replace: true,
       },
     )
+  }
+
+  const currentAttachments = processingGroup?.attachments ?? []
+  const appendExternalReports = (files: File[]) => {
+    if (!files.length) return
+
+    const nextFiles = [...files, ...externalReports]
+    const titleMap = new Map(
+      externalReports.map((file, index) => [getTempFileKey(file), externalReportTitles[index] ?? '']),
+    )
+    const nextTitles = nextFiles.map((file) => titleMap.get(getTempFileKey(file)) ?? '')
+
+    setExternalReports(nextFiles)
+    setExternalReportFileNames(nextFiles.map((file) => file.name))
+    setExternalReportTitles(nextTitles)
+  }
+  const formatAttachmentDateTime = (value?: string | null) => {
+    if (!value) return 'Fecha no disponible'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Fecha no disponible'
+    return date.toLocaleString('es-PY', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    })
+  }
+  const formatAttachmentSize = (size?: number | null) => {
+    if (!size || size <= 0) return null
+    if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
+    return `${Math.max(1, Math.round(size / 1024))} KB`
+  }
+  const getAttachmentDisplayTitle = (attachment: ExternalReportAttachment) => {
+    if (attachment.display_name?.trim()) {
+      return attachment.display_name.trim()
+    }
+
+    const labName = processingGroup?.externalLaboratoryName || 'Laboratorio derivado'
+    const profileName = processingGroup?.profileName || 'estudio'
+
+    return `Resultado externo - ${labName} - ${profileName}`
+  }
+  const confirmRemoveAttachment = () => {
+    if (!pendingAttachmentRemoval) return
+
+    if (pendingAttachmentRemoval.type === 'new') {
+      const removeIndex = pendingAttachmentRemoval.index
+      setExternalReports((prev) => prev.filter((_, index) => index !== removeIndex))
+      setExternalReportFileNames((prev) => prev.filter((_, index) => index !== removeIndex))
+      setExternalReportTitles((prev) => prev.filter((_, index) => index !== removeIndex))
+      setPendingAttachmentRemoval(null)
+      return
+    }
+
+    if (!processingGroup?.testRequestId) return
+
+    router.delete(`/medical/laboratory/test-requests/${processingGroup.testRequestId}/attachments/${pendingAttachmentRemoval.attachmentId}`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Adjunto eliminado correctamente')
+        setPendingAttachmentRemoval(null)
+      },
+    })
   }
 
   return (
@@ -285,7 +506,7 @@ export default function ResultsIndex({ results, filters, canValidate, validation
         </div>
 
         <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-6">
             <div className="md:col-span-2">
               <label className="mb-1 block text-xs font-medium text-gray-700">Buscar</label>
               <Input
@@ -309,14 +530,24 @@ export default function ResultsIndex({ results, filters, canValidate, validation
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:col-span-2 xl:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-700">Desde</label>
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                <DateInputWithCalendar
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  placeholder="dd-mm-yyyy"
+                  className="min-w-[180px]"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-700">Hasta</label>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                <DateInputWithCalendar
+                  value={dateTo}
+                  onChange={setDateTo}
+                  placeholder="dd-mm-yyyy"
+                  className="min-w-[180px]"
+                />
               </div>
             </div>
           </div>
@@ -349,6 +580,7 @@ export default function ResultsIndex({ results, filters, canValidate, validation
             const variant = STATUS_VARIANTS[group.status] ?? 'secondary'
             const isClosed = group.status === 'validated'
             const showValidateBtn = canValidate && group.hasValues && !isClosed
+            const derivedStatusLabel = getDerivedStatusLabel(group.testRequestStatus, group.processingMode)
 
             return (
               <div key={group.testRequestId} className="rounded-lg border bg-white shadow-sm overflow-hidden">
@@ -372,6 +604,19 @@ export default function ResultsIndex({ results, filters, canValidate, validation
                         <span><span className="font-medium text-gray-700">Tipo:</span> {group.sampleTypeName}</span>
                         <span><span className="font-medium text-gray-700">Barcode:</span> {group.barcode}</span>
                         <span><span className="font-medium text-gray-700">Recolección:</span> {formatCollectedAt(group.collectedAt)}</span>
+                        {group.processingMode === 'referred' && (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                              Derivado
+                            </span>
+                            {derivedStatusLabel && (
+                              <span className="text-red-700 font-medium">{derivedStatusLabel}</span>
+                            )}
+                            {group.externalLaboratoryName && (
+                              <span className="text-red-700">{group.externalLaboratoryName}</span>
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -393,6 +638,18 @@ export default function ResultsIndex({ results, filters, canValidate, validation
                         Continuar
                       </span>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`h-7 px-2 text-xs ${
+                        group.processingMode === 'referred'
+                          ? 'border-red-300 text-red-700 hover:bg-red-50'
+                          : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                      onClick={() => openProcessingModal(group)}
+                    >
+                      {group.processingMode === 'referred' ? 'Derivación' : 'Procesamiento'}
+                    </Button>
                     {showValidateBtn && (
                       <Button
                         size="sm"
@@ -476,6 +733,305 @@ export default function ResultsIndex({ results, filters, canValidate, validation
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmValidate}>Confirmar validar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Modal
+        open={Boolean(processingGroup)}
+        onClose={() => !processingSaving && setProcessingGroup(null)}
+        contentClassName="w-[96vw] max-w-2xl h-[min(90dvh,860px)] overflow-hidden p-0"
+      >
+        <div className="flex h-full min-h-0 flex-col bg-white">
+          <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
+            <h3 className="pr-8 text-lg font-semibold text-gray-900">Procesamiento del estudio</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {processingGroup
+                ? `${processingGroup.sampleNumber} · ${processingGroup.profileName}`
+                : 'Actualizar procesamiento'}
+            </p>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 sm:px-8 sm:py-6">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Modo</label>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-1">
+                  {PROCESSING_MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setProcessingMode(option.value)}
+                      className={cn(
+                        'h-9 rounded-md px-3 text-sm font-medium transition-colors cursor-pointer',
+                        processingMode === option.value
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-transparent text-emerald-900 hover:bg-emerald-100',
+                      )}
+                      aria-pressed={processingMode === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {processingMode === 'referred' && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Estado derivado</label>
+                  <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/40 p-1">
+                    {DERIVED_STATUS_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setProcessingStatus(option.value)}
+                        title={option.fullLabel}
+                        className={cn(
+                          'h-9 min-w-0 rounded-md px-2 text-sm font-medium leading-none transition-colors cursor-pointer whitespace-nowrap',
+                          processingStatus === option.value
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-transparent text-emerald-900 hover:bg-emerald-100',
+                        )}
+                        aria-pressed={processingStatus === option.value}
+                      >
+                        <span className="block truncate">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {processingMode === 'referred' && (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Laboratorio externo</label>
+                    <select
+                      value={externalLaboratoryId}
+                      onChange={(e) => setExternalLaboratoryId(Number(e.target.value) || 0)}
+                      className="h-9 w-full rounded-md border border-emerald-300 bg-white px-3 text-sm"
+                    >
+                      <option value={0}>Seleccionar laboratorio externo</option>
+                      {externalLaboratories.map((lab) => (
+                        <option key={lab.id} value={lab.id}>{lab.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Referencia externa</label>
+                    <Input
+                      value={externalReferenceNumber}
+                      onChange={(e) => setExternalReferenceNumber(e.target.value)}
+                      className="h-9"
+                      placeholder="Nro. o código"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs span-2 font-medium text-gray-700">Fecha estimada</label>
+                    <DateInputWithCalendar
+                      value={expectedResultAt}
+                      onChange={setExpectedResultAt}
+                      placeholder="dd-mm-yyyy"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Documento del laboratorio derivado</label>
+                    <FileUploadField
+                      id="external_report_modal"
+                      accept=".pdf,image/png,image/jpeg,image/webp"
+                      multiple
+                      onChangeMultiple={appendExternalReports}
+                      fileNames={externalReportFileNames}
+                      hasExistingFile={Boolean(currentAttachments.length || processingGroup?.externalReportPath)}
+                      placeholder="Adjuntar resultados externos"
+                      hint="PDF, PNG, JPG o WEBP hasta 10 MB c/u."
+                      note="Puede agregar varios archivos en tandas y guardar una sola vez al finalizar."
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                    {externalReports.length > 0 && (
+                      <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-2">
+                        {externalReports.map((file, index) => (
+                          <div key={`${file.name}-${file.size}-${index}`} className="rounded-md border border-slate-200 bg-white p-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                name={`external_report_title_${index}`}
+                                autoComplete="off"
+                                spellCheck={false}
+                                value={externalReportTitles[index] ?? ''}
+                                onChange={(e) => {
+                                  const nextTitles = [...externalReportTitles]
+                                  nextTitles[index] = e.target.value
+                                  setExternalReportTitles(nextTitles)
+                                }}
+                                className="block h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                                placeholder="Ej: Resultado externo - BioLab - Hemograma"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setPendingAttachmentRemoval({
+                                  type: 'new',
+                                  index,
+                                  label: externalReportTitles[index] || file.name,
+                                })}
+                                className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                                aria-label="Eliminar archivo seleccionado"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <div className="mt-1 truncate text-[11px] text-slate-500">
+                              <span className="font-medium text-slate-600">{file.name}</span>
+                              <span className="mx-1">·</span>
+                              <span>{file.type || 'Archivo'}</span>
+                              <span className="mx-1">·</span>
+                              <span>{formatAttachmentSize(file.size) || 'Tamano no disponible'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(currentAttachments.length > 0 || processingGroup?.externalReportPath) && (
+                      <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-2">
+                        {currentAttachments.map((attachment) => (
+                          <div key={attachment.id} className="rounded-md border border-slate-200 bg-white p-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <a
+                                href={`/medical/laboratory/test-requests/${processingGroup?.testRequestId}/attachments/${attachment.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="min-w-0 flex-1 hover:text-sky-800"
+                              >
+                                <div className="truncate font-medium text-sky-700">
+                                  {getAttachmentDisplayTitle(attachment)}
+                                </div>
+                                <div className="mt-1 truncate text-[11px] text-slate-500">
+                                  {[attachment.original_name || 'Archivo adjunto', attachment.mime_type, formatAttachmentSize(attachment.file_size), formatAttachmentDateTime(attachment.created_at)]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </div>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setPendingAttachmentRemoval({
+                                  type: 'existing',
+                                  attachmentId: attachment.id,
+                                  label: getAttachmentDisplayTitle(attachment),
+                                })}
+                                className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                                aria-label="Eliminar adjunto"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {!currentAttachments.length && processingGroup?.externalReportPath && (
+                          <a
+                            href={`/medical/laboratory/test-requests/${processingGroup?.testRequestId}/external-report`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block rounded-md border border-slate-200 bg-white p-2 text-xs font-medium text-sky-700 hover:border-sky-300 hover:text-sky-800"
+                          >
+                            {processingGroup.externalReportPath.split('/').pop() || 'Documento anterior'}
+                          </a>
+                        )}
+                      </div>
+                    )}
+                </div>
+
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-3 text-sm text-emerald-950">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={includeInMedicalHistory}
+                    onChange={(e) => setIncludeInMedicalHistory(e.target.checked)}
+                  />
+                  <span>
+                    <span className="block font-medium">Incluir adjuntos externos en la historia clínica del paciente</span>
+                    <span className="block text-xs text-emerald-800">
+                      Al publicar el estudio, estos documentos también quedarán disponibles en la ficha clínica del paciente.
+                    </span>
+                  </span>
+                </label>
+
+                {processingStatus === 'not_performed' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Motivo de no realizado</label>
+                    <textarea
+                      rows={3}
+                      value={notPerformedReason}
+                      onChange={(e) => setNotPerformedReason(e.target.value)}
+                      className="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm"
+                      placeholder="Detalle del motivo"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Notas</label>
+              <textarea
+                rows={3}
+                value={processingNotes}
+                onChange={(e) => setProcessingNotes(e.target.value)}
+                className="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm"
+                placeholder="Observaciones del procesamiento"
+              />
+            </div>
+          </div>
+          </div>
+
+          <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 sm:px-8">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProcessingGroup(null)}
+              disabled={processingSaving}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleSaveProcessing} disabled={processingSaving}>
+              {processingSaving ? 'Guardando...' : 'Guardar procesamiento'}
+            </Button>
+          </div>
+        </div>
+        </div>
+      </Modal>
+
+      <AlertDialog
+        open={Boolean(pendingAttachmentRemoval)}
+        onOpenChange={(open) => !open && setPendingAttachmentRemoval(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar adjunto</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAttachmentRemoval
+                ? `Se eliminará "${pendingAttachmentRemoval.label}". Esta acción no se puede deshacer.`
+                : 'Esta acción no se puede deshacer.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveAttachment}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Eliminar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

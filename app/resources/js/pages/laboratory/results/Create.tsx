@@ -25,6 +25,12 @@ interface Parameter {
 interface TestRequest {
   id: number
   status: string
+  processing_mode?: 'internal' | 'referred'
+  external_laboratory_id?: number | null
+  external_reference_number?: string | null
+  expected_result_at?: string | null
+  processing_notes?: string | null
+  not_performed_reason?: string | null
   lab_sample_id: number
   sample?: {
     sample_number?: string
@@ -52,6 +58,14 @@ interface TestRequest {
       }
     }>
   }
+  external_laboratory?: {
+    id: number
+    name: string
+    contact_name?: string | null
+    phone?: string | null
+    whatsapp?: string | null
+    email?: string | null
+  } | null
 }
 
 interface Equipment {
@@ -59,14 +73,30 @@ interface Equipment {
   name: string
 }
 
+interface ExternalLaboratory {
+  id: number
+  name: string
+  contact_name?: string | null
+  phone?: string | null
+  whatsapp?: string | null
+  email?: string | null
+}
+
 interface Props {
   testRequests: TestRequest[]
   equipments: Equipment[]
+  externalLaboratories: ExternalLaboratory[]
   initialTestRequestId?: number | null
   existingResults?: Record<string, { value: string; equipment_id?: number | null }>
 }
 
-export default function ResultsCreate({ testRequests, equipments, initialTestRequestId = null, existingResults = {} }: Props) {
+export default function ResultsCreate({
+  testRequests,
+  equipments,
+  externalLaboratories,
+  initialTestRequestId = null,
+  existingResults = {},
+}: Props) {
   const breadcrumbs = [
     { href: '/medical', title: 'Sistema Médico' },
     { href: '/medical/laboratory', title: 'Laboratorio' },
@@ -84,6 +114,7 @@ export default function ResultsCreate({ testRequests, equipments, initialTestReq
         <ResultForm
           testRequests={testRequests}
           equipments={equipments}
+          externalLaboratories={externalLaboratories}
           initialTestRequestId={initialTestRequestId}
           existingResults={existingResults}
           onSuccess={() => {

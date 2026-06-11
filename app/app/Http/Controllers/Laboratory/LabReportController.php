@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
 use App\Models\CompanySetting;
+use App\Models\MedicalRecord;
+use App\Models\MedicalRecordFile;
 use App\Models\Laboratory\LabReferenceRange;
 use App\Models\Laboratory\LabReport;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabSample;
+use App\Models\Laboratory\LabTestRequestAttachment;
 use App\Models\Laboratory\LabTestProfile;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -146,6 +150,8 @@ class LabReportController extends Controller
             $report->update(['signed_by_professional_id' => $signedByProfessionalId]);
         }
 
+        $this->syncExternalAttachmentsToMedicalHistory($sample, $report);
+
         // The PDF is rendered on demand from the validated data (Railway's
         // filesystem is ephemeral), so publishing only records the report.
 
@@ -257,6 +263,79 @@ class LabReportController extends Controller
         ];
 
         return Pdf::loadView('lab.report', $data)->setPaper('a4');
+    }
+
+    private function syncExternalAttachmentsToMedicalHistory(LabSample $sample, LabReport $report): void
+    {
+        $sample->loadMissing([
+            'patient',
+            'testRequests.testProfile',
+            'testRequests.attachments',
+        ]);
+
+        $eligibleRequests = $sample->testRequests
+            ->filter(fn ($request) => $request->include_external_attachments_in_medical_history)
+            ->filter(fn ($request) => $request->attachments->isNotEmpty());
+
+        if ($eligibleRequests->isEmpty() || ! $sample->patient) {
+            return;
+        }
+
+        DB::transaction(function () use ($eligibleRequests, $sample, $report) {
+            $medicalRecord = $report->medicalRecord;
+
+            if (! $medicalRecord) {
+                $profileNames = $eligibleRequests
+                    ->map(fn ($request) => $request->testProfile?->name)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
+
+                $medicalRecord = MedicalRecord::create([
+                    'patient_id' => $sample->patient_id,
+                    'doctor_id' => auth()->id(),
+                    'consultation_date' => $report->generated_at ?? now(),
+                    'reason' => 'Adjuntos de laboratorio externo',
+                    'notes' => trim('Documentos externos incorporados desde laboratorio'
+                        .($report->report_number ? ' - '.$report->report_number : '')
+                        .($profileNames !== '' ? ' - '.$profileNames : '')),
+                    'created_by' => auth()->id(),
+                    'updated_by' => auth()->id(),
+                ]);
+
+                $report->update(['medical_record_id' => $medicalRecord->id]);
+            }
+
+            foreach ($eligibleRequests as $testRequest) {
+                foreach ($testRequest->attachments as $attachment) {
+                    if ($attachment->medical_record_file_id || ! Storage::disk('public')->exists($attachment->file_path)) {
+                        continue;
+                    }
+
+                    $extension = pathinfo($attachment->original_name ?: $attachment->file_path, PATHINFO_EXTENSION);
+                    $copiedPath = 'medical_records/laboratory/'
+                        .($sample->patient_id)
+                        .'/'.uniqid('lab_', true)
+                        .($extension ? '.'.$extension : '');
+
+                    Storage::disk('public')->copy($attachment->file_path, $copiedPath);
+
+                    $medicalRecordFile = MedicalRecordFile::create([
+                        'medical_record_id' => $medicalRecord->id,
+                        'file_path' => $copiedPath,
+                        'file_type' => $attachment->mime_type,
+                        'original_name' => $attachment->display_name ?: ($attachment->original_name ?: basename($attachment->file_path)),
+                        'uploaded_by' => auth()->id(),
+                    ]);
+
+                    $attachment->update([
+                        'medical_record_file_id' => $medicalRecordFile->id,
+                        'copied_to_medical_history_at' => now(),
+                    ]);
+                }
+            }
+        });
     }
 
     /**

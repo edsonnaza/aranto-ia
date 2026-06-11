@@ -3,13 +3,16 @@ namespace App\Http\Controllers\Laboratory;
 
 use App\Http\Controllers\Controller;
 use App\Models\Professional;
+use App\Models\Laboratory\ExternalLaboratory;
 use App\Models\Laboratory\LabEquipment;
 use App\Models\Laboratory\LabResult;
 use App\Models\Laboratory\LabSample;
 use App\Models\Laboratory\LabTestRequest;
+use App\Models\Laboratory\LabTestRequestAttachment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -32,9 +35,11 @@ class LabResultController extends Controller
     public function create(Request $request): Response
     {
         $testRequests = LabTestRequest::query()
-            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
+            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed', 'referred_pending', 'referred_sent', 'external_result_received'])
             ->with([
                 'sample.patient',
+                'externalLaboratory',
+                'attachments',
                 'testProfile.parameters.referenceRanges',
                 'testProfile.parameters.equipmentParameterRanges',
                 'testProfile.profileEquipments.equipment',
@@ -45,6 +50,11 @@ class LabResultController extends Controller
         $equipments = LabEquipment::where('status', 'active')
             ->orderBy('name')
             ->get();
+
+        $externalLaboratories = ExternalLaboratory::query()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name', 'contact_name', 'phone', 'whatsapp', 'email']);
 
         $initialTestRequestId = $request->integer('test_request_id') ?: null;
 
@@ -61,6 +71,7 @@ class LabResultController extends Controller
         return Inertia::render('laboratory/results/Create', [
             'testRequests' => $testRequests,
             'equipments' => $equipments,
+            'externalLaboratories' => $externalLaboratories,
             'initialTestRequestId' => $initialTestRequestId,
             'existingResults' => $existingResults,
         ]);
@@ -102,9 +113,24 @@ class LabResultController extends Controller
         $query->whereDate('updated_at', '<=', $dateTo);
 
         $results = $query
-            ->with(['sample.patient', 'sample.report', 'sample.sampleType', 'testRequest.testProfile', 'parameter', 'equipment', 'enteredBy'])
+            ->with([
+                'sample.patient',
+                'sample.report',
+                'sample.sampleType',
+                'testRequest.testProfile',
+                'testRequest.externalLaboratory',
+                'testRequest.attachments',
+                'parameter',
+                'equipment',
+                'enteredBy',
+            ])
             ->latest()
             ->get();
+
+        $externalLaboratories = ExternalLaboratory::query()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name', 'contact_name', 'phone', 'whatsapp', 'email']);
 
         $testRequests = LabTestRequest::query()
             ->whereIn('status', ['pending', 'assigned', 'in_process'])
@@ -131,6 +157,7 @@ class LabResultController extends Controller
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
             ],
+            'externalLaboratories' => $externalLaboratories,
             'canValidate' => $authorizedSigner !== null,
             'validationAuthorizationMessage' => $authorizedSigner
                 ? null
@@ -143,15 +170,27 @@ class LabResultController extends Controller
         $validated = $request->validate([
             'lab_test_request_id' => 'required|exists:lab_test_requests,id',
             'equipment_id' => 'nullable|exists:lab_equipments,id',
+            'processing_mode' => ['required', Rule::in(['internal', 'referred'])],
+            'referred_status' => ['nullable', Rule::in(['referred_sent', 'external_result_received', 'not_performed'])],
+            'external_laboratory_id' => ['nullable', 'exists:external_laboratories,id'],
+            'external_reference_number' => ['nullable', 'string', 'max:120'],
+            'expected_result_at' => ['nullable', 'date'],
+            'processing_notes' => ['nullable', 'string'],
+            'not_performed_reason' => ['nullable', 'string'],
+            'include_external_attachments_in_medical_history' => ['nullable', 'boolean'],
+            'external_reports' => ['nullable', 'array'],
+            'external_reports.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'external_report_titles' => ['nullable', 'array'],
+            'external_report_titles.*' => ['nullable', 'string', 'max:150'],
             'status' => ['required', Rule::in(['draft', 'validated'])],
-            'results' => ['required', 'array', 'min:1'],
+            'results' => ['nullable', 'array'],
             'results.*.lab_test_parameter_id' => ['required', 'exists:lab_test_parameters,id'],
             'results.*.value' => ['nullable', 'string', 'max:255'],
             'results.*.is_out_of_range' => ['nullable', 'boolean'],
         ]);
 
         $testRequest = LabTestRequest::query()
-            ->with('testProfile.parameters', 'testProfile.profileEquipments')
+            ->with('testProfile.parameters', 'testProfile.profileEquipments', 'attachments')
             ->findOrFail((int) $validated['lab_test_request_id']);
 
         $this->validateEquipmentForTestRequest(
@@ -163,10 +202,31 @@ class LabResultController extends Controller
             ? $testRequest->testProfile->parameters->pluck('id')->map(fn ($id) => (int) $id)->all()
             : [];
 
-        DB::transaction(function () use ($validated, $testRequest, $allowedParameterIds) {
+        if (($validated['processing_mode'] ?? 'internal') === 'referred' && empty($validated['external_laboratory_id'])) {
+            throw ValidationException::withMessages([
+                'external_laboratory_id' => 'Debe seleccionar un laboratorio externo para estudios derivados.',
+            ]);
+        }
+
+        if (($validated['referred_status'] ?? null) === 'not_performed' && blank($validated['not_performed_reason'] ?? null)) {
+            throw ValidationException::withMessages([
+                'not_performed_reason' => 'Debe indicar el motivo si el estudio no fue realizado.',
+            ]);
+        }
+
+        $uploadedExternalReports = $request->file('external_reports', []);
+
+        DB::transaction(function () use ($validated, $testRequest, $allowedParameterIds, $uploadedExternalReports) {
+            if (($validated['status'] ?? 'draft') === 'draft') {
+                $this->ensureDraftResultsExist(
+                    $testRequest,
+                    isset($validated['equipment_id']) ? (int) $validated['equipment_id'] : null,
+                );
+            }
+
             $submittedValuesByParameter = [];
 
-            foreach ($validated['results'] as $row) {
+            foreach (($validated['results'] ?? []) as $row) {
                 $parameterId = (int) $row['lab_test_parameter_id'];
 
                 if (!in_array($parameterId, $allowedParameterIds, true)) {
@@ -196,11 +256,78 @@ class LabResultController extends Controller
                 );
             }
 
+            $processingMode = $validated['processing_mode'] ?? 'internal';
+            $referredStatus = $validated['referred_status'] ?? null;
+
+            if ($processingMode === 'referred') {
+                $testRequest->update([
+                    'processing_mode' => 'referred',
+                    'external_laboratory_id' => $validated['external_laboratory_id'] ?? null,
+                    'external_reference_number' => $validated['external_reference_number'] ?? null,
+                    'expected_result_at' => $validated['expected_result_at'] ?? null,
+                    'processing_notes' => $validated['processing_notes'] ?? null,
+                    'include_external_attachments_in_medical_history' => (bool) ($validated['include_external_attachments_in_medical_history'] ?? false),
+                    'not_performed_reason' => $referredStatus === 'not_performed'
+                        ? ($validated['not_performed_reason'] ?? null)
+                        : null,
+                    'not_performed_at' => $referredStatus === 'not_performed' ? now() : null,
+                    'sent_to_external_at' => in_array($referredStatus, ['referred_sent', 'external_result_received'], true)
+                        ? ($testRequest->sent_to_external_at ?? now())
+                        : null,
+                    'external_result_received_at' => $referredStatus === 'external_result_received'
+                        ? ($testRequest->external_result_received_at ?? now())
+                        : null,
+                    'status' => $referredStatus ?? 'referred_sent',
+                ]);
+
+                foreach ($uploadedExternalReports as $index => $uploadedFile) {
+                    $path = $uploadedFile->store('laboratory/external-results', 'public');
+                    $displayName = trim((string) (($validated['external_report_titles'][$index] ?? '') ?: ''));
+
+                    LabTestRequestAttachment::create([
+                        'lab_test_request_id' => $testRequest->id,
+                        'file_path' => $path,
+                        'original_name' => $uploadedFile->getClientOriginalName(),
+                        'display_name' => $displayName !== '' ? $displayName : null,
+                        'mime_type' => $uploadedFile->getClientMimeType(),
+                        'file_size' => $uploadedFile->getSize(),
+                        'kind' => 'external_result',
+                        'uploaded_by' => auth()->id(),
+                    ]);
+                }
+            } else {
+                if ($testRequest->external_report_path) {
+                    Storage::disk('public')->delete($testRequest->external_report_path);
+                }
+
+                foreach ($testRequest->attachments as $attachment) {
+                    Storage::disk('public')->delete($attachment->file_path);
+                    $attachment->delete();
+                }
+
+                $testRequest->update([
+                    'processing_mode' => 'internal',
+                    'external_laboratory_id' => null,
+                    'external_reference_number' => null,
+                    'expected_result_at' => null,
+                    'processing_notes' => $validated['processing_notes'] ?? null,
+                    'include_external_attachments_in_medical_history' => false,
+                    'not_performed_reason' => null,
+                    'not_performed_at' => null,
+                    'sent_to_external_at' => null,
+                    'external_result_received_at' => null,
+                    'external_report_path' => null,
+                    'status' => 'in_process',
+                    'started_at' => $testRequest->started_at ?? now(),
+                ]);
+            }
+
             $profile = $testRequest->testProfile;
             if (
                 $profile
                 && $profile->validation_type === 'sum_100'
                 && $validated['status'] === 'validated'
+                && $processingMode === 'internal'
             ) {
                 $sumParameterIds = $profile->parameters
                     ->where('include_in_sum_100', true)
@@ -241,17 +368,37 @@ class LabResultController extends Controller
                 }
             }
 
-            if ($testRequest->status === 'pending' || $testRequest->status === 'assigned') {
-                $testRequest->update([
-                    'status' => 'in_process',
-                    'started_at' => $testRequest->started_at ?? now(),
-                ]);
-            }
+            // Internal studies stay in in_process while results are being drafted.
         });
 
         return redirect()
             ->route('medical.laboratory.results.index')
             ->with('success', 'Resultados cargados exitosamente.');
+    }
+
+    private function ensureDraftResultsExist(LabTestRequest $testRequest, ?int $equipmentId = null): void
+    {
+        $parameterIds = $testRequest->testProfile?->parameters
+            ?->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all() ?? [];
+
+        foreach ($parameterIds as $parameterId) {
+            LabResult::firstOrCreate(
+                [
+                    'lab_sample_id' => $testRequest->lab_sample_id,
+                    'lab_test_request_id' => $testRequest->id,
+                    'lab_test_parameter_id' => $parameterId,
+                ],
+                [
+                    'equipment_id' => $equipmentId,
+                    'value' => null,
+                    'is_out_of_range' => false,
+                    'status' => 'draft',
+                    'entered_by' => auth()->id(),
+                ]
+            );
+        }
     }
 
     public function store(Request $request): RedirectResponse

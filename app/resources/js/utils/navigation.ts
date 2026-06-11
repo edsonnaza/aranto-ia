@@ -19,6 +19,7 @@ import {
   Shield,
   Beaker,
   Settings2,
+  Building2,
 } from 'lucide-react'
 
 export type NavigationItem = {
@@ -132,6 +133,11 @@ const ALL_NAV_ITEMS: NavigationItem[] = [
             title: 'Equipos',
             href: { url: '/medical/laboratory/equipments', method: 'get' },
             icon: Settings2,
+          },
+          {
+            title: 'Laboratorios Externos',
+            href: { url: '/medical/laboratory/external-laboratories', method: 'get' },
+            icon: Building2,
           },
         ],
       },

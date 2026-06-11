@@ -2,7 +2,7 @@ import { Head, useForm } from '@inertiajs/react'
 import { useState } from 'react'
 import AppLayout from '@/layouts/app-layout'
 import { toast } from 'sonner'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -111,6 +111,15 @@ const getContainerOptions = (selectedType?: { container_type?: string | null; co
 
 export default function CollectSample({ sample, sampleTypes }: CollectPageProps) {
   const [sampleTypeOpen, setSampleTypeOpen] = useState(false)
+  const [showOptionalDetails, setShowOptionalDetails] = useState(
+    Boolean(
+      sample.initial_collection?.container_type
+      || sample.initial_collection?.volume
+      || sample.initial_collection?.collection_site
+      || sample.initial_collection?.collection_notes
+      || sample.barcode,
+    ),
+  )
   const initialSampleTypeId = sample.current_sample_type_id || sample.suggested_sample_type_id || null
   const initialSelectedType = sampleTypes.find((type) => type.id === initialSampleTypeId)
   const isEditMode = sample.status === 'collected'
@@ -257,98 +266,117 @@ export default function CollectSample({ sample, sampleTypes }: CollectPageProps)
                 {errors.lab_sample_type_id && <p className="text-xs text-red-600 mt-1">{errors.lab_sample_type_id}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contenedor utilizado</label>
-                <select
-                  value={data.container_type}
-                  onChange={(e) => setData('container_type', e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                >
-                  <option value="">Seleccionar contenedor</option>
-                  {containerOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
+            <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50/40">
+              <button
+                type="button"
+                onClick={() => setShowOptionalDetails((prev) => !prev)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              >
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Volumen</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={data.volume}
-                    onChange={(e) => setData('volume', e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  />
+                  <p className="text-sm font-semibold text-emerald-900">Datos complementarios de extracción</p>
+                  <p className="text-xs text-emerald-700">Opcional. Útil cuando querés dejar más trazabilidad de la toma.</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
-                  <select
-                    value={data.volume_unit}
-                    onChange={(e) => setData('volume_unit', e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  >
-                    <option value="ml">ml</option>
-                    <option value="uL">uL</option>
-                    <option value="g">g</option>
-                  </select>
+                <ChevronDown className={`h-4 w-4 text-emerald-700 transition-transform ${showOptionalDetails ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showOptionalDetails && (
+                <div className="grid grid-cols-1 gap-4 border-t border-emerald-100 px-4 py-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contenedor utilizado</label>
+                    <select
+                      value={data.container_type}
+                      onChange={(e) => setData('container_type', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    >
+                      <option value="">Seleccionar contenedor</option>
+                      {containerOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Volumen</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={data.volume}
+                        onChange={(e) => setData('volume', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
+                      <select
+                        value={data.volume_unit}
+                        onChange={(e) => setData('volume_unit', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      >
+                        <option value="ml">ml</option>
+                        <option value="uL">uL</option>
+                        <option value="g">g</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado de la muestra</label>
+                    <select
+                      value={data.sample_condition}
+                      onChange={(e) => setData('sample_condition', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    >
+                      <option value="Adecuada">Adecuada</option>
+                      <option value="Hemolizada">Hemolizada</option>
+                      <option value="Coagulada">Coagulada</option>
+                      <option value="Insuficiente">Insuficiente</option>
+                      <option value="Contaminada">Contaminada</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sitio de colección</label>
+                    <select
+                      value={data.collection_site}
+                      onChange={(e) => setData('collection_site', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    >
+                      <option value="">Seleccionar sitio</option>
+                      {collectionSiteOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    {urineLike && (
+                      <p className="text-xs text-gray-500 mt-1">Para orina se usa tipo de recolección; no se requiere lado del brazo.</p>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Código de barras</label>
+                    <input
+                      type="text"
+                      value={data.barcode}
+                      onChange={(e) => setData('barcode', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+                    <textarea
+                      value={data.collection_notes}
+                      onChange={(e) => setData('collection_notes', e.target.value)}
+                      rows={3}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      placeholder="Paciente difícil acceso venoso, etc."
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estado de la muestra</label>
-                <select
-                  value={data.sample_condition}
-                  onChange={(e) => setData('sample_condition', e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                >
-                  <option value="Adecuada">Adecuada</option>
-                  <option value="Hemolizada">Hemolizada</option>
-                  <option value="Coagulada">Coagulada</option>
-                  <option value="Insuficiente">Insuficiente</option>
-                  <option value="Contaminada">Contaminada</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sitio de colección</label>
-                <select
-                  value={data.collection_site}
-                  onChange={(e) => setData('collection_site', e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                >
-                  <option value="">Seleccionar sitio</option>
-                  {collectionSiteOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                {urineLike && (
-                  <p className="text-xs text-gray-500 mt-1">Para orina se usa tipo de recolección; no se requiere lado del brazo.</p>
-                )}
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Código de barras</label>
-                <input
-                  type="text"
-                  value={data.barcode}
-                  onChange={(e) => setData('barcode', e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
-                <textarea
-                  value={data.collection_notes}
-                  onChange={(e) => setData('collection_notes', e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Paciente difícil acceso venoso, etc."
-                />
-              </div>
+              )}
             </div>
           </div>
 
@@ -359,7 +387,7 @@ export default function CollectSample({ sample, sampleTypes }: CollectPageProps)
             <button
               type="submit"
               disabled={processing}
-              className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
             >
               {processing ? 'Guardando...' : isEditMode ? 'Actualizar Toma' : 'Tomar Muestra'}
             </button>

@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MoreHorizontal } from 'lucide-react'
 import { useLabSamples } from '@/hooks/useLabSamples'
+import { useDateFormat } from '@/hooks/useDateFormat'
 import SampleForm from './SampleForm'
 import { toast } from 'sonner'
 
@@ -58,6 +59,14 @@ interface Sample {
   } | null
   patient?: { first_name: string; last_name: string }
   sample_type?: { name: string }
+  test_requests?: Array<{
+    id: number
+    processing_mode?: 'internal' | 'referred'
+    status?: string
+    external_laboratory?: {
+      name?: string | null
+    } | null
+  }>
   service_request_detail?: {
     medical_service?: { name?: string }
   }
@@ -147,7 +156,15 @@ const getSampleConditionRisk = (sampleCondition?: string | null) => {
   }
 }
 
+const getDerivedStatusLabel = (status?: string, processingMode?: string) => {
+  if (processingMode !== 'referred') return null
+  if (status === 'external_result_received') return 'Derivado - recibido'
+  if (status === 'not_performed') return 'Derivado - no realizado'
+  return 'Derivado - enviado'
+}
+
 export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesIndexProps) {
+  const { toBackend } = useDateFormat()
   const [modalOpen, setModalOpen] = useState(false)
   const [editSample, setEditSample] = useState<Sample | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -301,9 +318,7 @@ export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesI
     {
       accessorKey: 'requested_study',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estudio" />,
-      cell: ({ row }) => (
-        <span>{row.original.service_request_detail?.medical_service?.name || 'N/A'}</span>
-      ),
+      cell: ({ row }) => <span>{row.original.service_request_detail?.medical_service?.name || 'N/A'}</span>,
     },
     {
       accessorKey: 'sample_type',
@@ -320,7 +335,26 @@ export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesI
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const config = getStatusConfig(row.original.status)
-        return <Badge className={config.className}>{config.label}</Badge>
+        const referredRequest = row.original.test_requests?.find((request) => request.processing_mode === 'referred')
+        const derivedStatusLabel = getDerivedStatusLabel(referredRequest?.status, referredRequest?.processing_mode)
+
+        return (
+          <div className="space-y-1">
+            <Badge className={config.className}>{config.label}</Badge>
+            {referredRequest && derivedStatusLabel && (
+              <>
+                <div className="text-[11px] font-medium text-red-700">
+                  Derivado: {derivedStatusLabel.replace('Derivado - ', '')}
+                </div>
+                {referredRequest.external_laboratory?.name && (
+                  <div className="text-[11px] text-red-700">
+                    {referredRequest.external_laboratory.name}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )
       },
     },
     {
@@ -340,9 +374,9 @@ export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesI
         const primaryAction = (() => {
           if (sample.status === 'pending_collection') {
             return (
-              <Button asChild size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+              <Button asChild size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 cursor-pointer">
                 <Link href={`/medical/laboratory/samples/${sample.id}/collect`}>
-                  Tomar muestra
+                  Tomar Muestra
                 </Link>
               </Button>
             )
@@ -493,9 +527,9 @@ export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesI
               statusFilterable={true}
               onDateRangeChange={(dateRange) => {
                 const url = new URL(window.location.href)
-                if (dateRange.from) url.searchParams.set('date_from', dateRange.from)
+                if (dateRange.from) url.searchParams.set('date_from', toBackend(dateRange.from))
                 else url.searchParams.delete('date_from')
-                if (dateRange.to) url.searchParams.set('date_to', dateRange.to)
+                if (dateRange.to) url.searchParams.set('date_to', toBackend(dateRange.to))
                 else url.searchParams.delete('date_to')
                 url.searchParams.set('page', '1')
                 router.visit(url.toString(), { preserveState: true })
@@ -553,115 +587,119 @@ export default function SamplesIndex({ samples, sampleTypes, filters }: SamplesI
           setReceiveModalOpen(false)
           setReceiveSample(null)
         }}
-        contentClassName="w-[96vw] max-w-4xl p-0"
+        contentClassName="w-[96vw] max-w-4xl max-h-[calc(100dvh-1.5rem)] p-0 sm:max-h-[min(90dvh,52rem)]"
       >
-        <div className="p-6 space-y-5 sm:p-8">
-          <h3 className="pr-8 text-lg font-semibold text-gray-900 dark:text-white">Confirmar recepción de muestra</h3>
-          <p className="max-w-2xl text-sm text-gray-500">
-            Revise los datos de extracción antes de marcar la muestra como recibida en laboratorio.
-          </p>
-
-          {receiveConditionRisk && (
-            <div className={`rounded-lg border px-4 py-3 ${receiveConditionRisk.className}`}>
-              <p className="text-sm font-semibold">{receiveConditionRisk.title}</p>
-              <p className="mt-1 text-sm">{receiveConditionRisk.description}</p>
-            </div>
-          )}
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos del paciente</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Muestra</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_number || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Código de barras</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.barcode || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Paciente</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.patient ? `${receiveSample.patient.first_name} ${receiveSample.patient.last_name}` : 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Estudio</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.service_request_detail?.medical_service?.name || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Tipo de muestra</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_type?.name || 'N/A'}</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos de extracción</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Fecha y hora de extracción</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatCollectedAt(receiveSample?.latest_collection?.collected_at || receiveSample?.collected_at)}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Contenedor utilizado</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.container_type || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Volumen</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.volume != null ? `${receiveSample.latest_collection.volume} ${receiveSample.latest_collection.volume_unit || ''}`.trim() : 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Estado de la muestra</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.sample_condition || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Sitio de colección</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_site || 'N/A'}</p>
-                </div>
-                <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
-                  <p className="text-xs text-gray-500">Observaciones</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_notes || 'Sin observaciones'}</p>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 lg:flex-row lg:items-center lg:justify-between">
-            <p className="max-w-xl text-xs leading-5 text-slate-500">
-              Confirmar recepción continúa el flujo. Rechazar abre el registro formal de rechazo.
+        <div className="flex max-h-[calc(100dvh-1.5rem)] flex-col sm:max-h-[min(90dvh,52rem)]">
+          <div className="overflow-y-auto p-5 space-y-5 sm:p-8">
+            <h3 className="pr-8 text-lg font-semibold text-gray-900 dark:text-white">Confirmar recepción de muestra</h3>
+            <p className="max-w-2xl text-sm text-gray-500">
+              Revise los datos de extracción antes de marcar la muestra como recibida en laboratorio.
             </p>
 
-            <div className="flex flex-1 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setReceiveModalOpen(false)
-                  setReceiveSample(null)
-                }}
-                className="min-w-35 flex-1 sm:flex-none"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => receiveSample && handleRequestReject(receiveSample)}
-                className={`min-w-45 flex-1 sm:flex-none ${
-                  receiveConditionRisk
-                    ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
-                    : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
-                }`}
-              >
-                {receiveConditionRisk ? 'Sugerido: rechazar muestra' : 'Rechazar muestra'}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleRequestReceiveConfirmation}
-                className="min-w-45 flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
-              >
-                Confirmar recepción
-              </Button>
+            {receiveConditionRisk && (
+              <div className={`rounded-lg border px-4 py-3 ${receiveConditionRisk.className}`}>
+                <p className="text-sm font-semibold">{receiveConditionRisk.title}</p>
+                <p className="mt-1 text-sm">{receiveConditionRisk.description}</p>
+              </div>
+            )}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos del paciente</h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Muestra</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_number || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Código de barras</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.barcode || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Paciente</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.patient ? `${receiveSample.patient.first_name} ${receiveSample.patient.last_name}` : 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Estudio</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.service_request_detail?.medical_service?.name || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Tipo de muestra</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.sample_type?.name || 'N/A'}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border bg-slate-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Datos de extracción</h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Fecha y hora de extracción</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatCollectedAt(receiveSample?.latest_collection?.collected_at || receiveSample?.collected_at)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Contenedor utilizado</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.container_type || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Volumen</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.volume != null ? `${receiveSample.latest_collection.volume} ${receiveSample.latest_collection.volume_unit || ''}`.trim() : 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Estado de la muestra</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.sample_condition || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Sitio de colección</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_site || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-white px-3 py-2 sm:col-span-2 dark:border-emerald-900/60 dark:bg-emerald-950">
+                    <p className="text-xs text-gray-500">Observaciones</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{receiveSample?.latest_collection?.collection_notes || 'Sin observaciones'}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="shrink-0 border-t border-slate-200 bg-white px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-6 dark:bg-[#0f1a1e]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <p className="max-w-xl text-xs leading-5 text-slate-500">
+                Confirmar recepción continúa el flujo. Rechazar abre el registro formal de rechazo.
+              </p>
+
+              <div className="flex flex-1 flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setReceiveModalOpen(false)
+                    setReceiveSample(null)
+                  }}
+                  className="min-w-35 flex-1 sm:flex-none"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => receiveSample && handleRequestReject(receiveSample)}
+                  className={`min-w-45 flex-1 sm:flex-none ${
+                    receiveConditionRisk
+                      ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800'
+                      : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+                  }`}
+                >
+                  {receiveConditionRisk ? 'Sugerido: rechazar muestra' : 'Rechazar muestra'}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRequestReceiveConfirmation}
+                  className="min-w-45 flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
+                >
+                  Confirmar recepción
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -11,9 +11,10 @@ export interface DateInputWithCalendarProps {
   placeholder?: string
   disabled?: boolean
   format?: "iso" | "local"
+  className?: string
 }
 
-export function DateInputWithCalendar({ value, onChange, placeholder, disabled, format = "local" }: DateInputWithCalendarProps) {
+export function DateInputWithCalendar({ value, onChange, placeholder, disabled, format = "local", className }: DateInputWithCalendarProps) {
   const [open, setOpen] = React.useState(false)
   const [month, setMonth] = React.useState<Date>(() => {
     const parsed = value ? parseDate(value) : new Date()
@@ -50,7 +51,7 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled, 
   }, [value, open])
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={`flex items-center gap-2 ${className ?? ""}`.trim()}>
       <Input
         type="text"
         value={value || ""}
@@ -60,7 +61,7 @@ export function DateInputWithCalendar({ value, onChange, placeholder, disabled, 
         pattern={format === "iso"
           ? "^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"
           : "^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[012])-\\d{4}$"}
-        className="w-36"
+        className="min-w-0 flex-1"
         onKeyDown={e => {
           if (e.key === 'Enter') e.preventDefault();
         }}

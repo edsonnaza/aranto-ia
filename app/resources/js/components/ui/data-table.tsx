@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-table"
 import { router } from '@inertiajs/react'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2 } from "lucide-react"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -120,14 +121,15 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
     insuranceTypeOptions = [],
     statusOptions = [],
   } = props
+  const { toFrontend } = useDateFormat()
 
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
   const [searchValue, setSearchValue] = React.useState(initialSearch || "")
-  const [dateFrom, setDateFrom] = React.useState<string | null>(initialDateFrom || null)
-  const [dateTo, setDateTo] = React.useState<string | null>(initialDateTo || null)
+  const [dateFrom, setDateFrom] = React.useState<string | null>(initialDateFrom ? toFrontend(initialDateFrom) : null)
+  const [dateTo, setDateTo] = React.useState<string | null>(initialDateTo ? toFrontend(initialDateTo) : null)
   const [status, setStatus] = React.useState<string>(initialStatus || "all")
   const [category, setCategory] = React.useState<string>(initialCategory || "all")
   const [insuranceType, setInsuranceType] = React.useState<string>(initialInsuranceType || "all")
@@ -175,12 +177,12 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
   }, [initialSearch])
 
   React.useEffect(() => {
-    setDateFrom(initialDateFrom || null)
-  }, [initialDateFrom])
+    setDateFrom(initialDateFrom ? toFrontend(initialDateFrom) : null)
+  }, [initialDateFrom, toFrontend])
 
   React.useEffect(() => {
-    setDateTo(initialDateTo || null)
-  }, [initialDateTo])
+    setDateTo(initialDateTo ? toFrontend(initialDateTo) : null)
+  }, [initialDateTo, toFrontend])
 
   React.useEffect(() => {
     setStatus(initialStatus || "all")

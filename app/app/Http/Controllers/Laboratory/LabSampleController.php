@@ -23,6 +23,16 @@ use Inertia\Response;
 
 class LabSampleController extends Controller
 {
+    private const ACTIVE_TEST_REQUEST_STATUSES = [
+        'pending',
+        'assigned',
+        'in_process',
+        'completed',
+        'referred_sent',
+        'external_result_received',
+        'not_performed',
+    ];
+
     public function index(Request $request): Response
     {
         $today = now()->toDateString();
@@ -55,11 +65,31 @@ class LabSampleController extends Controller
             $query->where('lab_sample_type_id', $request->sample_type_id);
         }
 
-        $query->whereDate('collected_at', '>=', $dateFrom);
-        $query->whereDate('collected_at', '<=', $dateTo);
+        $query->where(function ($dateQuery) use ($dateFrom, $dateTo) {
+            $dateQuery
+                ->where(function ($collectedQuery) use ($dateFrom, $dateTo) {
+                    $collectedQuery
+                        ->whereNotNull('collected_at')
+                        ->whereDate('collected_at', '>=', $dateFrom)
+                        ->whereDate('collected_at', '<=', $dateTo);
+                })
+                ->orWhere(function ($pendingQuery) use ($dateFrom, $dateTo) {
+                    $pendingQuery
+                        ->whereNull('collected_at')
+                        ->whereDate('created_at', '>=', $dateFrom)
+                        ->whereDate('created_at', '<=', $dateTo);
+                });
+        });
 
         $samples = $query
-            ->with(['serviceRequestDetail.medicalService', 'patient', 'sampleType', 'receivedBy', 'latestCollection'])
+            ->with([
+                'serviceRequestDetail.medicalService',
+                'patient',
+                'sampleType',
+                'receivedBy',
+                'latestCollection',
+                'testRequests.externalLaboratory',
+            ])
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -369,8 +399,9 @@ class LabSampleController extends Controller
         ]);
 
         $testRequest = $sample->testRequests()
-            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
+            ->whereIn('status', self::ACTIVE_TEST_REQUEST_STATUSES)
             ->with('testProfile')
+            ->latest('id')
             ->first();
 
         $latestTestRequest = $sample->testRequests()
@@ -744,7 +775,8 @@ class LabSampleController extends Controller
         }
 
         $testRequest = $sample->testRequests()
-            ->whereIn('status', ['pending', 'assigned', 'in_process', 'completed'])
+            ->whereIn('status', self::ACTIVE_TEST_REQUEST_STATUSES)
+            ->latest('id')
             ->first();
 
         if (!$testRequest) {

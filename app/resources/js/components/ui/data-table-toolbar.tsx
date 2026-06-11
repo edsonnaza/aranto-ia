@@ -90,17 +90,15 @@ export const DataTableToolbar: React.FC<DataTableToolbarProps> = ({
         <DateInputWithCalendar
           value={dateFrom}
           onChange={onDateFromChange}
-          placeholder="yyyy-mm-dd"
+          placeholder="dd-mm-yyyy"
           disabled={loading}
-          format="iso"
         />
         <span className="mx-1">-</span>
         <DateInputWithCalendar
           value={dateTo}
           onChange={onDateToChange}
-          placeholder="yyyy-mm-dd"
+          placeholder="dd-mm-yyyy"
           disabled={loading}
-          format="iso"
         />
       </div>
     )}
